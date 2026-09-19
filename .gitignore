@@ -26,3 +26,5 @@ ios/*.log
 __pycache__/
 *.pyc
 .runtime/
+# Trained SignEngine packages are provisioned per build after a provenance check
+ios/Signloop/Resources/SignEngine/

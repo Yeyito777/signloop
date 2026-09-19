@@ -13,11 +13,7 @@ for name in MediaPipeTasksCommon MediaPipeTasksVision; do
   fi
   cp "Vendor/$name/LICENSE" "Signloop/Resources/$name-LICENSE.txt"
 done
-if [ ! -f Signloop/Resources/hand_landmarker.task ]; then
-  curl --fail --location --retry 3 \
-    https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task \
-    -o Signloop/Resources/hand_landmarker.task
-fi
+bash scripts/fetch-hand-model.sh
 echo "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1  Signloop/Resources/hand_landmarker.task" | shasum -a 256 --check
 fetch_tracking_model() {
   local name="$1" digest="$2" url="$3" target temporary
@@ -39,18 +35,5 @@ fetch_tracking_model pose_landmarker_lite \
 fetch_tracking_model face_landmarker \
   64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff \
   https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task
-gesture=Signloop/Resources/gesture_recognizer.task
-gesture_sha=97952348cf6a6a4915c2ea1496b4b37ebabc50cbbf80571435643c455f2b0482
-if [ ! -f "$gesture" ]; then
-  temporary=$(mktemp)
-  trap 'rm -f "$temporary"' EXIT
-  curl --fail --location --retry 3 \
-    https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task \
-    -o "$temporary"
-  echo "$gesture_sha  $temporary" | shasum -a 256 --check
-  mv "$temporary" "$gesture"
-  trap - EXIT
-fi
-echo "$gesture_sha  $gesture" | shasum -a 256 --check
 bash scripts/bootstrap-litert.sh
 xcodegen generate
