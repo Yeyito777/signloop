@@ -10,11 +10,19 @@ from pathlib import Path
 import threading
 
 from .service import Backboard, Service, ServiceError, VOCABULARY, read_env, validate_frames
+from .voice import ElevenLabsVoice, validate_speech_input
 
 MAX_BODY = 300_000
 
 
-def make_server(host: str, port: int, service: Service, token: str) -> ThreadingHTTPServer:
+def make_server(host: str, port: int, service: Service | None, token: str,
+                speech: ElevenLabsVoice | None = None) -> ThreadingHTTPServer:
+    """Build the local API server.
+
+    ``speech`` is deliberately optional so existing classification-only callers
+    retain their previous behavior.  Passing ``service=None`` supports the
+    narrowly-scoped voice-only deployment mode.
+    """
     if len(token) < 24:
         raise ServiceError("config", "Set a random SIGNLOOP_BACKEND_TOKEN of at least 24 characters.", 503)
     slots = threading.BoundedSemaphore(2)
@@ -66,19 +74,31 @@ def make_server(host: str, port: int, service: Service, token: str) -> Threading
         def dispatch(self):
             if self.command == "GET" and self.path == "/health":
                 return {"status": "ok", "experimental": True,
-                        "classifier": getattr(service, "mode", "zero_shot"),
-                        "caption_provider": "cerebras" if service.caption_model else None,
-                        "caption_model": service.caption_model}
+                        "classifier": getattr(service, "mode", "unavailable"),
+                        "caption_provider": "cerebras" if service and service.caption_model else None,
+                        "caption_model": service.caption_model if service else None,
+                        "speech": "elevenlabs" if speech else None}
             self.authorize()
             if self.command == "GET" and self.path == "/v1/status":
-                return {"status": "ok", "vocabulary": getattr(service, "vocabulary", list(VOCABULARY)),
-                        "mode": getattr(service, "mode", "zero_shot"), "validated": False}
+                return {"status": "ok",
+                        "vocabulary": getattr(service, "vocabulary", list(VOCABULARY)) if service else [],
+                        "mode": getattr(service, "mode", "unavailable"), "validated": False,
+                        "classifier": bool(service), "caption": bool(service), "speech": bool(speech)}
             if self.command == "POST":
+                # Check feature availability before consuming an unavailable
+                # endpoint's payload, but only after the shared token check.
+                if self.path in ("/v1/classify", "/v1/caption") and not service:
+                    raise ServiceError("unavailable", "This feature is not configured.", 503)
+                if self.path == "/v1/speech" and not speech:
+                    raise ServiceError("speech_unavailable", "Speech is not configured.", 503)
                 body = self.body()
                 if self.path == "/v1/classify":
                     return service.classify(validate_frames(body.get("frames")))
                 if self.path == "/v1/caption":
                     return service.caption(body.get("raw_signs"))
+                if self.path == "/v1/speech":
+                    text, emotion = validate_speech_input(body.get("text"), body.get("emotion", "joy"))
+                    return speech.speak(text, emotion)
             raise ServiceError("not_found", "Unknown endpoint.", 404)
 
         def handle_request(self):
@@ -132,16 +152,26 @@ def main():
     parser.add_argument("--port", type=int, default=8787)
     parser.add_argument("--reference-corpus", type=Path)
     parser.add_argument("--calibration-report", type=Path)
+    parser.add_argument("--voice-only", action="store_true",
+                        help="Serve only authenticated ElevenLabs speech; no Backboard key is needed.")
     args = parser.parse_args()
     values = read_env(args.env_file)
     if bool(args.reference_corpus) != bool(args.calibration_report):
         parser.error("--reference-corpus and --calibration-report must be supplied together.")
-    if args.reference_corpus:
+    if args.voice_only and args.reference_corpus:
+        parser.error("--voice-only cannot be combined with a reference classifier.")
+    if args.voice_only:
+        service = None
+    elif args.reference_corpus:
         service = reference_service(args.reference_corpus, args.calibration_report, args.host)
     else:
         service = Service(Backboard(values.get("BACKBOARD_API_KEY", ""), timeout=8),
                           caption_model=values.get("CEREBRAS_MODEL", "openai/gpt-oss-120b"))
-    server = make_server(args.host, args.port, service, values.get("SIGNLOOP_BACKEND_TOKEN", ""))
+    api_key, voice_id = values.get("ELEVENLABS_API_KEY", ""), values.get("ELEVENLABS_VOICE_ID", "")
+    # An absent or partial optional speech configuration remains unavailable at
+    # the endpoint rather than preventing the rest of the backend from starting.
+    speech = ElevenLabsVoice(api_key, voice_id) if api_key and voice_id else None
+    server = make_server(args.host, args.port, service, values.get("SIGNLOOP_BACKEND_TOKEN", ""), speech)
     print(f"Signloop backend: http://{args.host}:{args.port} (experimental; no payload logging)", flush=True)
     try:
         server.serve_forever()
