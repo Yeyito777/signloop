@@ -120,6 +120,12 @@ def validate_frames(value: object) -> list[dict]:
     for frame in value:
         if not isinstance(frame, dict):
             raise ServiceError("frames", "Invalid frame.")
+        if "imageAspectRatio" in frame:
+            ratio = frame["imageAspectRatio"]
+            if type(ratio) not in (int, float) or not math.isfinite(ratio) or not .1 <= ratio <= 10:
+                raise ServiceError("frames", "Invalid image aspect ratio.")
+        if "mirrored" in frame and type(frame["mirrored"]) is not bool:
+            raise ServiceError("frames", "Invalid mirroring flag.")
         timestamp = frame.get("timestampMS")
         if type(timestamp) is not int or not last < timestamp < 10**15:
             raise ServiceError("frames", "Timestamps must be increasing nonnegative milliseconds.")

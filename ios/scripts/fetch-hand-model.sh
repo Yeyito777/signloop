@@ -11,3 +11,18 @@ if [ ! -s "$model" ]; then
     -o "$download"
   mv "$download" "$model"
 fi
+
+# Both app shells now share the Gesture Recognizer tracker.
+gesture=Signloop/Resources/gesture_recognizer.task
+gesture_sha=97952348cf6a6a4915c2ea1496b4b37ebabc50cbbf80571435643c455f2b0482
+if [ ! -s "$gesture" ]; then
+  download=$(mktemp)
+  trap 'rm -f "$download"' EXIT
+  curl --fail --location --retry 3 \
+    https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task \
+    -o "$download"
+  echo "$gesture_sha  $download" | shasum -a 256 --check
+  mv "$download" "$gesture"
+  trap - EXIT
+fi
+echo "$gesture_sha  $gesture" | shasum -a 256 --check

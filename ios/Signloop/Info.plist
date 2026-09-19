@@ -20,15 +20,8 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
-	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Signloop uses your camera to visualize hand joints on-device. No video is uploaded or saved.</string>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>Connect to your Mac backend for automatic live sign estimates from hand coordinates. No camera images are sent.</string>
+	<string>Signloop tracks hands and estimates supported signs on your iPhone. No images or video are uploaded or saved.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

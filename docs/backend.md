@@ -1,9 +1,23 @@
-# Live sign estimates — zero setup in the app
+# Legacy backend research tools
+
+**Current camera UI is offline only.** The cloud toggle and automatic requests
+were removed in favor of the [native live worker](live-offline.md). The remainder
+of this page documents the earlier optional backend architecture and retained
+CLI/API research tools; it is not the current app setup flow.
+
+Without private pretrained assets the app falls back to the
+[offline ILY handshape preview](local-gesture-preview.md).
+This page describes the historical **Experimental cloud signs / zero-shot Jev** path.
+An opt-in, provider-free
+[reference matcher and local replay tool](recognition-evaluation.md) now exists;
+its [first real-recording benchmark](recognition-baseline-results.md) is not
+accurate enough to replace the deployed path. Research data is not bundled.
 
 The app is a **single full-screen camera**. Open it and the current possible sign
 updates automatically. Pause/resume, camera switching, and a skeleton toggle are
-the only controls. No backend settings screen, reference recording, saving, or
-Analyze button.
+the primary controls. A top-right settings button controls hand joints, joint
+numbers and tracking stats. No backend configuration screen, reference recording,
+saving, or Analyze button.
 
 ## What actually runs
 
@@ -61,6 +75,28 @@ service hosting. No production daemon is installed by these scripts.
 
 For worktrees use `--env-file /private/path/.env` and a distinct port.
 
+### Removing the Mac / same-Wi-Fi requirement
+
+The LAN dependency is only the current backend's location, not MediaPipe.
+Deploy the included `Dockerfile` to an HTTPS container host and inject
+`BACKBOARD_API_KEY`, `SIGNLOOP_BACKEND_TOKEN`, and optionally `CEREBRAS_MODEL`
+as server-side secrets/environment variables. The container listens on 8080.
+Keep deployment concurrency low and configure request/billing limits. The
+development HTTP handler is appropriate only behind the host's HTTPS ingress
+and demo-level access protection, not as a hardened public API.
+
+Then provision the phone without putting any provider key in its binary:
+
+```sh
+python3 -m backend.pair_phone --device Yeyito --url https://YOUR-HOSTED-ENDPOINT
+```
+
+The phone subsequently talks directly to that HTTPS service over Wi-Fi or
+cellular; the Mac can be off. Only the backend access token goes to Keychain.
+`.dockerignore` excludes credentials, iOS build assets and all other repository
+files. Deploying requires an authenticated hosting account and billing approval;
+**the presence of the Dockerfile does not mean the backend is deployed**.
+
 ## Verified gateway
 
 One Hack the North key supports both routes via:
@@ -99,7 +135,8 @@ Other endpoints require `Authorization: Bearer <SIGNLOOP_BACKEND_TOKEN>`:
 Reference-save endpoints have been removed. Live frames/sign histories are not
 written to disk. Only a short landmark window is held in memory.
 
-No images or video are sent. While the app is active and unpaused, **landmark
+No images or video are sent. **Only when Experimental cloud signs is enabled**,
+while the app is active and unpaused, **landmark
 coordinates are automatically sent to the Mac and Backboard/TypeSafe**. The
 single-screen UI discloses cloud analysis. Pausing/backgrounding stops new
 requests; an already submitted upstream call may finish.
@@ -114,7 +151,7 @@ not logged. No automatic recording/export is performed.
 ## Tests
 
 ```sh
-python3 -m unittest backend.test_service -v
+python3 -m unittest backend.test_service backend.test_matcher backend.test_hand_tracking backend.test_static -v
 python3 -m backend.test_native        # Swift ↔ HTTP contract, mocked models
 bash ios/scripts/test-core.sh        # normalization, buffer, live stabilization
 python3 -m backend.probe              # opt-in paid live API connectivity checks

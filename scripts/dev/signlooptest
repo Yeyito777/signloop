@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# signlooptest [name|path|.] [core|backend|build|open]
+# signlooptest [name|path|.] [core|backend|native|build|open]
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 source "$SCRIPT_DIR/worktree-common.sh"
-[[ $# -le 2 ]] || worktree_die "Usage: signlooptest [name|path|.] [core|backend|build|open]"
+[[ $# -le 2 ]] || worktree_die "Usage: signlooptest [name|path|.] [core|backend|native|build|open]"
 INPUT="${1:-.}"
 case "$INPUT" in
   .) TARGET="$SIGNLOOP_CHECKOUT" ;;
@@ -17,7 +17,12 @@ case "${2:-core}" in
     (cd "$TARGET" && bash ios/scripts/test-core.sh)
     ;;
   backend)
-    (cd "$TARGET" && python3 -m unittest backend.test_service -v)
+    (cd "$TARGET" && python3 -m unittest backend.test_service backend.test_matcher backend.test_hand_tracking backend.test_static backend.test_stream_replay backend.test_stream_calibrate backend.test_pretrained backend.test_motion backend.test_holdout backend.test_face backend.test_citizen -v)
+    ;;
+  native)
+    # Actual Swift HTTP adapter + local temporal engine; synthetic data only.
+    (cd "$TARGET" && python3 -m backend.test_native && python3 -m backend.test_temporal_native &&
+      python3 -m backend.test_pretrained_native && python3 -m backend.test_motion_native)
     ;;
   build)
     bootstrap_worktree "$TARGET"
@@ -29,5 +34,5 @@ case "${2:-core}" in
     bootstrap_worktree "$TARGET"
     open "$TARGET/ios/Signloop.xcodeproj"
     ;;
-  *) worktree_die "Mode must be core, backend, build, or open." ;;
+  *) worktree_die "Mode must be core, backend, native, build, or open." ;;
 esac

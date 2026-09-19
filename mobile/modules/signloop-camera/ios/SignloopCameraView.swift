@@ -17,11 +17,12 @@ final class SignloopCameraView: ExpoView {
     private var appliedCaptureId = -1
     private var lastStatus = ""
     private var renderScheduled = false
+    private var expiryTimer: Timer?
 
     required init(appContext: AppContext? = nil) {
         let resourceURL = Bundle(for: SignloopCameraView.self).url(forResource: "SignloopCameraModels", withExtension: "bundle")
             ?? Bundle.main.url(forResource: "SignloopCameraModels", withExtension: "bundle")
-        let model = resourceURL.flatMap(Bundle.init(url:))?.path(forResource: "hand_landmarker", ofType: "task")
+        let model = resourceURL.flatMap(Bundle.init(url:))?.path(forResource: "gesture_recognizer", ofType: "task")
         tracker = CameraTracker(modelPath: model)
         super.init(appContext: appContext)
         clipsToBounds = true
@@ -55,6 +56,7 @@ final class SignloopCameraView: ExpoView {
     }
 
     deinit {
+        expiryTimer?.invalidate()
         subscription?.cancel()
         observers.forEach(NotificationCenter.default.removeObserver)
         tracker.pause()
@@ -90,10 +92,16 @@ final class SignloopCameraView: ExpoView {
         lastStatus = ""
         emit("starting")
         tracker.start()
+        expiryTimer?.invalidate()
+        expiryTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            self?.tracker.expireLocalResult()
+        }
         #endif
     }
 
     private func stop() {
+        expiryTimer?.invalidate()
+        expiryTimer = nil
         guard isCapturing else { return }
         isCapturing = false
         skeleton.path = nil

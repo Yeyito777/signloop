@@ -6,6 +6,7 @@ This local Expo SDK 55 module embeds the shared Swift scanner in the Conversatio
 
 - `ios/Signloop/CameraTracker.swift`: capture, permissions, MediaPipe, bounded landmark buffer.
 - `ios/Signloop/CaptureLifecycle.swift`: generation checks for delayed permissions/start/inference work.
+- `ios/Signloop/CaptureCadence.swift` and `CaptureFreshness.swift`: frame pacing, capture-time validation, and stale-overlay expiry.
 - `ios/Signloop/CameraPreview.swift`: the shared portrait/aspect-fill preview view.
 - `ios/Signloop/Recognition.swift`: landmark schema, normalization, buffer, coordinate mapping.
 - This directory's `ios/`: Expo module and native view; native skeleton drawing and deduplicated status events.
@@ -39,6 +40,11 @@ getRecentFrames(): Promise<{ captureId: number; frames: LandmarkFrame[] }>
 It returns the most recent 1.2 seconds from the native bounded buffer, or an empty array when capture stopped/the generation changed. Coordinates are image-normalized, portrait, mirrored for the front camera; z is relative depth. Handedness confidence is not sign confidence. The native skeleton uses the same aspect-fill math as the standalone app.
 
 Keep at most one classification request in flight and request a fresh window after it completes. Cancel requests on pause/generation changes; reject stale results again on receipt. Keep provider API keys on the backend. You can also connect the existing Swift `RemoteRecognition` beside the tracker, avoiding landmark serialization through JS entirely. It is not compiled into this camera pod yet.
+
+The shared tracker now uses MediaPipe Gesture Recognizer (including hand landmarks),
+loaded from the pod's `gesture_recognizer.task` resource. The native view runs the
+same stale-frame watchdog as the standalone camera. The private five-sign
+LiteRT engine is still standalone-only and is not compiled into this pod.
 
 Expose tentative sign estimates separately from `TranslationEvent.accepted`. Only a completed, accepted English phrase belongs in the transcript/voice pipeline. `cameraKit` deliberately emits no translations and has no simulated successful voice playback.
 

@@ -10,7 +10,7 @@ settings:
     CODE_SIGN_STYLE: Automatic
     PRODUCT_BUNDLE_IDENTIFIER: com.yeyito.signloop
     MARKETING_VERSION: "0.1.0"
-    CURRENT_PROJECT_VERSION: "3"
+    CURRENT_PROJECT_VERSION: "10"
     ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     OTHER_LDFLAGS:
       - $(inherited)
@@ -25,18 +25,20 @@ targets:
     settings:
       base:
         TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_INCLUDE_PATHS: $(inherited) $(PROJECT_DIR)/Interop
+        HEADER_SEARCH_PATHS: $(inherited) $(PROJECT_DIR)/Vendor/TensorFlowLiteHeaders
     sources:
-      - Signloop
+      - path: Signloop
+        excludes:
+          - Resources/hand_landmarker.task
+      - path: Vendor/TensorFlowLiteSwift
     info:
       path: Signloop/Info.plist
       properties:
         CFBundleDisplayName: Signloop
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        NSCameraUsageDescription: Signloop uses your camera to visualize hand joints on-device. No video is uploaded or saved.
-        NSLocalNetworkUsageDescription: Connect to your Mac backend for automatic live sign estimates from hand coordinates. No camera images are sent.
-        NSAppTransportSecurity:
-          NSAllowsLocalNetworking: true
+        NSCameraUsageDescription: Signloop tracks hands and estimates supported signs on your iPhone. No images or video are uploaded or saved.
         UILaunchScreen: {}
         UIRequiresFullScreen: true
         UIApplicationSceneManifest:
@@ -60,8 +62,26 @@ targets:
       - sdk: MetalKit.framework
       - sdk: QuartzCore.framework
       - sdk: Security.framework
+  SignloopUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - Tests/UI
+    dependencies:
+      - target: Signloop
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Signloop
+        PRODUCT_BUNDLE_IDENTIFIER: com.yeyito.signloop.uitests
+        OTHER_LDFLAGS: ""
+        "OTHER_LDFLAGS[sdk=iphoneos*]": ""
+        "OTHER_LDFLAGS[sdk=iphonesimulator*]": ""
 schemes:
   Signloop:
     build:
       targets:
         Signloop: all
+    test:
+      targets:
+        - SignloopUITests

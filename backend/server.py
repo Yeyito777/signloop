@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import hmac
+import hashlib
 import json
 from pathlib import Path
 import threading
@@ -64,12 +65,14 @@ def make_server(host: str, port: int, service: Service, token: str) -> Threading
 
         def dispatch(self):
             if self.command == "GET" and self.path == "/health":
-                return {"status": "ok", "experimental": True, "classifier": "typesafe/jev-latest",
-                        "caption_provider": "cerebras", "caption_model": service.caption_model}
+                return {"status": "ok", "experimental": True,
+                        "classifier": getattr(service, "mode", "zero_shot"),
+                        "caption_provider": "cerebras" if service.caption_model else None,
+                        "caption_model": service.caption_model}
             self.authorize()
             if self.command == "GET" and self.path == "/v1/status":
-                return {"status": "ok", "vocabulary": list(VOCABULARY),
-                        "mode": "zero_shot", "validated": False}
+                return {"status": "ok", "vocabulary": getattr(service, "vocabulary", list(VOCABULARY)),
+                        "mode": getattr(service, "mode", "zero_shot"), "validated": False}
             if self.command == "POST":
                 body = self.body()
                 if self.path == "/v1/classify":
@@ -103,15 +106,41 @@ def make_server(host: str, port: int, service: Service, token: str) -> Threading
     return server
 
 
+def reference_service(corpus_path: Path, report_path: Path, host: str):
+    from .matcher import load_corpus, MATCHERS, ReferenceService
+    corpus = load_corpus(corpus_path)
+    if corpus.get("redistribution") == "PROHIBITED" and host not in ("localhost", "127.0.0.1", "::1"):
+        raise ValueError("Restricted research corpus may only be evaluated on loopback.")
+    report = json.loads(report_path.read_text())
+    if report.get("protocol") == "rolling-calibration-v1":
+        raise ValueError("Rolling calibration requires its tested client cadence/filter; "
+                         "these experimental reports cannot configure the legacy live server.")
+    digest = hashlib.sha256(corpus_path.read_bytes()).hexdigest()
+    if report.get("corpus_sha256") != digest or report.get("model") not in MATCHERS:
+        raise ValueError("Calibration report does not match this corpus/model.")
+    params = report["parameters"]
+    matcher = MATCHERS[report["model"]](corpus["samples"], **params)
+    if not set(matcher.labels) <= set(VOCABULARY):
+        raise ValueError("Corpus labels must be in the current app vocabulary.")
+    return ReferenceService(matcher)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--env-file", type=Path, default=Path(".env"))
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8787)
+    parser.add_argument("--reference-corpus", type=Path)
+    parser.add_argument("--calibration-report", type=Path)
     args = parser.parse_args()
     values = read_env(args.env_file)
-    service = Service(Backboard(values.get("BACKBOARD_API_KEY", ""), timeout=8),
-                      caption_model=values.get("CEREBRAS_MODEL", "openai/gpt-oss-120b"))
+    if bool(args.reference_corpus) != bool(args.calibration_report):
+        parser.error("--reference-corpus and --calibration-report must be supplied together.")
+    if args.reference_corpus:
+        service = reference_service(args.reference_corpus, args.calibration_report, args.host)
+    else:
+        service = Service(Backboard(values.get("BACKBOARD_API_KEY", ""), timeout=8),
+                          caption_model=values.get("CEREBRAS_MODEL", "openai/gpt-oss-120b"))
     server = make_server(args.host, args.port, service, values.get("SIGNLOOP_BACKEND_TOKEN", ""))
     print(f"Signloop backend: http://{args.host}:{args.port} (experimental; no payload logging)", flush=True)
     try:
