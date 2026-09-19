@@ -7,3 +7,14 @@ ios/Signloop.xcodeproj/
 xcuserdata/
 .env
 ios/*.log
+
+# Managed worktrees and local bootstrap metadata
+.worktrees/
+.signloop-worktree
+
+# Local build/test reports and signing material
+*.xcresult/
+*.p12
+*.mobileprovision
+.env.*
+!.env.example

@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# clean-worktree <name|.worktrees/name|absolute-path>
+# Refuses dirty trees, detached/reassigned branches, or unique commits.
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+source "$SCRIPT_DIR/worktree-common.sh"
+[[ $# == 1 ]] || worktree_die "Usage: clean-worktree <name|path>"
+WORKTREE_DIR="$(resolve_worktree_dir "$1")"
+require_registered_worktree "$WORKTREE_DIR"
+[[ -f "$WORKTREE_DIR/.signloop-worktree" && ! -L "$WORKTREE_DIR/.signloop-worktree" ]] ||
+  worktree_die "Not created by this flow; use git worktree commands to manage it."
+NAME="$(sed -n '1p' "$WORKTREE_DIR/.signloop-worktree")"
+START="$(sed -n '2p' "$WORKTREE_DIR/.signloop-worktree")"
+[[ "$NAME" == "$(basename "$WORKTREE_DIR")" ]] || worktree_die "Worktree metadata does not match its path."
+BRANCH="$(git -C "$WORKTREE_DIR" symbolic-ref --quiet --short HEAD || true)"
+[[ "$BRANCH" == "$NAME" ]] || worktree_die "Branch changed or is detached; refusing to remove it."
+[[ -z "$(git -C "$WORKTREE_DIR" status --porcelain --untracked-files=all)" ]] ||
+  worktree_die "Worktree has changes/untracked files. Commit or move them first."
+TIP="$(git -C "$WORKTREE_DIR" rev-parse HEAD)"
+SAFE=0
+[[ "$TIP" == "$START" ]] && SAFE=1
+# Check explicit integration branches, not just an upstream pointing to itself.
+for ref in HEAD refs/heads/main refs/remotes/origin/main; do
+  if git -C "$SIGNLOOP_ROOT" rev-parse --verify "$ref^{commit}" >/dev/null 2>&1 &&
+    git -C "$SIGNLOOP_ROOT" merge-base --is-ancestor "$TIP" "$ref"; then
+    SAFE=1
+  fi
+done
+[[ "$SAFE" == 1 ]] || worktree_die "Branch has unmerged commits. Merge it before cleaning."
+
+# Run from the main checkout so this script also works inside the target.
+cd "$SIGNLOOP_ROOT"
+git worktree remove "$WORKTREE_DIR"
+# -D is safe ONLY after the ancestry/unchanged-base checks above. Git's own -d
+# uses a branch's upstream, which may not be the integration branch checked here.
+git branch -D "$BRANCH"
+printf '\nCleaned %s and local branch %s. Remote branches were not changed.\n' "$WORKTREE_DIR" "$BRANCH"

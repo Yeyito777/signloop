@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Enable versioned hooks for this repository only; never replace custom hooks.
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+source "$SCRIPT_DIR/worktree-common.sh"
+CURRENT="$(git -C "$SIGNLOOP_ROOT" config --get core.hooksPath || true)"
+[[ -z "$CURRENT" || "$CURRENT" == .githooks ]] ||
+  worktree_die "Existing core.hooksPath=$CURRENT; integrate .githooks/post-checkout manually."
+git -C "$SIGNLOOP_ROOT" config --local core.hooksPath .githooks
+printf 'Enabled Signloop checkout hooks locally (.githooks).\n'

@@ -2,6 +2,21 @@
 
 Hack the North · limited-vocabulary ASL-to-English prototype.
 
+## Parallel development
+
+Use a separate branch/checkout per task while keeping `yeyito` available:
+
+```sh
+scripts/dev/setup-worktrees
+scripts/dev/create-worktree camera-polish
+scripts/dev/signlooptest camera-polish
+# After merging your task:
+scripts/dev/clean-worktree camera-polish
+```
+
+See [the worktree guide](docs/worktrees.md) for build/open commands, dependency
+isolation, safety checks, and the create/clean smoke test.
+
 ## Developer MVP: real on-device hand tracking
 
 Native iPhone app with **Google MediaPipe Hand Landmarker**, not simulated joints.

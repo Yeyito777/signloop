@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# Integration smoke test against committed HEAD. No network when deps are cached.
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+source "$SCRIPT_DIR/worktree-common.sh"
+NAME="smoke-wt-$(date +%s)-$$"
+CHILD="$NAME-child"
+TARGET="$SIGNLOOP_ROOT/.worktrees/$NAME"
+CHILD_TARGET="$SIGNLOOP_ROOT/.worktrees/$CHILD"
+
+cleanup() {
+  local status=$?
+  trap - EXIT
+  for name in "$CHILD" "$NAME"; do
+    if [[ -d "$SIGNLOOP_ROOT/.worktrees/$name" ]]; then
+      "$SCRIPT_DIR/clean-worktree" "$name" || status=1
+    fi
+  done
+  exit "$status"
+}
+trap cleanup EXIT
+
+"$SCRIPT_DIR/create-worktree" "$NAME"
+[[ -f "$TARGET/ios/Signloop.xcodeproj/project.pbxproj" ]]
+[[ -d "$TARGET/ios/Vendor" && ! -L "$TARGET/ios/Vendor" ]]
+[[ -f "$TARGET/ios/Signloop/Resources/hand_landmarker.task" ]]
+[[ ! -L "$TARGET/ios/Signloop/Resources/hand_landmarker.task" ]]
+[[ ! -e "$TARGET/ios/build" && ! -e "$TARGET/.env" ]]
+[[ -z "$(git -C "$TARGET" status --porcelain)" ]]
+"$TARGET/scripts/dev/signlooptest" . core
+
+# Cached artifacts are independent, not writable shared symlinks.
+printf 'private smoke artifact\n' > "$TARGET/ios/Vendor/signloop-smoke-probe"
+[[ ! -e "$SIGNLOOP_ROOT/ios/Vendor/signloop-smoke-probe" ]]
+rm "$TARGET/ios/Vendor/signloop-smoke-probe"
+
+if "$SCRIPT_DIR/create-worktree" "$NAME" 2>/dev/null; then
+  worktree_die "Duplicate creation unexpectedly succeeded."
+fi
+if "$SCRIPT_DIR/clean-worktree" ../outside 2>/dev/null; then
+  worktree_die "Traversal protection failed."
+fi
+if "$SCRIPT_DIR/clean-worktree" "$SIGNLOOP_ROOT" 2>/dev/null; then
+  worktree_die "Main-checkout protection failed."
+fi
+printf 'do not delete\n' > "$TARGET/worktree-smoke-untracked"
+if "$SCRIPT_DIR/clean-worktree" "$NAME" 2>/dev/null; then
+  worktree_die "Dirty-worktree protection failed."
+fi
+[[ -f "$TARGET/worktree-smoke-untracked" ]]
+rm "$TARGET/worktree-smoke-untracked"
+
+START="$(git -C "$TARGET" rev-parse HEAD)"
+git -C "$TARGET" -c user.name=SignloopSmoke -c user.email=smoke@localhost \
+  commit --allow-empty -m "Temporary worktree safety test"
+TEMP_COMMIT="$(git -C "$TARGET" rev-parse HEAD)"
+if "$SCRIPT_DIR/clean-worktree" "$NAME" 2>/dev/null; then
+  worktree_die "Unmerged-commit protection failed."
+fi
+# Only rewind our known, empty test commit using compare-and-swap.
+git -C "$SIGNLOOP_ROOT" update-ref "refs/heads/$NAME" "$START" "$TEMP_COMMIT"
+
+# Running a worktree's own script still creates a sibling under the common root.
+"$TARGET/scripts/dev/create-worktree" "$CHILD"
+[[ -d "$CHILD_TARGET" && ! -e "$TARGET/.worktrees" ]]
+"$CHILD_TARGET/scripts/dev/clean-worktree" ".worktrees/$CHILD"
+"$SCRIPT_DIR/clean-worktree" "$TARGET"
+for name in "$CHILD" "$NAME"; do
+  [[ ! -e "$SIGNLOOP_ROOT/.worktrees/$name" ]]
+  ! git -C "$SIGNLOOP_ROOT" show-ref --verify --quiet "refs/heads/$name"
+  ! git -C "$SIGNLOOP_ROOT" worktree list --porcelain | grep -Fqx "worktree $SIGNLOOP_ROOT/.worktrees/$name"
+done
+printf '\nPASS: create, isolated dependencies, core tests, safety guards, nested invocation, clean.\n'
+printf 'No smoke worktrees or branches remain.\n'
