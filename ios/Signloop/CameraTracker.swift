@@ -328,7 +328,6 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     private func configureOutputConnection() {
         for output in session.outputs {
             guard let connection = output.connection(with: .video) else { continue }
-            if connection.isVideoRotationAngleSupported(90) { connection.videoRotationAngle = 90 }
             if connection.isVideoMirroringSupported {
                 connection.automaticallyAdjustsVideoMirroring = false
                 connection.isVideoMirrored = front
