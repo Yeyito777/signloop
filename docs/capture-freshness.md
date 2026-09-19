@@ -68,3 +68,9 @@ a hard real-time guarantee.
 
 The remaining real-camera/recognition checks are in the
 [no-recording live phone checklist](live-phone-checklist.md).
+
+Build 10 (`d6f92c9`) passed the expanded core suite, all 72 Python tests and
+signed compilation, then installed successfully on Yeyito at 06:51 local,
+September 19. No live launch/accuracy claim follows from that installation.
+The six UI tests were last run on build 9; they were not rerun for this
+watchdog-only change.
