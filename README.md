@@ -10,19 +10,21 @@ capture, saving, or Analyze button. Pause/flip stay on the camera; the top-right
 settings button controls hand joints, joint numbers and tracking stats.
 
 **The default offline preview currently recognizes only the ILY (“I love you”)
-handshape.** Extend thumb, index and pinky; fold middle and ring. Other signs are
-not supported locally yet. It requires no Mac, network or API key and does not
+handshape without extra model assets.** Extend thumb, index and pinky; fold middle
+and ring. A private Debug build with verified pretrained assets automatically
+enables the [five-sign offline research mode](docs/live-offline.md):
+HELLO, YES, NO, PLEASE and THANK_YOU. It requires no Mac connection, network or API key and does not
 upload images or landmarks. Thumbs-up is never relabeled as ASL YES.
 
 MediaPipe's pretrained Gesture Recognizer supplies both real landmarks and
 handshape estimates. This is not a general ASL model. See
 [the local evaluation and limitations](docs/local-gesture-preview.md).
 
-An optional **Experimental cloud signs** toggle retains the previous backend/Jev
-path. It is off by default; enabling it uploads recent landmark windows to the
-configured backend/provider. Its broader vocabulary remains unvalidated.
-See [backend setup](docs/backend.md). Completing a reliable multi-sign recognizer
-and validating live iPhone signing remain open project goals.
+The camera screen is now **offline only**; the cloud toggle and automatic
+backend calls have been removed. Legacy [backend research tools](docs/backend.md)
+remain separate. The five-sign weights are not bundled or publicly distributed
+while their provenance/rights are clarified. Live iPhone and fresh-signer
+accuracy validation remain open project goals.
 
 ## Local reference-matching experiment
 
@@ -41,13 +43,15 @@ the same V2 matcher without a server. It is parity-tested but **not enabled in t
 camera UI**: distributable references and live rejection validation are still needed.
 
 A [pretrained 250-word candidate](docs/pretrained-sign-research.md) now recognizes
-all five target words in local rolling-window research. It is **not enabled in
-the app**: stationary-pose false positives, phone validation and model provenance
-remain unresolved.
+all five target words in local rolling-window research. A calibrated articulation
+gate rejects the synthetic stationary-NO failures. Natural nonsigning behavior,
+phone validation and model provenance remain unresolved.
 
 The [native runtime probe](docs/native-pretrained-runtime.md) matches Python
 model outputs and coexists with MediaPipe on the iOS simulator. It is a
-developer-only test entry, not an enabled five-word camera mode.
+developer-only test entry. The separate live worker now uses the same native
+engine when exact private Debug assets are present; the screen clearly identifies
+that research mode instead of claiming it is available in every build.
 
 ## Parallel development
 

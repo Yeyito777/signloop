@@ -29,9 +29,10 @@ multi-sign accuracy goal** and not validated ASL translation.
 - Camera pauses/flips reset local evidence; a 400 ms freshness check runs on the
   250 ms UI timer, so a stalled sign clears within about 650 ms.
 
-Cloud analysis is **off by default**. The optional settings toggle retains the
-unvalidated Jev path for developers and discloses uploads. Provider keys stay on
-the backend. The local preview has no networking, recording or training workflow.
+The camera is now **offline only**, with no cloud toggle or automatic requests.
+The ILY preview remains the fallback when the separate
+[five-sign private research assets](live-offline.md) are unavailable.
+Neither local path needs networking, recording or a training workflow.
 
 ## Real-video check (not phone validation)
 

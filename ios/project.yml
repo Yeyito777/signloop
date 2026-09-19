@@ -10,7 +10,7 @@ settings:
     CODE_SIGN_STYLE: Automatic
     PRODUCT_BUNDLE_IDENTIFIER: com.yeyito.signloop
     MARKETING_VERSION: "0.1.0"
-    CURRENT_PROJECT_VERSION: "5"
+    CURRENT_PROJECT_VERSION: "6"
     ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     OTHER_LDFLAGS:
       - $(inherited)
@@ -38,10 +38,7 @@ targets:
         CFBundleDisplayName: Signloop
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        NSCameraUsageDescription: Signloop uses your camera to visualize hand joints on-device. No video is uploaded or saved.
-        NSLocalNetworkUsageDescription: Connect to your Mac backend for automatic live sign estimates from hand coordinates. No camera images are sent.
-        NSAppTransportSecurity:
-          NSAllowsLocalNetworking: true
+        NSCameraUsageDescription: Signloop tracks hands and estimates supported signs on your iPhone. No images or video are uploaded or saved.
         UILaunchScreen: {}
         UIRequiresFullScreen: true
         UIApplicationSceneManifest:

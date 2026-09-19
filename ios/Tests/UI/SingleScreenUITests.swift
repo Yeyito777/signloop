@@ -73,16 +73,17 @@ final class SingleScreenUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Allow camera in Settings"].waitForExistence(timeout: 5))
     }
 
-    func testCloudAnalysisIsExplicitOptIn() {
+    func testCameraScreenHasNoCloudSetupOrNetworkDependency() {
         XCTAssertTrue(app.buttons["camera-settings"].waitForExistence(timeout: 10))
         app.buttons["camera-settings"].tap()
-        let toggle = actualSwitch("Experimental cloud signs")
-        XCTAssertEqual(toggle.value as? String, "0")
-        toggle.tap()
-        app.buttons["Done"].tap()
-        XCTAssertTrue(app.staticTexts["analysis-mode"].label.contains("cloud"))
-        app.buttons["camera-settings"].tap()
-        actualSwitch("Experimental cloud signs").tap()
+        XCTAssertFalse(app.switches["Experimental cloud signs"].exists)
+        let privacy = app.staticTexts["offline-privacy"]
+        for _ in 0..<6 {
+            if privacy.exists && privacy.isHittable { break }
+            app.collectionViews.firstMatch.swipeUp()
+        }
+        XCTAssertTrue(privacy.exists)
+        XCTAssertTrue(privacy.label.contains("nothing is recorded or sent"))
         app.buttons["Done"].tap()
         XCTAssertTrue(app.staticTexts["analysis-mode"].label.contains("Offline"))
     }

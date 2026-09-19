@@ -25,6 +25,12 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
         didSet { UserDefaults.standard.set(showNumbers, forKey: "showJointNumbers") }
     }
     @Published private(set) var snapshotURL: URL?
+    // Main-thread callbacks; frames stay in RAM on the phone.
+    var onFrame: ((LandmarkFrame) -> Void)?
+    var onReset: (() -> Void)?
+    private var uiGeneration = 0
+    private var captureGeneration = 0 // camera queue only
+    private var wantsRunning = false
 
     private let queue = DispatchQueue(label: "com.signloop.camera", qos: .userInitiated)
     private var recognizer: GestureRecognizer?
@@ -44,36 +50,48 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
         observers.append(NotificationCenter.default.addObserver(
             forName: .AVCaptureSessionWasInterrupted, object: session, queue: .main
         ) { [weak self] _ in
-            self?.hands = []
-            self?.localSign = nil
+            self?.invalidateDisplayedFrames()
             if let self { self.queue.async { self.localFilter.reset() } }
             self?.isRunning = false
             self?.status = "Camera interrupted"
         })
         observers.append(NotificationCenter.default.addObserver(
             forName: .AVCaptureSessionInterruptionEnded, object: session, queue: .main
-        ) { [weak self] _ in self?.start() })
+        ) { [weak self] _ in
+            if self?.wantsRunning == true { self?.start() }
+        })
         observers.append(NotificationCenter.default.addObserver(
             forName: .AVCaptureSessionRuntimeError, object: session, queue: .main
         ) { [weak self] notification in
             let error = notification.userInfo?[AVCaptureSessionErrorKey] as? NSError
             self?.isRunning = false
-            self?.hands = []
-            self?.localSign = nil
+            self?.invalidateDisplayedFrames()
             self?.errorMessage = error?.localizedDescription ?? "Camera error. Tap Resume to retry."
         })
     }
 
     deinit { observers.forEach(NotificationCenter.default.removeObserver) }
 
+    private func invalidateDisplayedFrames() {
+        uiGeneration += 1
+        hands = []
+        localSign = nil
+        onReset?()
+    }
+
     func start() {
+        wantsRunning = true
+        invalidateDisplayedFrames()
+        let generation = uiGeneration
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             permissionDenied = false
-            queue.async { self.startOnQueue() }
+            queue.async { self.startOnQueue(generation: generation) }
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { [weak self] _ in
-                DispatchQueue.main.async { self?.start() }
+                DispatchQueue.main.async {
+                    if self?.wantsRunning == true { self?.start() }
+                }
             }
         default:
             permissionDenied = true
@@ -82,12 +100,17 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     }
 
     func pause() {
+        wantsRunning = false
+        invalidateDisplayedFrames()
+        let generation = uiGeneration
+        isRunning = false
         queue.async {
             self.session.stopRunning()
             self.buffer.reset()
             self.localFilter.reset()
             self.recognizer = nil
             DispatchQueue.main.async {
+                guard self.uiGeneration == generation else { return }
                 self.isRunning = false
                 self.hands = []
                 self.localSign = nil
@@ -100,8 +123,11 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     }
 
     func flipCamera() {
+        invalidateDisplayedFrames()
+        let generation = uiGeneration
         queue.async {
             guard self.configured else { return }
+            self.captureGeneration = generation
             let wasRunning = self.session.isRunning
             self.session.stopRunning()
             do {
@@ -113,6 +139,7 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
                 if wasRunning { self.session.startRunning() }
                 let nowFront = self.front
                 DispatchQueue.main.async {
+                    guard self.uiGeneration == generation else { return }
                     self.isFront = nowFront
                     self.hands = []
                     self.localSign = nil
@@ -182,7 +209,8 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
         }
     }
 
-    private func startOnQueue() {
+    private func startOnQueue(generation: Int) {
+        captureGeneration = generation
         do {
             try configureRecognizer()
             if !configured {
@@ -208,6 +236,7 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
             session.startRunning()
             let running = session.isRunning
             DispatchQueue.main.async {
+                guard self.uiGeneration == generation else { return }
                 self.errorMessage = nil
                 self.isRunning = running
                 self.status = running ? "Looking for hands" : "Camera unavailable"
@@ -255,6 +284,7 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
                        from connection: AVCaptureConnection) {
         guard session.isRunning, let recognizer else { return }
         let now = CACurrentMediaTime()
+        let generation = captureGeneration
         guard now - lastInference >= 1.0 / 24.0 else { return }
         lastInference = now
         let timestamp = max(lastTimestamp + 1, Int(now * 1000))
@@ -281,9 +311,10 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
             let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
             let width = pixelBuffer.map { CVPixelBufferGetWidth($0) } ?? 720
             let height = pixelBuffer.map { CVPixelBufferGetHeight($0) } ?? 1280
-            buffer.append(LandmarkFrame(timestampMS: timestamp, hands: detected,
-                                        imageAspectRatio: Float(width) / Float(height),
-                                        mirrored: connection.isVideoMirrored))
+            let frame = LandmarkFrame(timestampMS: timestamp, hands: detected,
+                                      imageAspectRatio: Float(width) / Float(height),
+                                      mirrored: connection.isVideoMirrored)
+            buffer.append(frame)
             let count = buffer.frames.count
             rateFrames += 1
             var measuredFPS: Int?
@@ -293,10 +324,12 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
                 rateFrames = 0
             }
             DispatchQueue.main.async {
+                guard self.uiGeneration == generation, self.wantsRunning else { return }
                 let fresh = CACurrentMediaTime() - now <= 0.4
                 self.hands = fresh ? detected : []
                 self.localSign = fresh ? local : nil
                 self.lastLocalFrameAt = now
+                if fresh { self.onFrame?(frame) } else { self.onReset?() }
                 self.latencyMS = elapsed
                 self.bufferedFrames = count
                 self.frameSize = CGSize(width: width, height: height)
@@ -308,10 +341,11 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
 
     private func report(_ error: Error) {
         localFilter.reset()
+        let generation = captureGeneration
         queue.async { if self.session.isRunning { self.session.stopRunning() } }
         DispatchQueue.main.async {
-            self.hands = []
-            self.localSign = nil
+            guard self.uiGeneration == generation else { return }
+            self.invalidateDisplayedFrames()
             self.isRunning = false
             self.errorMessage = error.localizedDescription
             self.status = "Tracking unavailable"

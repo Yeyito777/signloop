@@ -1,7 +1,13 @@
-# Live sign estimates — zero setup in the app
+# Legacy backend research tools
 
-The app now defaults to an [offline ILY handshape preview](local-gesture-preview.md).
-This page describes the optional **Experimental cloud signs / zero-shot Jev** path.
+**Current camera UI is offline only.** The cloud toggle and automatic requests
+were removed in favor of the [native live worker](live-offline.md). The remainder
+of this page documents the earlier optional backend architecture and retained
+CLI/API research tools; it is not the current app setup flow.
+
+Without private pretrained assets the app falls back to the
+[offline ILY handshape preview](local-gesture-preview.md).
+This page describes the historical **Experimental cloud signs / zero-shot Jev** path.
 An opt-in, provider-free
 [reference matcher and local replay tool](recognition-evaluation.md) now exists;
 its [first real-recording benchmark](recognition-baseline-results.md) is not
