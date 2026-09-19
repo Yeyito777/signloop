@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 import time
 
-from .matcher import ReferenceMatcher, load_corpus
+from .matcher import MATCHERS, load_corpus
 
 
 def metrics(rows, matcher):
@@ -41,9 +41,9 @@ def metrics(rows, matcher):
                           for (a, b), n in sorted(confusion.items())]}
 
 
-def evaluate(corpus, corpus_sha):
+def evaluate(corpus, corpus_sha, model="reference-dtw-v1"):
     samples = corpus["samples"]
-    matcher = ReferenceMatcher(samples, max_distance=0, min_margin=1)
+    matcher = MATCHERS[model](samples, max_distance=0, min_margin=1)
     by_split = {split: [s for s in samples if s["split"] == split]
                 for split in ("train", "calibration", "test")}
     for split in ("calibration", "test"):
@@ -77,7 +77,7 @@ def evaluate(corpus, corpus_sha):
     test = [(s, matcher.rank(s["frames"])) for s in by_split["test"]]
     test_seconds = time.perf_counter() - start
     return {
-        "model": "reference-dtw-v1", "corpus_sha256": corpus_sha,
+        "model": model, "corpus_sha256": corpus_sha,
         "scope": "Isolated public research clips, NOT iPhone/live/continuous-sign validation.",
         "dataset": corpus.get("dataset"), "signer_disjoint": True,
         "parameters": {"max_distance": chosen[0], "min_margin": chosen[1]},
@@ -95,9 +95,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("corpus", type=Path)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--model", choices=sorted(MATCHERS), default="reference-dtw-v1")
     args = parser.parse_args()
     corpus = load_corpus(args.corpus)
-    report = evaluate(corpus, hashlib.sha256(args.corpus.read_bytes()).hexdigest())
+    report = evaluate(corpus, hashlib.sha256(args.corpus.read_bytes()).hexdigest(), args.model)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=2, allow_nan=False) + "\n")
     print(json.dumps({k: v for k, v in report.items() if k != "test_predictions"}, indent=2))

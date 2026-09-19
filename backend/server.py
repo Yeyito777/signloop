@@ -107,16 +107,16 @@ def make_server(host: str, port: int, service: Service, token: str) -> Threading
 
 
 def reference_service(corpus_path: Path, report_path: Path, host: str):
-    from .matcher import load_corpus, ReferenceMatcher, ReferenceService
+    from .matcher import load_corpus, MATCHERS, ReferenceService
     corpus = load_corpus(corpus_path)
     if corpus.get("redistribution") == "PROHIBITED" and host not in ("localhost", "127.0.0.1", "::1"):
         raise ValueError("Restricted research corpus may only be evaluated on loopback.")
     report = json.loads(report_path.read_text())
     digest = hashlib.sha256(corpus_path.read_bytes()).hexdigest()
-    if report.get("corpus_sha256") != digest or report.get("model") != "reference-dtw-v1":
+    if report.get("corpus_sha256") != digest or report.get("model") not in MATCHERS:
         raise ValueError("Calibration report does not match this corpus/model.")
     params = report["parameters"]
-    matcher = ReferenceMatcher(corpus["samples"], **params)
+    matcher = MATCHERS[report["model"]](corpus["samples"], **params)
     if not set(matcher.labels) <= set(VOCABULARY):
         raise ValueError("Corpus labels must be in the current app vocabulary.")
     return ReferenceService(matcher)

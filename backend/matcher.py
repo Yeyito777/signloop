@@ -153,6 +153,9 @@ def load_corpus(path: Path) -> dict:
 
 
 class ReferenceMatcher:
+    model_name = "reference-dtw-v1"
+    feature_function = staticmethod(features)
+
     def __init__(self, samples: list[dict], max_distance: float, min_margin: float):
         if not math.isfinite(max_distance) or not 0 <= max_distance <= 10:
             raise ValueError("Invalid maximum distance.")
@@ -162,7 +165,7 @@ class ReferenceMatcher:
         self.references = []
         for sample in samples:
             if sample["split"] == "train" and sample["label"] != "UNKNOWN":
-                vector = features(sample["frames"])
+                vector = self.feature_function(sample["frames"])
                 if not vector:
                     raise ValueError(f"Unusable reference: {sample['id']}")
                 self.references.append((sample["label"], sample["id"], vector))
@@ -171,7 +174,7 @@ class ReferenceMatcher:
             raise ValueError("Need at least two supported labels for ambiguity rejection.")
 
     def rank(self, frames: list[dict], diagnostics: dict | None = None) -> list[dict]:
-        query = features(frames, diagnostics=diagnostics)
+        query = self.feature_function(frames, diagnostics=diagnostics)
         if not query:
             return []
         closest = {}
@@ -194,7 +197,7 @@ class ReferenceMatcher:
             if accepted:
                 reason = "reference_match"
         return {"candidates": ranked, "unknown": not accepted, "reason": reason,
-                "model": "reference-dtw-v1", "mode": "reference_dtw", "experimental": True,
+                "model": self.model_name, "mode": "reference_dtw", "experimental": True,
                 "diagnostics": {"margin": margin, "max_distance": self.max_distance,
                                 "min_margin": self.min_margin, "score_kind": "exp_negative_distance"}}
 
@@ -206,6 +209,23 @@ class ReferenceMatcher:
         if not ranked:
             result["reason"] = diagnostics["observation_reason"]
         return result
+
+
+class TrackedReferenceMatcher(ReferenceMatcher):
+    model_name = "reference-dtw-v2"
+
+    @staticmethod
+    def feature_function(frames, diagnostics=None):
+        from .hand_tracking import stabilize
+        details = diagnostics if diagnostics is not None else {}
+        result = features(stabilize(frames, details), diagnostics=details)
+        if (not result and frames and frames[-1]["hands"]
+                and details.get("observation_reason") == "no_hands"):
+            details["observation_reason"] = "unresolved_hand_tracking"
+        return result
+
+
+MATCHERS = {cls.model_name: cls for cls in (ReferenceMatcher, TrackedReferenceMatcher)}
 
 
 class ReferenceService:

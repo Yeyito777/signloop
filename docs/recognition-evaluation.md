@@ -4,6 +4,10 @@
 clips recognized; 15/15 unsupported clips rejected, but 20/45 test clips failed
 observation-quality gates. This is not ready for deployment.
 
+**[Hand-association follow-up](recognition-tracking-results.md):** V2 recovered
+most unusable calibration sequences; a fresh signer-disjoint test recognized
+7/14 supported clips and falsely accepted 1/15 unsupported clips. Still not ready.
+
 ## What changed
 
 The existing Jev adapter sends six subsampled frames plus written descriptions,
@@ -40,6 +44,11 @@ Synthetic fixtures test invariance, motion order, orientation, two-hand
 visibility, unknown rejection, malformed input, calibration/test isolation,
 duplicate recordings, signer leakage, report binding and the HTTP contract.
 They are explicitly **not ASL recordings or accuracy evidence**.
+
+The default remains `reference-dtw-v1` for reproducibility. Opt into geometric
+hand association with `backend.research_data --matcher reference-dtw-v2` and
+`backend.replay --model reference-dtw-v2`. Keep versioned corpus/report filenames.
+Both models remain server-side local research baselines, not bundled iPhone models.
 
 ## Bring a real corpus
 

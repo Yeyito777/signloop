@@ -142,7 +142,7 @@ not logged. No automatic recording/export is performed.
 ## Tests
 
 ```sh
-python3 -m unittest backend.test_service backend.test_matcher -v
+python3 -m unittest backend.test_service backend.test_matcher backend.test_hand_tracking -v
 python3 -m backend.test_native        # Swift ↔ HTTP contract, mocked models
 bash ios/scripts/test-core.sh        # normalization, buffer, live stabilization
 python3 -m backend.probe              # opt-in paid live API connectivity checks

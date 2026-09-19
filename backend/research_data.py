@@ -157,6 +157,19 @@ def select_rows(splits, per_label, negatives):
     return selected
 
 
+def fresh_signer_rows(splits, per_label, negatives):
+    """New test signers not present in ANY of the originally selected 107 clips.
+
+    Uses unused official-train participants as a new local holdout, never as
+    training data. Old official-test examples are not revisited for selection.
+    """
+    original = select_rows(splits, 6, 15)
+    used_signers = {row["Participant ID"] for _, _, row in original}
+    untouched = [row for row in splits["train"] if row["Participant ID"] not in used_signers]
+    holdout = select_rows({"test": untouched}, per_label, negatives)
+    return [(split, label, row) for split, label, row in original if split != "test"] + holdout
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--accept-research-license", action="store_true")
@@ -165,9 +178,15 @@ def main():
     parser.add_argument("--per-label", type=int, default=6)
     parser.add_argument("--negatives", type=int, default=15)
     parser.add_argument("--model", type=Path, default=Path("ios/Signloop/Resources/hand_landmarker.task"))
+    parser.add_argument("--matcher", choices=("reference-dtw-v1", "reference-dtw-v2"),
+                        default="reference-dtw-v1")
+    parser.add_argument("--fresh-signers", action="store_true")
+    parser.add_argument("--corpus-name", default="corpus.json")
     args = parser.parse_args()
     if not args.accept_research_license:
         parser.error(f"Read {LICENSE}, then explicitly pass --accept-research-license.")
+    if Path(args.corpus_name).name != args.corpus_name or not args.corpus_name.endswith(".json"):
+        parser.error("--corpus-name must be a JSON filename without a directory.")
     with zipfile.ZipFile(RangeReader()) as archive:
         splits = metadata(archive, args.out_dir)
         for name, rows in splits.items():
@@ -176,8 +195,10 @@ def main():
             return
         if not 1 <= args.per_label <= 30 or not 1 <= args.negatives <= 100:
             parser.error("Use 1–30 per label and 1–100 negatives per evaluation split.")
-        from .matcher import features, load_corpus
-        selected = select_rows(splits, args.per_label, args.negatives)
+        from .matcher import MATCHERS, load_corpus
+        features = MATCHERS[args.matcher].feature_function
+        selector = fresh_signer_rows if args.fresh_signers else select_rows
+        selected = selector(splits, args.per_label, args.negatives)
         samples, rejected = [], []
         clips = args.out_dir / "clips"
         clips.mkdir(exist_ok=True)
@@ -210,9 +231,10 @@ def main():
                   "license": LICENSE, "redistribution": "PROHIBITED",
                   "preprocessing": "MediaPipe 0.10.21 float16 v1; mirrored; 15Hz; center <=3s; no-hand edge trim",
                   "model_sha256": hashlib.sha256(args.model.read_bytes()).hexdigest(),
-                  "selection": {"per_label": args.per_label, "negatives_per_split": args.negatives},
+                  "selection": {"per_label": args.per_label, "negatives_per_split": args.negatives,
+                                "fresh_signers": args.fresh_signers, "matcher": args.matcher},
                   "rejected_training": rejected, "samples": samples}
-        path = args.out_dir / "corpus.json"
+        path = args.out_dir / args.corpus_name
         path.write_text(json.dumps(corpus, allow_nan=False))
         load_corpus(path)  # Enforce signer isolation and recording deduplication.
         print(f"Corpus saved locally: {path}. DO NOT COMMIT OR UPLOAD.")
