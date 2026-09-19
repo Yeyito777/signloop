@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { advanceTime, idlePose } from '../src/components/goose/motion.ts';
-import { motion } from '../src/components/goose/settings.ts';
+import {
+  activityOffset,
+  advanceTime,
+  composePose,
+  gooseActivities,
+  gooseEmotions,
+  idlePose,
+  stepPose,
+} from '../src/components/goose/motion.ts';
+import { motion, poseLimits } from '../src/components/goose/settings.ts';
 
 test('pause holds a pose and resume advances from the held time', () => {
   let time = advanceTime(2, 1 / 60, true);
@@ -27,7 +35,7 @@ test('blink fully closes then reopens, including across the cycle boundary', () 
 });
 
 test('neutral pose has open eyes; all idle motion stays within small limits', () => {
-  assert.deepEqual(idlePose(0), { breath: 1, bob: 0, tilt: 0, wing: 0, eyes: 1 });
+  assert.deepEqual(idlePose(0), { breath: 1, bob: 0, tilt: 0, wing: 0, eyes: 1, yaw: 0, pitch: 0, beak: 0 });
   for (let t = 0; t < 100; t += 0.01) {
     const p = idlePose(t);
     assert.ok(Math.abs(p.breath - 1) <= motion.breathingAmount + 1e-9);
@@ -35,5 +43,67 @@ test('neutral pose has open eyes; all idle motion stays within small limits', ()
     assert.ok(Math.abs(p.tilt) <= motion.headTiltRadians);
     assert.ok(Math.abs(p.wing) <= motion.wingRadians);
     assert.ok(p.eyes >= 0.039 && p.eyes <= 1);
+    assert.equal(p.yaw, 0);
+    assert.equal(p.pitch, 0);
+    assert.equal(p.beak, 0);
   }
+});
+
+test('Idle activity matches the idle clock', () => {
+  for (const t of [0, 1.2, 8.7, 19.2]) {
+    assert.deepEqual(composePose(t, 'idle'), idlePose(t));
+  }
+});
+
+test('Speaking opens the beak; Idle does not', () => {
+  assert.equal(activityOffset('idle', 0.2).beak, 0);
+  assert.equal(composePose(0.2, 'idle').beak, 0);
+  const peak = motion.speakingBeakSeconds * 0.25;
+  assert.ok(composePose(peak, 'speaking').beak > 0.2);
+});
+
+test('Watching and Thinking change the pose versus Idle', () => {
+  assert.ok(composePose(0, 'watching').pitch < composePose(0, 'idle').pitch);
+  assert.notEqual(composePose(1.3, 'thinking').yaw, composePose(1.3, 'idle').yaw);
+});
+
+test('Fear hops higher than Idle', () => {
+  let maxFear = 0;
+  let maxIdle = 0;
+  for (let t = 0; t < motion.fearJumpSeconds; t += 0.02) {
+    maxFear = Math.max(maxFear, composePose(t, 'idle', 'fear').bob);
+    maxIdle = Math.max(maxIdle, composePose(t, 'idle').bob);
+  }
+  assert.ok(maxFear > maxIdle + 0.03);
+});
+
+test('each of the four emotions changes the pose versus Idle', () => {
+  for (const emotion of gooseEmotions) {
+    assert.notDeepEqual(composePose(1.2, 'idle', emotion), composePose(1.2, 'idle'));
+  }
+});
+
+test('composed poses stay inside the small motion limits', () => {
+  for (const activity of gooseActivities) {
+    for (const emotion of [undefined, ...gooseEmotions]) {
+      for (let t = 0; t < 20; t += 0.1) {
+        const p = composePose(t, activity, emotion);
+        assert.ok(Math.abs(p.breath - 1) <= poseLimits.breath + 1e-9);
+        assert.ok(Math.abs(p.bob) <= poseLimits.bob + 1e-9);
+        assert.ok(Math.abs(p.tilt) <= poseLimits.tilt + 1e-9);
+        assert.ok(Math.abs(p.wing) <= poseLimits.wing + 1e-9);
+        assert.ok(Math.abs(p.yaw) <= poseLimits.yaw + 1e-9);
+        assert.ok(Math.abs(p.pitch) <= poseLimits.pitch + 1e-9);
+        assert.ok(p.beak >= 0 && p.beak <= poseLimits.beak);
+        assert.ok(p.eyes >= poseLimits.eyesMin && p.eyes <= 1);
+      }
+    }
+  }
+});
+
+test('the same time, activity, and emotion stay deterministic', () => {
+  assert.deepEqual(composePose(3.4, 'speaking', 'joy'), composePose(3.4, 'speaking', 'joy'));
+  const start = idlePose(0);
+  const toward = stepPose(start, composePose(1, 'watching', 'sadness'), 0.1);
+  assert.notDeepEqual(toward, start);
 });

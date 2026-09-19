@@ -1,18 +1,28 @@
+import type { GooseEmotion } from '../components/goose/motion.ts';
 import { voiceConfig } from './config.ts';
 
-export const ELEVENLABS_MODEL_ID = 'eleven_turbo_v2_5';
+export const ELEVENLABS_MODEL_ID = 'eleven_multilingual_v2';
 export const ELEVENLABS_OUTPUT_FORMAT = 'mp3_44100_128';
 export const ELEVENLABS_VOICE_SETTINGS = {
   stability: 0.85,
   similarity_boost: 0.9,
   style: 0,
+  speed: 1,
   use_speaker_boost: true,
 };
 
-export function seedForSpeechText(text: string): number {
+export const emotionVoice = {
+  joy: { stability: 0.32, similarity_boost: 0.72, style: 0.62, speed: 1.12, use_speaker_boost: true },
+  sadness: { stability: 0.58, similarity_boost: 0.86, style: 0.4, speed: 0.82, use_speaker_boost: true },
+  anger: { stability: 0.28, similarity_boost: 0.7, style: 0.7, speed: 1.06, use_speaker_boost: true },
+  fear: { stability: 0.3, similarity_boost: 0.68, style: 0.55, speed: 1.14, use_speaker_boost: true },
+} as const satisfies Record<GooseEmotion, typeof ELEVENLABS_VOICE_SETTINGS>;
+
+export function seedForSpeechText(text: string, emotion: GooseEmotion = 'joy'): number {
+  const material = `${emotion}:${text}`;
   let hash = 2166136261;
-  for (let i = 0; i < text.length; i += 1) {
-    hash ^= text.charCodeAt(i);
+  for (let i = 0; i < material.length; i += 1) {
+    hash ^= material.charCodeAt(i);
     hash = Math.imul(hash, 16777619);
   }
   return hash >>> 0;
@@ -31,7 +41,7 @@ export function prepareSpeechText(text: string): string {
   return trimmed;
 }
 
-export function buildSpeechRequest(text: string, voiceId: string, apiKey: string) {
+export function buildSpeechRequest(text: string, voiceId: string, apiKey: string, emotion: GooseEmotion = 'joy') {
   return {
     url: `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=${ELEVENLABS_OUTPUT_FORMAT}`,
     headers: {
@@ -42,8 +52,8 @@ export function buildSpeechRequest(text: string, voiceId: string, apiKey: string
     body: JSON.stringify({
       text,
       model_id: ELEVENLABS_MODEL_ID,
-      seed: seedForSpeechText(text),
-      voice_settings: ELEVENLABS_VOICE_SETTINGS,
+      seed: seedForSpeechText(text, emotion),
+      voice_settings: emotionVoice[emotion],
     }),
   };
 }
@@ -61,9 +71,9 @@ export function messageForSpeechError(status?: number, detail?: { status?: strin
 }
 
 /** Turns English text into an MP3 buffer. Future ASR can call this unchanged. */
-export async function speakEnglish(text: string, signal?: AbortSignal): Promise<ArrayBuffer> {
+export async function speakEnglish(text: string, signal?: AbortSignal, emotion: GooseEmotion = 'joy'): Promise<ArrayBuffer> {
   if (!voiceConfig.voiceConfigured) throw new VoiceError(voiceConfig.setupMessage);
-  const request = buildSpeechRequest(prepareSpeechText(text), voiceConfig.voiceId, voiceConfig.apiKey);
+  const request = buildSpeechRequest(prepareSpeechText(text), voiceConfig.voiceId, voiceConfig.apiKey, emotion);
   let response: Response;
   try {
     response = await fetch(request.url, { method: 'POST', headers: request.headers, body: request.body, signal });

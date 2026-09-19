@@ -4,7 +4,7 @@ import {
   buildSpeechRequest,
   ELEVENLABS_MODEL_ID,
   ELEVENLABS_OUTPUT_FORMAT,
-  ELEVENLABS_VOICE_SETTINGS,
+  emotionVoice,
   seedForSpeechText,
   messageForSpeechError,
   prepareSpeechText,
@@ -20,7 +20,7 @@ test('speech text is trimmed', () => {
   assert.equal(prepareSpeechText('  hello goose  '), 'hello goose');
 });
 
-test('speech request uses the convert endpoint, key header, and turbo model', () => {
+test('speech request uses the convert endpoint, key header, and multilingual model', () => {
   const request = buildSpeechRequest('Hi from SignLoop.', 'goose-voice-id', 'test-key');
   assert.equal(request.url, `https://api.elevenlabs.io/v1/text-to-speech/goose-voice-id?output_format=${ELEVENLABS_OUTPUT_FORMAT}`);
   assert.equal(request.headers['xi-api-key'], 'test-key');
@@ -29,14 +29,22 @@ test('speech request uses the convert endpoint, key header, and turbo model', ()
   assert.deepEqual(JSON.parse(request.body), {
     text: 'Hi from SignLoop.',
     model_id: ELEVENLABS_MODEL_ID,
-    seed: seedForSpeechText('Hi from SignLoop.'),
-    voice_settings: ELEVENLABS_VOICE_SETTINGS,
+    seed: seedForSpeechText('Hi from SignLoop.', 'joy'),
+    voice_settings: emotionVoice.joy,
   });
 });
 
-test('the same line always uses the same speech seed', () => {
-  assert.equal(seedForSpeechText('Hello from SignLoop.'), seedForSpeechText('Hello from SignLoop.'));
-  assert.notEqual(seedForSpeechText('Hello from SignLoop.'), seedForSpeechText('Goodbye from SignLoop.'));
+test('the same line and emotion always uses the same speech seed', () => {
+  assert.equal(seedForSpeechText('Hello from SignLoop.', 'joy'), seedForSpeechText('Hello from SignLoop.', 'joy'));
+  assert.notEqual(seedForSpeechText('Hello from SignLoop.', 'joy'), seedForSpeechText('Hello from SignLoop.', 'sadness'));
+});
+
+test('each emotion sends different voice settings', () => {
+  const joy = JSON.parse(buildSpeechRequest('Hi', 'id', 'key', 'joy').body);
+  const sad = JSON.parse(buildSpeechRequest('Hi', 'id', 'key', 'sadness').body);
+  assert.deepEqual(joy.voice_settings, emotionVoice.joy);
+  assert.deepEqual(sad.voice_settings, emotionVoice.sadness);
+  assert.notDeepEqual(joy.voice_settings, sad.voice_settings);
 });
 
 test('voice ids are encoded in the request URL', () => {

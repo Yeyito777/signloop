@@ -1,8 +1,8 @@
 import { useEffect, useRef, type RefObject } from 'react';
-import { Group, OrthographicCamera } from 'three';
+import { Group, Mesh, MeshBasicMaterial, OrthographicCamera } from 'three';
 import { useFrame, useThree } from './GooseCanvas';
 import { colors } from './settings';
-import { advanceTime, idlePose } from './motion';
+import { advanceTime, composePose, stillPose, stepPose, type GooseActivity, type GooseEmotion, type GoosePose } from './motion';
 
 type Vec3 = [number, number, number];
 type PebbleProps = {
@@ -41,7 +41,12 @@ function Eye({ side, blinkRef }: { side: number; blinkRef: RefObject<Group | nul
   );
 }
 
-function Goose({ animate, reducedMotion }: { animate: boolean; reducedMotion: boolean }) {
+function Goose({ animate, reducedMotion, activity, emotion }: {
+  animate: boolean;
+  reducedMotion: boolean;
+  activity: GooseActivity;
+  emotion?: GooseEmotion;
+}) {
   const root = useRef<Group>(null);
   const body = useRef<Group>(null);
   const head = useRef<Group>(null);
@@ -49,32 +54,74 @@ function Goose({ animate, reducedMotion }: { animate: boolean; reducedMotion: bo
   const rightWing = useRef<Group>(null);
   const leftEye = useRef<Group>(null);
   const rightEye = useRef<Group>(null);
+  const upperBeak = useRef<Group>(null);
+  const lowerBeak = useRef<Group>(null);
+  const steamPuffs = useRef<(Mesh | null)[]>([null, null, null, null, null, null]);
+  const tearDrops = useRef<(Mesh | null)[]>([null, null, null, null]);
   const time = useRef(0);
+  const displayed = useRef<GoosePose>(stillPose(emotion));
   const invalidate = useThree(state => state.invalidate);
 
-  function applyPose(t: number) {
-    const pose = idlePose(t);
+  function applyPose(pose: GoosePose) {
     if (root.current) root.current.position.y = pose.bob;
     if (body.current) body.current.scale.set(1 + (pose.breath - 1) * 0.5, pose.breath, pose.breath);
-    if (head.current) head.current.rotation.z = pose.tilt;
+    if (head.current) {
+      head.current.rotation.x = pose.pitch;
+      head.current.rotation.y = pose.yaw;
+      head.current.rotation.z = pose.tilt;
+    }
     if (leftWing.current) leftWing.current.rotation.z = -0.14 - pose.wing;
     if (rightWing.current) rightWing.current.rotation.z = 0.14 + pose.wing;
     if (leftEye.current) leftEye.current.scale.y = pose.eyes;
     if (rightEye.current) rightEye.current.scale.y = pose.eyes;
+    if (upperBeak.current) upperBeak.current.position.y = -0.16 + pose.beak * 0.045;
+    if (lowerBeak.current) lowerBeak.current.position.y = -0.278 - pose.beak * 0.055;
+  }
+
+  function applyEffects(clock: number, current?: GooseEmotion) {
+    const steaming = current === 'anger';
+    steamPuffs.current.forEach((mesh, i) => {
+      if (!mesh) return;
+      mesh.visible = steaming;
+      if (!steaming) return;
+      const phase = (clock / 1.35 + i * 0.17) % 1;
+      const side = i % 2 === 0 ? -1 : 1;
+      mesh.position.set(side * (0.42 + phase * 0.16), 0.52 + phase * 0.5, 0.08 + (i % 3) * 0.02);
+      const size = 0.085 + phase * 0.09;
+      mesh.scale.set(size * 1.2, size, size * 1.2);
+      (mesh.material as MeshBasicMaterial).opacity = (1 - phase) * 0.7;
+    });
+
+    const crying = current === 'sadness';
+    tearDrops.current.forEach((mesh, i) => {
+      if (!mesh) return;
+      mesh.visible = crying;
+      if (!crying) return;
+      const phase = (clock / 1.55 + i * 0.28) % 1;
+      const side = i % 2 === 0 ? -1 : 1;
+      mesh.position.set(side * (0.36 + phase * 0.05), -0.02 - phase * 0.38, 0.78);
+      const size = 0.06 + (1 - phase) * 0.02;
+      mesh.scale.set(size * 0.65, size * 1.45, size * 0.65);
+      (mesh.material as MeshBasicMaterial).opacity = (1 - phase) * 0.95;
+    });
   }
 
   useEffect(() => {
     if (reducedMotion) {
       time.current = 0;
-      applyPose(0);
+      displayed.current = stillPose(emotion);
+      applyPose(displayed.current);
     }
+    applyEffects(time.current, emotion);
     invalidate();
-  }, [reducedMotion, invalidate]);
+  }, [reducedMotion, activity, emotion, invalidate]);
 
   useFrame((_, delta) => {
     if (!animate) return;
     time.current = advanceTime(time.current, delta, true);
-    applyPose(time.current);
+    displayed.current = stepPose(displayed.current, composePose(time.current, activity, emotion), delta);
+    applyPose(displayed.current);
+    applyEffects(time.current, emotion);
   });
 
   return (
@@ -106,10 +153,22 @@ function Goose({ animate, reducedMotion }: { animate: boolean; reducedMotion: bo
           {/* Scale each complete eye around its own center, including its highlights. */}
           <Eye side={-1} blinkRef={leftEye} />
           <Eye side={1} blinkRef={rightEye} />
-          <group name="upper-beak" position={[0, -0.16, 0.7]}>
+          {[0, 1, 2, 3, 4, 5].map(i => (
+            <mesh key={`steam-${i}`} ref={node => { steamPuffs.current[i] = node; }} visible={false}>
+              <sphereGeometry args={[1, 12, 10]} />
+              <meshBasicMaterial color={colors.steam} transparent opacity={0} depthWrite={false} />
+            </mesh>
+          ))}
+          {[0, 1, 2, 3].map(i => (
+            <mesh key={`tear-${i}`} ref={node => { tearDrops.current[i] = node; }} visible={false}>
+              <sphereGeometry args={[1, 12, 10]} />
+              <meshBasicMaterial color={colors.tear} transparent opacity={0} depthWrite={false} />
+            </mesh>
+          ))}
+          <group ref={upperBeak} name="upper-beak" position={[0, -0.16, 0.7]}>
             <Pebble color={colors.beakAndFeet} scale={[0.245, 0.125, 0.29]} />
           </group>
-          <group name="lower-beak" position={[0, -0.278, 0.695]}>
+          <group ref={lowerBeak} name="lower-beak" position={[0, -0.278, 0.695]}>
             <Pebble color={colors.beakAndFeet} scale={[0.21, 0.067, 0.24]} />
           </group>
           <group position={[0, 0.62, -0.03]} rotation={[0.05, 0, -0.2]}>
@@ -122,11 +181,16 @@ function Goose({ animate, reducedMotion }: { animate: boolean; reducedMotion: bo
   );
 }
 
-export function GooseScene(props: { animate: boolean; reducedMotion: boolean }) {
+export function GooseScene(props: {
+  animate: boolean;
+  reducedMotion: boolean;
+  activity: GooseActivity;
+  emotion?: GooseEmotion;
+}) {
   const { camera, size, invalidate } = useThree();
   useEffect(() => {
     const orthographicCamera = camera as OrthographicCamera;
-    orthographicCamera.zoom = Math.min(size.width / 3.25, size.height / 4.65);
+    orthographicCamera.zoom = Math.min(size.width / 2.8, size.height / 4.2);
     orthographicCamera.lookAt(0, 1.93, 0);
     orthographicCamera.updateProjectionMatrix();
     invalidate();

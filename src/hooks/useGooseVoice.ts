@@ -1,6 +1,7 @@
 import { File as CacheFile, Paths } from 'expo-file-system';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
+import type { GooseEmotion } from '../components/goose/motion.ts';
 import { voiceConfig } from '../voice/config.ts';
 import { prepareSpeechText, speakEnglish, VoiceError } from '../voice/elevenlabs.ts';
 import { playClip, unlockPlayback } from '../voice/playClip.ts';
@@ -44,7 +45,7 @@ export function useGooseVoice() {
     setStatus('idle');
   }, [releaseClip]);
 
-  const speak = useCallback(async (text: string) => {
+  const speak = useCallback(async (text: string, emotion: GooseEmotion = 'joy') => {
     if (!voiceConfig.voiceConfigured) {
       setError(voiceConfig.setupMessage);
       setStatus('error');
@@ -62,7 +63,7 @@ export function useGooseVoice() {
 
     try {
       const spoken = prepareSpeechText(text);
-      const buffer = await speakEnglish(spoken, abort.signal);
+      const buffer = await speakEnglish(spoken, abort.signal, emotion);
       if (id !== requestId.current) return;
       const clip = cacheSpeechAudio(buffer);
       clipRef.current = clip;
