@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 import time
 
-from .service import Backboard, References, Service, ServiceError, read_env, parse_decision
+from .service import Backboard, Service, ServiceError, read_env, parse_decision
 
 
 def main():
@@ -31,14 +31,14 @@ def main():
     print(json.dumps({"test": "jev_empty_synthetic_input", "passed": True,
                       "model": parsed["model"], "seconds": round(time.monotonic() - start, 2)}))
     with tempfile.TemporaryDirectory() as temp:
-        service = Service(gateway, References(Path(temp) / "references.json"),
-                          config.get("CEREBRAS_MODEL", "openai/gpt-oss-120b"))
+        service = Service(gateway, caption_model=config.get("CEREBRAS_MODEL", "openai/gpt-oss-120b"))
         start = time.monotonic()
         caption = service.caption(["HELLO", "THANK_YOU"])
         assert caption["polished"], "Caption must pass the meaning guard."
         print(json.dumps({"test": "cerebras_synthetic_labels", "passed": True,
                           "seconds": round(time.monotonic() - start, 2), **caption}))
     print("Connectivity only. Real landmark sign recognition remains unvalidated.")
+    gateway.cleanup_queue.join()
 
 
 if __name__ == "__main__":

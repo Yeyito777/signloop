@@ -26,7 +26,7 @@ struct BackendClient {
     ) async throws -> Response {
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
         request.httpMethod = method
-        request.timeoutInterval = 50
+        request.timeoutInterval = 5
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if method == "POST" { request.httpBody = try JSONEncoder().encode(body) }
@@ -45,13 +45,7 @@ struct BackendClient {
     struct Labels: Encodable {
         let raw_signs: [String]
     }
-    struct Reference: Encodable {
-        let label: String
-        let frames: [LandmarkFrame]
-        let human_confirmed = true
-    }
-    struct ReferenceStatus: Decodable { let labels: [String] }
-    struct DeleteStatus: Decodable { let deleted: Bool }
+    struct Status: Decodable { let status: String; let vocabulary: [String] }
     struct Caption: Decodable {
         let text: String
         let raw_signs: [String]

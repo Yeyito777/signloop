@@ -10,9 +10,9 @@ struct BackendClientTests {
         precondition(BackendClient.validURL("http://example.com") == nil)
         precondition(BackendClient.validURL("https://user:password@example.com") == nil)
         precondition(BackendClient.validURL("http://10.999.1.2") == nil)
-        let status: BackendClient.ReferenceStatus = try await client.request(
-            "v1/references", body: BackendClient.Empty(), method: "GET")
-        precondition(status.labels == ["HELLO"])
+        let status: BackendClient.Status = try await client.request(
+            "v1/status", body: BackendClient.Empty(), method: "GET")
+        precondition(status.status == "ok" && status.vocabulary.contains("HELLO"))
         let classifier = BackendClassifier(client: client)
         let empty = try await classifier.classify(frames: [])
         precondition(empty.unknown && empty.reason == "no_hands")
@@ -32,8 +32,8 @@ struct BackendClientTests {
         precondition(caption.raw_signs == ["HELLO", "THANK_YOU"])
         let badClient = BackendClient(baseURL: url, token: "invalid")
         do {
-            let _: BackendClient.ReferenceStatus = try await badClient.request(
-                "v1/references", body: BackendClient.Empty(), method: "GET")
+            let _: BackendClient.Status = try await badClient.request(
+                "v1/status", body: BackendClient.Empty(), method: "GET")
             preconditionFailure("Invalid auth must fail")
         } catch is BackendError { }
         print("PASS: native Swift HTTP encoding/decoding, URL policy, unknown, caption and auth (mocked models).")

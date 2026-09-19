@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 import threading
 
-from .service import Backboard, References, Service, ServiceError, VOCABULARY, read_env, validate_frames
+from .service import Backboard, Service, ServiceError, VOCABULARY, read_env, validate_frames
 
 MAX_BODY = 300_000
 
@@ -67,22 +67,15 @@ def make_server(host: str, port: int, service: Service, token: str) -> Threading
                 return {"status": "ok", "experimental": True, "classifier": "typesafe/jev-latest",
                         "caption_provider": "cerebras", "caption_model": service.caption_model}
             self.authorize()
-            if self.command == "GET" and self.path == "/v1/references":
-                return {"labels": sorted(service.references.snapshot()), "vocabulary": list(VOCABULARY),
-                        "validated": False}
-            if self.command == "DELETE" and self.path == "/v1/references":
-                service.references.delete_all()
-                return {"deleted": True}
+            if self.command == "GET" and self.path == "/v1/status":
+                return {"status": "ok", "vocabulary": list(VOCABULARY),
+                        "mode": "zero_shot", "validated": False}
             if self.command == "POST":
                 body = self.body()
                 if self.path == "/v1/classify":
                     return service.classify(validate_frames(body.get("frames")))
                 if self.path == "/v1/caption":
                     return service.caption(body.get("raw_signs"))
-                if self.path == "/v1/references":
-                    service.references.save(body.get("label"), validate_frames(body.get("frames")),
-                                            body.get("human_confirmed"))
-                    return {"labels": sorted(service.references.snapshot()), "saved": True, "validated": False}
             raise ServiceError("not_found", "Unknown endpoint.", 404)
 
         def handle_request(self):
@@ -115,12 +108,10 @@ def main():
     parser.add_argument("--env-file", type=Path, default=Path(".env"))
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8787)
-    parser.add_argument("--data-dir", type=Path, default=Path(".runtime/backend"))
     args = parser.parse_args()
     values = read_env(args.env_file)
-    service = Service(Backboard(values.get("BACKBOARD_API_KEY", "")),
-                      References(args.data_dir / "references.json"),
-                      values.get("CEREBRAS_MODEL", "openai/gpt-oss-120b"))
+    service = Service(Backboard(values.get("BACKBOARD_API_KEY", ""), timeout=8),
+                      caption_model=values.get("CEREBRAS_MODEL", "openai/gpt-oss-120b"))
     server = make_server(args.host, args.port, service, values.get("SIGNLOOP_BACKEND_TOKEN", ""))
     print(f"Signloop backend: http://{args.host}:{args.port} (experimental; no payload logging)", flush=True)
     try:

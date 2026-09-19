@@ -1,143 +1,123 @@
-# Experimental Jev → Cerebras backend
+# Live sign estimates — zero setup in the app
 
-## Verified route (2026-09-19)
+The app is a **single full-screen camera**. Open it and the current possible sign
+updates automatically. Pause/resume, camera switching, and a skeleton toggle are
+the only controls. No backend settings screen, reference recording, saving, or
+Analyze button.
 
-The Hack the North Backboard key can access **both** providers. No direct Cerebras
-key is needed. Runtime API calls use:
+## What actually runs
+
+Camera → on-device MediaPipe → recent 1.2-second landmark window → local backend
+→ Backboard / TypeSafe Jev → current possible sign.
+
+- One request in flight, targeting approximately one per second. This is network
+  inference, **not camera-frame-rate recognition**.
+- Two matching results stabilize a displayed label. Unknown, hands leaving view,
+  camera switching, pause and backgrounding clear old labels. Responses older
+  than 2.5 seconds are discarded; stalled labels expire.
+- No backlog: every request uses the latest window. Offline failures back off.
+- Jev uses built-in **textual sign descriptions and geometric features**, not
+  saved examples or a validated ASL model. There is no required training step.
+- Candidate vocabulary: HELLO, YES, NO, I_LOVE_YOU, THANK_YOU, PLEASE, and UNKNOWN.
+  Chin/chest-relative signs may be ambiguous without face/body landmarks and
+  should be rejected. Scores are uncalibrated; 0.8/0.2 score/margin gates are
+  experimental, not a statement of recognition accuracy.
+- The UI calls it a **possible sign / live estimate**. Zero-shot recognition is
+  unvalidated; testing actual signs, unknown gestures and a held-out signer is
+  still needed. API connectivity does not establish sign accuracy.
+
+Cerebras's guarded label-to-caption endpoint remains available for later phrase
+assembly, but is **not on the current-sign hot path**: a language model should
+not rewrite the label you are currently making or add extra latency.
+
+## Developer launch and provisioning
+
+Python 3.10+ standard library. Secrets stay in ignored mode-0600 `.env`:
+
+```sh
+cp .env.example .env
+# Set BACKBOARD_API_KEY and a different random SIGNLOOP_BACKEND_TOKEN.
+chmod 600 .env
+python3 -m backend.server --host 0.0.0.0 --port 8787
+```
+
+After installing the signed app on the phone, provision it automatically:
+
+```sh
+python3 -m backend.pair_phone --device Yeyito
+```
+
+This copies a temporary connection file containing only the Mac's local URL and
+the **separate LAN access token** into the app sandbox. On launch, the app stores
+the token in Keychain and removes the temporary file. The Backboard key is never
+put in the phone binary, sandbox or Keychain. Existing configured installations
+also retain their connection. iOS may still require Camera/Local Network permission.
+
+No user setup screen is necessary. The phone and Mac must be on a network that
+permits local connections; LAN client isolation/firewall rules may block access.
+This is a development backend, not a standalone/offline recognizer. Local HTTP
+is for a trusted network only. Production deployment requires HTTPS and proper
+service hosting. No production daemon is installed by these scripts.
+
+For worktrees use `--env-file /private/path/.env` and a distinct port.
+
+## Verified gateway
+
+One Hack the North key supports both routes via:
 
 ```
 POST https://app.backboard.io/api/threads/messages
 X-API-Key: <server-only BACKBOARD_API_KEY>
 ```
 
-- **Jev:** `llm_provider: typesafe`, `model_name: jev-latest`. Resolved to
-  `jev-1.13.0` in a live test. Questions go in `system_one.questions`; landmark
-  observations and references go in `system_one.state`. Decisions are parsed from
-  `system_one.answers.sign` (`type: choice`, `choice`, `probabilities`).
-- **Cerebras:** `llm_provider: cerebras`, `model_name: openai/gpt-oss-120b`.
-  This route was tested successfully with synthetic `HELLO, THANK_YOU` labels,
-  producing `"Hello, thank you."`.
-- The catalog's smallest Cerebras entry, `meta-llama/llama-3.1-8b-instruct`, failed
-  with an HTTP-200 response whose inference status was **FAILED** / no available
-  endpoint. The implementation checks status/provider, not just HTTP success.
-  GPT-OSS-120B is a working fallback, **not a small 8B model**. Change
-  `CEREBRAS_MODEL` only after testing the alternative.
+- Jev: `llm_provider: typesafe`, `model_name: jev-latest` (resolved to
+  `jev-1.13.0` in live tests). `system_one.state` carries observations;
+  `system_one.questions.sign` is a choice question.
+  Parse `system_one.answers.sign`, not free-form text.
+- Cerebras: `llm_provider: cerebras`, `model_name: openai/gpt-oss-120b`.
+  Tested with synthetic labels → `"Hello, thank you."`.
+- The smaller catalog entry `meta-llama/llama-3.1-8b-instruct` returned HTTP 200
+  with inference status FAILED / no available endpoint. Always check status,
+  not only HTTP success. The fallback is not a small 8B model.
 
-Live catalogs: `GET /models/providers` and `GET /models?provider=cerebras`.
-No unsupported top-level `mode`, `temperature`, `max_tokens` or `response_format`
-fields are sent to Jev. Typed System One questions select its execution mode.
+Sources:
+https://docs.backboard.io/concepts/system-one
+https://docs.backboard.io/concepts/models
+https://docs.backboard.io/api-reference/threads/send-message
 
-Documentation:
-- https://docs.backboard.io/concepts/system-one
-- https://docs.backboard.io/concepts/models
-- https://docs.backboard.io/api-reference/threads/send-message
+## API and privacy
 
-**These tests prove API connectivity and schema handling, not ASL accuracy.**
-
-## Run locally
-
-Python 3.10+ standard library only. No pip dependencies.
-
-```sh
-cp .env.example .env
-# Edit .env securely: BACKBOARD_API_KEY and a DIFFERENT random
-# SIGNLOOP_BACKEND_TOKEN (at least 24 characters). Never commit real values.
-chmod 600 .env
-python3 -m unittest backend.test_service -v
-python3 -m backend.test_native           # Swift ↔ HTTP contract test; mocked models
-python3 -m backend.probe                 # live API calls / small usage charge
-python3 -m backend.server                # loopback-only, port 8787
-```
-
-To connect the phone on your trusted Wi-Fi network:
-
-```sh
-python3 -m backend.server --host 0.0.0.0 --port 8787
-scutil --get LocalHostName
-```
-
-Open **Connect** in the app's transcript card. Set
-`http://<LocalHostName>.local:8787`, enter the **backend access token**, and test
-the connection. Allow iOS Local Network access if asked. The Backboard key never
-goes to the phone. The separate access token is stored in the iPhone Keychain.
-Local HTTP is development-only; use a TLS reverse proxy for deployment. This
-stdlib development server is not intended to be public-facing.
-
-An optional `signloop://connect?url=<encoded-url>&token=<encoded-access-token>`
-link configures the connection and opens settings, but **never enables uploads**.
-Treat connection links as credentials; don't publish them.
-
-## Try an actual gesture
-
-1. Enable **Allow gesture uploads this session** in Backend settings.
-2. Choose a reference label among HELLO, THANK_YOU, YES, NO, PLEASE.
-3. Have someone who knows that ASL sign perform it with their hands in frame.
-   Confirm the label and tap **Save last 2 seconds**. The camera keeps running
-   behind the settings sheet. Saving replaces the example for that label.
-4. Add the remaining signs. Examples are user-labelled, not independently
-   validated; don't record invented approximations or call them validated ASL.
-5. Return to the camera. Perform **one sign**, then tap **Analyze gesture**.
-   That explicit tap defines a segment from the preceding two-second window.
-6. Only a supported, sufficiently separated Jev match adds a raw label.
-   Lower your hands before intentionally repeating a sign. Repeated held
-   detections are suppressed.
-7. Cerebras formats the ordered labels. A meaning guard checks the exact glossary
-   word sequence; altered meanings fall back to literal labels. On provider error,
-   the app keeps the raw labels and shows the error rather than inventing output.
-8. Test unsupported gestures, no hands, transitions and a **different signer**.
-   Record misses/false positives before claiming a useful recognizer.
-
-This is **explicitly triggered, manually segmented** recognition, not automatic
-continuous ASL transcription. No temporal auto-segmentation is claimed.
-With no references, the backend returns `unknown/no_references` without calling
-Jev. Empty/no-hand windows are rejected locally. Probability-like Jev scores are
-uncalibrated; the 0.8 score / 0.2 margin are experimental gates, not validated
-accuracy guarantees. Face/body context is absent and may make signs ambiguous.
-
-## API
-
-`GET /health` is an unauthenticated, non-sensitive readiness check. It does not
-check live upstream availability or reveal credentials. All other routes require
-`Authorization: Bearer <SIGNLOOP_BACKEND_TOKEN>`:
+`GET /health`: non-sensitive readiness only, not an upstream availability test.
+Other endpoints require `Authorization: Bearer <SIGNLOOP_BACKEND_TOKEN>`:
 
 | Route | Input | Result |
 | --- | --- | --- |
-| `GET /v1/references` | — | Saved labels and five-sign vocabulary |
-| `POST /v1/references` | `label`, `human_confirmed: true`, `frames` | Save/replace an explicitly labelled reference |
-| `DELETE /v1/references` | — | Delete locally saved reference coordinates |
+| `GET /v1/status` | — | Vocabulary and experimental mode |
 | `POST /v1/classify` | `frames` | `candidates`, `unknown`, `reason`, `model` |
-| `POST /v1/caption` | `raw_signs` | `text`, `raw_signs`, `polished`, `model` |
+| `POST /v1/caption` | `raw_signs` | Guarded text, raw labels, model |
 
-Frames use the native export schema: increasing `timestampMS`, zero to two hands,
-each with `handedness` and 21 `joints` of x/y/z. Inputs are bounded to 90 frames,
-three seconds, and 300 KB. Data is downsampled for the model while retaining
-normalized joints, handedness, wrist position and palm scale.
+Reference-save endpoints have been removed. Live frames/sign histories are not
+written to disk. Only a short landmark window is held in memory.
 
-## Privacy and deployment
+No images or video are sent. While the app is active and unpaused, **landmark
+coordinates are automatically sent to the Mac and Backboard/TypeSafe**. The
+single-screen UI discloses cloud analysis. Pausing/backgrounding stops new
+requests; an already submitted upstream call may finish.
 
-- Camera images/video never leave the phone. Upload permission defaults off and
-  turns off on backgrounding/pausing; sending and reference saving are explicit.
-- Reference coordinates are saved only upon explicit request, in ignored
-  `.runtime/backend/references.json`, mode 0600. The settings screen can delete them.
-- Request bodies, keys, captions, and provider error bodies are not logged.
-- Backboard calls set `memory: "off"` and use independent turns, but Backboard
-  creates server-side thread/assistant records. **This is not zero retention**.
-  Provider retention policies still apply; deleting local references does not
-  erase already submitted provider messages.
-- `.env` and `.runtime` are ignored and never copied into task worktrees or app
-  bundles. Secrets may be supplied explicitly using `--env-file /private/path/.env`.
-- Use only a trusted LAN for local HTTP. Don't expose this development server to
-  the public internet. Stop it with Ctrl-C; there is no managed production service.
+Backboard calls disable memory and schedule best-effort deletion of the
+thread/assistant created by each independent call. Cleanup runs on a bounded
+background queue so it does not delay live results. Failures/abrupt shutdown may
+leave gateway records; upstream processing/retention policies still apply.
+**Do not promise zero provider retention.** Keys, payloads and error bodies are
+not logged. No automatic recording/export is performed.
 
-## Worktrees
+## Tests
 
 ```sh
-scripts/dev/signlooptest backend-jev backend # offline mocked/unit HTTP tests
-cd .worktrees/backend-jev
-python3 -m backend.probe --env-file ../../.env
-python3 -m backend.server --env-file ../../.env --port 8788
+python3 -m unittest backend.test_service -v
+python3 -m backend.test_native        # Swift ↔ HTTP contract, mocked models
+bash ios/scripts/test-core.sh        # normalization, buffer, live stabilization
+python3 -m backend.probe              # opt-in paid live API connectivity checks
 ```
 
-Choose a distinct port for parallel backend instances. Reference data defaults
-to each checkout's own `.runtime/backend`. No secret copying, background service
-startup, or phone deployment is performed by `signlooptest`.
+Synthetic test geometry is not reference data or proof of ASL recognition.

@@ -8,8 +8,8 @@ import tempfile
 import threading
 
 from .server import make_server
-from .service import References, Service
-from .test_service import decision, frames
+from .service import Service
+from .test_service import decision
 
 
 class Gateway:
@@ -25,10 +25,8 @@ def main():
     root = Path(__file__).resolve().parent.parent
     with tempfile.TemporaryDirectory(prefix="signloop-native-") as directory:
         temp = Path(directory)
-        references = References(temp / "references.json")
-        references.save("HELLO", frames(), True)
         token = secrets.token_urlsafe(32)
-        server = make_server("127.0.0.1", 0, Service(Gateway(), references), token)
+        server = make_server("127.0.0.1", 0, Service(Gateway()), token)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:

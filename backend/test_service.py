@@ -1,13 +1,11 @@
 import json
-from pathlib import Path
-import tempfile
 import threading
 import unittest
 import urllib.error
 import urllib.request
 
 from .service import (
-    Backboard, References, Service, ServiceError, parse_decision, summarize, validate_frames,
+    Backboard, Service, ServiceError, SIGN_CRITERIA, parse_decision, summarize, validate_frames,
 )
 from .server import make_server
 
@@ -20,7 +18,8 @@ def frames():
 
 def decision(scores=None, choice="HELLO"):
     return {"system_one": {"model": "test-jev", "answers": {"sign": {
-        "type": "choice", "choice": choice, "probabilities": scores or {"HELLO": .95, "UNKNOWN": .05},
+        "type": "choice", "choice": choice, "probabilities": scores or {
+            **{label: 0 for label in SIGN_CRITERIA}, "HELLO": .95, "UNKNOWN": .05},
     }}}}
 
 
@@ -34,11 +33,6 @@ class FakeGateway:
 
 
 class Tests(unittest.TestCase):
-    def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
-        self.refs = References(Path(self.temp.name) / "refs.json")
-
     def test_validate_and_normalize(self):
         data = validate_frames(frames())
         summary = summarize(data)
@@ -55,31 +49,23 @@ class Tests(unittest.TestCase):
         with self.assertRaises(ServiceError):
             validate_frames(data)
 
-    def test_reference_confirmation_and_storage(self):
-        with self.assertRaises(ServiceError):
-            self.refs.save("HELLO", frames(), False)
-        self.refs.save("HELLO", frames(), True)
-        self.assertIn("HELLO", References(self.refs.path).snapshot())
-        self.assertEqual(self.refs.path.stat().st_mode & 0o777, 0o600)
-        self.refs.delete_all()
-        self.assertFalse(self.refs.path.exists())
-
-    def test_no_hand_or_reference_no_external_call(self):
+    def test_no_hand_no_external_call(self):
         gateway = FakeGateway({})
-        service = Service(gateway, self.refs)
+        service = Service(gateway)
         self.assertEqual(service.classify([])["reason"], "no_hands")
-        self.assertEqual(service.classify(frames())["reason"], "no_references")
         self.assertFalse(gateway.calls)
 
     def test_real_adapter_schema_and_abstention(self):
-        self.refs.save("HELLO", frames(), True)
         gateway = FakeGateway(decision())
-        result = Service(gateway, self.refs).classify(frames())
+        result = Service(gateway).classify(frames())
         self.assertFalse(result["unknown"])
+        self.assertEqual(result["mode"], "zero_shot")
         provider, request = gateway.calls[0]
         self.assertEqual(provider, "typesafe")
         self.assertIn("UNKNOWN", request["system_one"]["questions"]["sign"]["criteria"])
         self.assertNotIn("response_format", request)
+        self.assertNotIn("references", request["system_one"]["state"])
+        self.assertEqual(set(request["system_one"]["questions"]["sign"]["criteria"]), set(SIGN_CRITERIA) | {"UNKNOWN"})
         self.assertTrue(parse_decision(decision({"HELLO": .55, "UNKNOWN": .45}), {"HELLO"})["unknown"])
         with self.assertRaises(ServiceError):
             parse_decision(decision({"HELLO": float("nan"), "UNKNOWN": .05}), {"HELLO"})
@@ -89,7 +75,7 @@ class Tests(unittest.TestCase):
     def test_caption_exact_meaning_guard(self):
         gateway = FakeGateway({"content": json.dumps({"text": "Hello! Thank you.", "raw_signs": ["HELLO", "THANK_YOU"]}),
                                "model_name": "test-caption"})
-        service = Service(gateway, self.refs)
+        service = Service(gateway)
         self.assertTrue(service.caption(["HELLO", "THANK_YOU"])["polished"])
         gateway.response["content"] = json.dumps({"text": "Hello, thank you for helping me.", "raw_signs": ["HELLO", "THANK_YOU"]})
         result = service.caption(["HELLO", "THANK_YOU"])
@@ -109,7 +95,7 @@ class Tests(unittest.TestCase):
         self.assertNotIn("secret", str(context.exception))
 
     def test_http_auth_validation_and_no_hand(self):
-        service = Service(FakeGateway({}), self.refs)
+        service = Service(FakeGateway({}))
         token = "test-token-not-real-secret-long"
         server = make_server("127.0.0.1", 0, service, token)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -120,13 +106,19 @@ class Tests(unittest.TestCase):
         with urllib.request.urlopen(base + "/health") as response:
             self.assertEqual(json.load(response)["status"], "ok")
         with self.assertRaises(urllib.error.HTTPError) as error:
-            urllib.request.urlopen(base + "/v1/references")
+            urllib.request.urlopen(base + "/v1/status")
         self.assertEqual(error.exception.code, 401)
         error.exception.close()
         request = urllib.request.Request(base + "/v1/classify", data=b'{"frames":[]}',
                                         headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
         with urllib.request.urlopen(request) as response:
             self.assertEqual(json.load(response)["reason"], "no_hands")
+        request = urllib.request.Request(base + "/v1/references", data=b'{}',
+                                        headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
+        with self.assertRaises(urllib.error.HTTPError) as error:
+            urllib.request.urlopen(request)
+        self.assertEqual(error.exception.code, 404)
+        error.exception.close()
 
 
 if __name__ == "__main__":

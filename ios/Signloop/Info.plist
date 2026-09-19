@@ -18,17 +18,6 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleURLName</key>
-			<string>com.yeyito.signloop.connect</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>signloop</string>
-			</array>
-		</dict>
-	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>NSAppTransportSecurity</key>
@@ -39,7 +28,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Signloop uses your camera to visualize hand joints on-device. No video is uploaded or saved.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Connect to your Mac backend to send explicitly selected hand landmarks for experimental sign recognition.</string>
+	<string>Connect to your Mac backend for automatic live sign estimates from hand coordinates. No camera images are sent.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -98,11 +98,9 @@ This creates disposable worktrees, runs core tests, checks independent artifacts
 duplicate/path/dirty/unmerged guards, invokes scripts from inside a worktree,
 then removes both task checkouts and branches. It never touches remote branches.
 
-For optional cloud inference, see [backend setup](backend.md). `.env` files are
-never seeded automatically; pass an explicit `--env-file` path. Saved reference
-coordinates stay in each worktree's ignored `.runtime/backend` directory.
-Cleaning a worktree removes its ignored data too; export needed reference
-examples first and stop its backend before cleaning.
+For live cloud inference, see [backend setup](backend.md). `.env` files are
+never seeded automatically; pass an explicit `--env-file` path. No live samples
+or reference recordings are saved. Stop a worktree's backend before cleaning.
 
 Adapted from Exocortex's `create-worktree`, `clean-worktree`, `worktree-common.sh`,
 `post-checkout`, and `exotest`. On this Mac those references were found under
