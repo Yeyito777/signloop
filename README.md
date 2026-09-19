@@ -66,6 +66,12 @@ A [face-context calibration experiment](docs/face-context-research.md) found
 only a small, cadence-sensitive gain. Face tracking remains **disabled** rather
 than adding unproven camera overhead.
 
+[Microsoft pretrained video/body-model benchmarks](docs/citizen-baselines.md)
+are now complete. On a separate official-split research cohort, a newer-hand +
+body hybrid accepted 47/72 complete signs, but displayed only 14/72 with causal
+windows. Neither model replaces the phone classifier; these are not sentence
+recognition or live-phone accuracy results.
+
 [Capture-time freshness checks](docs/capture-freshness.md) reject delayed and
 pre-switch camera frames instead of treating processing time as capture time.
 Camera frame age is available in settings; actual phone latency still needs
