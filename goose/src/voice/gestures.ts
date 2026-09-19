@@ -60,6 +60,26 @@ export function alignmentWithoutAudioTags(alignment: SpeechAlignment): SpeechAli
   return { characters, character_start_times_seconds, character_end_times_seconds };
 }
 
+/** Stitch timestamp chunks. If a chunk’s clock restarts at 0, slide it to follow the audio we already have. */
+export function mergeAlignment(base: SpeechAlignment | undefined, next: SpeechAlignment | undefined, timeOffset: number): SpeechAlignment | undefined {
+  if (!next?.characters.length) return base;
+  const ends = base?.character_end_times_seconds;
+  const lastEnd = ends?.[ends.length - 1] ?? 0;
+  const firstStart = next.character_start_times_seconds[0] ?? 0;
+  const offset = base && firstStart + 0.02 < lastEnd ? timeOffset : 0;
+  const shifted: SpeechAlignment = {
+    characters: next.characters,
+    character_start_times_seconds: next.character_start_times_seconds.map(time => time + offset),
+    character_end_times_seconds: next.character_end_times_seconds.map(time => time + offset),
+  };
+  if (!base) return shifted;
+  return {
+    characters: [...base.characters, ...shifted.characters],
+    character_start_times_seconds: [...base.character_start_times_seconds, ...shifted.character_start_times_seconds],
+    character_end_times_seconds: [...base.character_end_times_seconds, ...shifted.character_end_times_seconds],
+  };
+}
+
 export function wordsFromAlignment(alignment: SpeechAlignment): SpokenWord[] {
   const words: SpokenWord[] = [];
   let current = '';

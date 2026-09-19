@@ -2,10 +2,14 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   buildSpeechRequest,
+  buildStreamSpeechRequest,
   ELEVENLABS_MODEL_ID,
   ELEVENLABS_OUTPUT_FORMAT,
+  ELEVENLABS_STREAM_FORMAT,
   emotionTags,
   emotionVoice,
+  parseStreamLine,
+  consumeStreamObjects,
   performanceText,
   seedForSpeechText,
   messageForSpeechError,
@@ -74,6 +78,27 @@ test('each emotion sends different voice settings and tagged text', () => {
 test('voice ids are encoded in the request URL', () => {
   const request = buildSpeechRequest('Hi', 'id with space', 'key');
   assert.equal(request.url, `https://api.elevenlabs.io/v1/text-to-speech/id%20with%20space/with-timestamps?output_format=${ELEVENLABS_OUTPUT_FORMAT}`);
+});
+
+test('a ready phrase streams pcm with timestamps', () => {
+  const request = buildStreamSpeechRequest('hello it is me', 'goose-voice-id', 'test-key', 'joy');
+  assert.equal(request.url, `https://api.elevenlabs.io/v1/text-to-speech/goose-voice-id/stream/with-timestamps?output_format=${ELEVENLABS_STREAM_FORMAT}`);
+  assert.equal(JSON.parse(request.body).text, performanceText('hello it is me', 'joy'));
+  assert.equal(JSON.parse(request.body).model_id, ELEVENLABS_MODEL_ID);
+});
+
+test('stream lines tolerate a data prefix and skip blanks', () => {
+  assert.equal(parseStreamLine(''), undefined);
+  assert.equal(parseStreamLine('data: [DONE]'), undefined);
+  assert.deepEqual(parseStreamLine('data: {"audio_base64":"QQ=="}'), { audio_base64: 'QQ==' });
+});
+
+test('pretty-printed stream objects still parse', () => {
+  const { objects, rest } = consumeStreamObjects('{\n  "audio_base64": "QQ=="\n}\n{ "audio_base64": "Qg==" } leftover');
+  assert.equal(objects.length, 2);
+  assert.equal(objects[0]?.audio_base64, 'QQ==');
+  assert.equal(objects[1]?.audio_base64, 'Qg==');
+  assert.equal(rest, '');
 });
 
 test('speech errors map to short user-facing messages', () => {
