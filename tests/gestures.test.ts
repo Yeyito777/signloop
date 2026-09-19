@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { alignmentWithoutAudioTags, cuesFromText, cuesFromWords, gestureAt, wordsFromAlignment } from '../src/voice/gestures.ts';
+import { alignmentWithoutAudioTags, cuesFromText, cuesFromWords, gestureAt, mergeAlignment, wordsFromAlignment } from '../src/voice/gestures.ts';
 
 test('audio tags are stripped before word matching', () => {
   const cleaned = alignmentWithoutAudioTags({
@@ -11,6 +11,22 @@ test('audio tags are stripped before word matching', () => {
   const words = wordsFromAlignment(cleaned);
   assert.deepEqual(words.map(word => word.word), ['hello', 'there']);
   assert.equal(words[0]?.start, 0.1);
+});
+
+test('a restarted timestamp chunk is slid to follow the audio we already have', () => {
+  const first = {
+    characters: ['h', 'i'],
+    character_start_times_seconds: [0, 0.1],
+    character_end_times_seconds: [0.1, 0.2],
+  };
+  const second = {
+    characters: [' ', 'y', 'o', 'u'],
+    character_start_times_seconds: [0, 0.05, 0.1, 0.15],
+    character_end_times_seconds: [0.05, 0.1, 0.15, 0.2],
+  };
+  const merged = mergeAlignment(first, second, 0.5);
+  assert.deepEqual(merged?.characters.join(''), 'hi you');
+  assert.equal(merged?.character_start_times_seconds[3], 0.55);
 });
 
 test('alignment characters group into timed words', () => {

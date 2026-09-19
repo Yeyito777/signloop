@@ -1,9 +1,12 @@
 import type { GooseEmotion } from '../components/goose/motion.ts';
 import { voiceConfig } from './config.ts';
-import { alignmentWithoutAudioTags, type SpeechAlignment } from './gestures.ts';
+import { alignmentWithoutAudioTags, mergeAlignment, type SpeechAlignment } from './gestures.ts';
+import { pcm16ToFloat } from './pcm.ts';
 
 export const ELEVENLABS_MODEL_ID = 'eleven_v3';
 export const ELEVENLABS_OUTPUT_FORMAT = 'mp3_44100_128';
+export const ELEVENLABS_STREAM_FORMAT = 'pcm_24000';
+export const ELEVENLABS_STREAM_SAMPLE_RATE = 24_000;
 export const ELEVENLABS_VOICE_SETTINGS = {
   stability: 0.85,
   similarity_boost: 0.9,
@@ -83,6 +86,72 @@ export function buildMpegSpeechRequest(text: string, voiceId: string, apiKey: st
   };
 }
 
+export function buildStreamSpeechRequest(text: string, voiceId: string, apiKey: string, emotion: GooseEmotion = 'joy') {
+  const request = buildSpeechRequest(text, voiceId, apiKey, emotion);
+  return {
+    ...request,
+    url: `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}/stream/with-timestamps?output_format=${ELEVENLABS_STREAM_FORMAT}`,
+  };
+}
+
+export type StreamSpeechChunk = {
+  audio_base64?: string;
+  alignment?: SpeechAlignment;
+  normalized_alignment?: SpeechAlignment;
+};
+
+export function parseStreamLine(line: string): StreamSpeechChunk | undefined {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed === '[DONE]') return undefined;
+  const json = trimmed.startsWith('data:') ? trimmed.slice(5).trim() : trimmed;
+  if (!json || json === '[DONE]') return undefined;
+  try {
+    return JSON.parse(json) as StreamSpeechChunk;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Pull complete JSON objects out of a buffer, even if ElevenLabs pretty-prints them. */
+export function consumeStreamObjects(buffer: string): { rest: string; objects: StreamSpeechChunk[] } {
+  const objects: StreamSpeechChunk[] = [];
+  let i = 0;
+  while (i < buffer.length) {
+    const start = buffer.indexOf('{', i);
+    if (start < 0) return { rest: '', objects };
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+    let end = -1;
+    for (let j = start; j < buffer.length; j += 1) {
+      const ch = buffer[j];
+      if (inString) {
+        if (escape) escape = false;
+        else if (ch === '\\') escape = true;
+        else if (ch === '"') inString = false;
+        continue;
+      }
+      if (ch === '"') {
+        inString = true;
+        continue;
+      }
+      if (ch === '{') depth += 1;
+      else if (ch === '}') {
+        depth -= 1;
+        if (depth === 0) {
+          end = j;
+          break;
+        }
+      }
+    }
+    if (end < 0) return { rest: buffer.slice(start), objects };
+    const parsed = parseStreamLine(buffer.slice(start, end + 1));
+    if (parsed) objects.push(parsed);
+    i = end + 1;
+  }
+  return { rest: '', objects };
+}
+
 export function messageForSpeechError(status?: number, detail?: { status?: string; message?: string }): string {
   if (detail?.status === 'missing_permissions' || /missing the permission text_to_speech/i.test(detail?.message ?? '')) {
     return 'This ElevenLabs key cannot do text-to-speech. Create a new key with Text to Speech enabled, put it in .env, and restart Expo.';
@@ -102,8 +171,8 @@ export type SpokenClip = {
 
 export function bytesFromBase64(value: string): ArrayBuffer {
   if (typeof Buffer !== 'undefined') {
-    const bytes = Buffer.from(value, 'base64');
-    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    const bytes = Uint8Array.from(Buffer.from(value, 'base64'));
+    return bytes.buffer;
   }
   const binary = atob(value);
   const bytes = new Uint8Array(binary.length);
@@ -120,7 +189,71 @@ function alignmentFromBody(body: { alignment?: SpeechAlignment; normalized_align
   return cleaned.characters.length ? cleaned : undefined;
 }
 
-/** Turns English text into an MP3 buffer plus word timings. Future ASR can call this unchanged. */
+/** Turns a finished English phrase into speech, streaming audio as soon as the first chunk exists. */
+export async function speakEnglishStream(
+  text: string,
+  emotion: GooseEmotion = 'joy',
+  signal: AbortSignal | undefined,
+  onChunk: (chunk: { samples: Float32Array; sampleRate: number; alignment?: SpeechAlignment }) => void,
+): Promise<void> {
+  if (!voiceConfig.voiceConfigured) throw new VoiceError(voiceConfig.setupMessage);
+  const spoken = prepareSpeechText(text);
+  const request = buildStreamSpeechRequest(spoken, voiceConfig.voiceId, voiceConfig.apiKey, emotion);
+  let response: Response;
+  try {
+    response = await fetch(request.url, { method: 'POST', headers: request.headers, body: request.body, signal });
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    throw new VoiceError(messageForSpeechError());
+  }
+  if (!response.ok) throw new VoiceError(messageForSpeechError(response.status, await readErrorDetail(response)));
+
+  let alignment: SpeechAlignment | undefined;
+  let samplesSoFar = 0;
+  let heardAudio = false;
+
+  await forEachStreamObject(response, signal, body => {
+    if (!body.audio_base64) return;
+    const samples = pcm16ToFloat(bytesFromBase64(body.audio_base64));
+    if (!samples.length) return;
+    heardAudio = true;
+    const timeOffset = samplesSoFar / ELEVENLABS_STREAM_SAMPLE_RATE;
+    samplesSoFar += samples.length;
+    alignment = mergeAlignment(alignment, alignmentFromBody(body), timeOffset);
+    onChunk({ samples, sampleRate: ELEVENLABS_STREAM_SAMPLE_RATE, alignment });
+  });
+
+  if (!heardAudio) throw new VoiceError('Mr. Goose could not speak that line.');
+}
+
+async function forEachStreamObject(response: Response, signal: AbortSignal | undefined, onObject: (body: StreamSpeechChunk) => void): Promise<void> {
+  const emit = (text: string, rest = '') => {
+    const consumed = consumeStreamObjects(rest + text);
+    for (const object of consumed.objects) onObject(object);
+    return consumed.rest;
+  };
+
+  if (response.body && typeof response.body.getReader === 'function') {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      if (signal?.aborted) {
+        await reader.cancel();
+        throw new VoiceError('Stopped.');
+      }
+      const { done, value } = await reader.read();
+      buffer = emit(decoder.decode(value ?? new Uint8Array(), { stream: !done }), buffer);
+      if (done) break;
+    }
+    emit('', buffer);
+    return;
+  }
+
+  emit(await response.text());
+}
+
+/** Turns English text into an MP3 buffer plus word timings. Used if the stream path cannot run. */
 export async function speakEnglish(text: string, signal?: AbortSignal, emotion: GooseEmotion = 'joy'): Promise<SpokenClip> {
   if (!voiceConfig.voiceConfigured) throw new VoiceError(voiceConfig.setupMessage);
   const request = buildSpeechRequest(prepareSpeechText(text), voiceConfig.voiceId, voiceConfig.apiKey, emotion);

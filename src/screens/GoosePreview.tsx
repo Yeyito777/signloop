@@ -17,7 +17,7 @@ const emotionLabel: Record<GooseEmotion, string> = {
 function activityFromVoice(status: string, textFocused: boolean): GooseActivity {
   if (status === 'speaking') return 'speaking';
   if (status === 'loading') return 'thinking';
-  if (textFocused) return 'watching';
+  if (status === 'waiting' || textFocused) return 'watching';
   return 'idle';
 }
 
@@ -63,10 +63,12 @@ export function GoosePreview() {
   const voice = useGooseVoice();
   const trimmed = asrText.trim();
   const activity = activityFromVoice(voice.status, textFocused);
-  const speakDisabled = !voice.configured || !trimmed || voice.status === 'loading';
+  const readyDisabled = !voice.configured || !trimmed || voice.status === 'loading';
   const stopDisabled = voice.status !== 'loading' && voice.status !== 'speaking';
+  const caption = voice.status === 'waiting' ? voice.pending : voice.lastSpoken;
   const voiceNote = !voice.configured ? voice.setupMessage
-    : voice.status === 'loading' ? 'Getting the goose ready…'
+    : voice.status === 'waiting' ? 'Waiting until this phrase is ready.'
+    : voice.status === 'loading' ? 'Phrase ready — getting the goose ready…'
     : voice.status === 'speaking' ? 'Speaking.'
     : voice.status === 'error' && voice.error ? voice.error
     : reducedMotion ? 'Keeping still · Reduce Motion is on'
@@ -81,25 +83,29 @@ export function GoosePreview() {
           <Text accessibilityRole="header" style={styles.title}>Mr. Goose</Text>
         </View>
         <MrGoose animationEnabled={animationEnabled} activity={activity} emotion={emotion} lipSync={voice.lipSync} style={styles.goose} />
-        {voice.lastSpoken ? <Text style={styles.spoken} accessibilityLiveRegion="polite">{voice.lastSpoken}</Text> : null}
+        {caption ? <Text style={styles.spoken} accessibilityLiveRegion="polite">{caption}</Text> : null}
         <View style={styles.controls}>
           <TextInput
-            accessibilityLabel="Text for Mr. Goose to say"
-            placeholder="Type anything for Mr. Goose to say…"
+            accessibilityLabel="Phrase for Mr. Goose to say"
+            placeholder="Phrase in progress…"
             placeholderTextColor="#A39E93"
             value={asrText}
-            onChangeText={setAsrText}
+            onChangeText={text => {
+              setAsrText(text);
+              void voice.receive({ text, emotion, ready: false });
+            }}
             onFocus={() => setTextFocused(true)}
             onBlur={() => setTextFocused(false)}
             returnKeyType="done"
             style={styles.input}
           />
           <View style={styles.row}>
-            <Pressable accessibilityRole="button" accessibilityLabel="Speak" disabled={speakDisabled}
-              accessibilityHint="Speaks whatever you typed in Mr. Goose’s ElevenLabs voice."
-              onPress={() => { void voice.speak(asrText, emotion); }}
-              style={({ pressed }) => [styles.button, styles.half, speakDisabled && styles.buttonDisabled, pressed && !speakDisabled && styles.buttonPressed]}>
-              <Text style={styles.buttonText}>Speak</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="Ready"
+              accessibilityHint="This phrase is done. Mr. Goose will say it."
+              disabled={readyDisabled}
+              onPress={() => { void voice.receive({ text: asrText, emotion, ready: true }); }}
+              style={({ pressed }) => [styles.button, styles.half, readyDisabled && styles.buttonDisabled, pressed && !readyDisabled && styles.buttonPressed]}>
+              <Text style={styles.buttonText}>Ready</Text>
             </Pressable>
             <Pressable accessibilityRole="button" accessibilityLabel="Stop" disabled={stopDisabled}
               accessibilityHint="Stops Mr. Goose from speaking."
