@@ -40,6 +40,63 @@ struct PretrainedSignPolicy {
             (supported ? "uncertain" : "unsupported_label"), model: Self.modelName)
     }
 
+    static let motionModelName = "kaggle-islr-250-hands-motion-research-v2"
+    static let minPinchMotion = 0.075
+
+    /// Post-classification rejection only. Never creates or promotes a label.
+    /// Threshold frozen on calibration + synthetic jitter, NOT natural negatives.
+    static func applyingArticulation(_ result: Classification,
+                                     frames: [LandmarkFrame]) -> Classification {
+        let rejected = !result.unknown && result.candidates.first?.label == "NO" &&
+            pinchMotion(frames) < minPinchMotion
+        return Classification(candidates: result.candidates, unknown: result.unknown || rejected,
+                              reason: rejected ? "insufficient_articulation" : result.reason,
+                              model: motionModelName)
+    }
+
+    /// Thumb/index/middle aperture change in palm units, with 3-frame median.
+    /// Input must already pass pack's frame validation. No gap interpolation.
+    static func pinchMotion(_ frames: [LandmarkFrame]) -> Double {
+        var best = 0.0
+        for side in ["Left", "Right"] {
+            var segment: [Double] = []
+            var previous: Int?
+            var previousAspect: Float?
+            var previousMirrored: Bool?
+            for frame in frames {
+                let aspect = frame.imageAspectRatio ?? 1
+                let mirrored = frame.mirrored ?? true
+                let hands = frame.hands.filter { $0.handedness == side }
+                let delta = previous.map { frame.timestampMS - $0 }
+                if hands.count != 1 || delta == nil || delta! <= 0 || delta! > 150 ||
+                    previousAspect != aspect || previousMirrored != mirrored {
+                    segment = []
+                }
+                previous = frame.timestampMS
+                previousAspect = aspect
+                previousMirrored = mirrored
+                guard hands.count == 1, hands[0].joints.count == 21 else { continue }
+                let points = hands[0].joints
+                func distance(_ a: Int, _ b: Int) -> Double {
+                    hypot((Double(points[a].x)-Double(points[b].x))*Double(aspect),
+                          Double(points[a].y)-Double(points[b].y))
+                }
+                let scale = distance(0, 9)
+                guard scale.isFinite, scale >= 0.01 else { segment = []; continue }
+                let aperture = (distance(4, 8)+distance(4, 12))/(2*scale)
+                guard aperture.isFinite else { segment = []; continue }
+                segment.append(aperture)
+                if segment.count >= 6 {
+                    let smooth = (0..<(segment.count-2)).map {
+                        Array(segment[$0..<($0+3)]).sorted()[1]
+                    }
+                    best = max(best, smooth.max()! - smooth.min()!)
+                }
+            }
+        }
+        return best
+    }
+
     static func pack(_ frames: [LandmarkFrame]) throws -> [Float]? {
         guard frames.count <= 90 else { throw Failure.invalidFrames }
         var last = -1

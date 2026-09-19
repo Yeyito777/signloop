@@ -87,6 +87,10 @@ Motion/quality gating, natural nonsigning examples, fresh signers, phone
 tracking, camera-to-display latency, and model-rights clarification remain.
 No transcription backend or API key is involved in this candidate.
 
+A subsequent [articulation-gate experiment](recognition-motion-guard.md) rejects
+the stationary/noisy development probes without losing displayed coverage on
+this diagnostic set. It is not a substitute for natural nonsigning validation.
+
 ## Reproduce locally
 
 Use an isolated environment with `ai-edge-litert==2.2.0` and NumPy. Download

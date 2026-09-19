@@ -69,8 +69,8 @@ final class PretrainedSignEngine {
     func classify(_ frames: [LandmarkFrame]) throws -> Classification {
         guard let values = try logits(frames) else {
             return Classification(candidates: [], unknown: true,
-                                  reason: "insufficient_observation", model: PretrainedSignPolicy.modelName)
+                                  reason: "insufficient_observation", model: PretrainedSignPolicy.motionModelName)
         }
-        return try policy.decode(values)
+        return PretrainedSignPolicy.applyingArticulation(try policy.decode(values), frames: frames)
     }
 }
