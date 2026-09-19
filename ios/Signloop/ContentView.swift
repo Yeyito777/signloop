@@ -206,6 +206,7 @@ private struct CameraSettings: View {
                     LabeledContent("Joints", value: "\(tracker.hands.reduce(0) { $0 + $1.joints.count })")
                     LabeledContent("Tracking rate", value: "\(tracker.fps) FPS")
                     LabeledContent("On-device tracking", value: "\(tracker.latencyMS) ms")
+                    LabeledContent("Camera frame age", value: tracker.frameAgeMS.map { "\($0) ms" } ?? "—")
                     LabeledContent("On-device sign inference", value: recognition.latencyMS > 0 ? "\(recognition.latencyMS) ms" : "—")
                 }
                 Section("Live sign estimates") {

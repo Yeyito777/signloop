@@ -66,6 +66,11 @@ A [face-context calibration experiment](docs/face-context-research.md) found
 only a small, cadence-sensitive gain. Face tracking remains **disabled** rather
 than adding unproven camera overhead.
 
+[Capture-time freshness checks](docs/capture-freshness.md) reject delayed and
+pre-switch camera frames instead of treating processing time as capture time.
+Camera frame age is available in settings; actual phone latency still needs
+measurement.
+
 ## Parallel development
 
 Use a separate branch/checkout per task while keeping `yeyito` available:

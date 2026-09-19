@@ -18,7 +18,7 @@ final class LocalSignRecognition: ObservableObject {
     private var configured = false
     private var running = false
 
-    private static var nowMS: Int { Int(CACurrentMediaTime()*1000) }
+    private static var nowMS: Int { Int(CaptureClock.now*1000) }
 
     func prepare() {
         guard !configured else { return }

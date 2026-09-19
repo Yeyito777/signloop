@@ -14,6 +14,7 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     @Published private(set) var permissionDenied = false
     @Published private(set) var errorMessage: String?
     @Published private(set) var latencyMS = 0
+    @Published private(set) var frameAgeMS: Int?
     @Published private(set) var fps = 0
     @Published private(set) var bufferedFrames = 0
     @Published private(set) var frameSize = CGSize(width: 720, height: 1280)
@@ -38,7 +39,7 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     private var lastLocalFrameAt: CFTimeInterval = 0
     private var configured = false
     private var front = true
-    private var lastTimestamp = -1
+    private var freshness = CaptureFreshness()
     private var cadence = CaptureCadence()
     private var rateStart = 0.0
     private var rateFrames = 0
@@ -76,6 +77,7 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
         uiGeneration += 1
         hands = []
         localSign = nil
+        frameAgeMS = nil
         onReset?()
     }
 
@@ -140,6 +142,7 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
                 self.rateFrames = 0
                 self.recognizer = nil
                 try self.configureRecognizer()
+                self.freshness.reset(at: CaptureClock.now)
                 if wasRunning { self.session.startRunning() }
                 let nowFront = self.front
                 DispatchQueue.main.async {
@@ -182,7 +185,10 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
 
     /// Main-thread watchdog; a stalled camera cannot leave an old sign visible.
     func expireLocalResult() {
-        if CACurrentMediaTime() - lastLocalFrameAt > 0.4 { localSign = nil }
+        if CaptureClock.now - lastLocalFrameAt > 0.4 {
+            localSign = nil
+            frameAgeMS = nil
+        }
     }
 
     func recentFrames() async -> [LandmarkFrame] {
@@ -238,6 +244,7 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
             cadence.reset()
             rateStart = CACurrentMediaTime()
             rateFrames = 0
+            freshness.reset(at: CaptureClock.now)
             session.startRunning()
             let running = session.isRunning
             DispatchQueue.main.async {
@@ -290,9 +297,24 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
         guard session.isRunning, let recognizer else { return }
         let now = CACurrentMediaTime()
         let generation = captureGeneration
-        guard cadence.admit(at: now) else { return }
-        let timestamp = max(lastTimestamp + 1, Int(now * 1000))
-        lastTimestamp = timestamp
+        guard let captured = CaptureClock.hostSeconds(
+            presentation: CMSampleBufferGetPresentationTimeStamp(sampleBuffer),
+            sourceClock: session.synchronizationClock),
+              let timestamp = freshness.timestamp(captured: captured, now: CaptureClock.now) else {
+            buffer.reset()
+            localFilter.reset()
+            DispatchQueue.main.async {
+                guard self.uiGeneration == generation, self.wantsRunning else { return }
+                self.hands = []
+                self.localSign = nil
+                self.frameAgeMS = nil
+                self.bufferedFrames = 0
+                self.onReset?()
+                self.status = "Waiting for fresh camera frames"
+            }
+            return
+        }
+        guard cadence.admit(at: captured) else { return }
         do {
             // Pixel buffers are physically rotated/mirrored by the output connection.
             let image = try MPImage(sampleBuffer: sampleBuffer, orientation: .up)
@@ -329,16 +351,19 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
             }
             DispatchQueue.main.async {
                 guard self.uiGeneration == generation, self.wantsRunning else { return }
-                let fresh = CACurrentMediaTime() - now <= 0.4
+                let age = CaptureClock.now - captured
+                let fresh = age >= 0 && age <= 0.4
                 self.hands = fresh ? detected : []
                 self.localSign = fresh ? local : nil
-                self.lastLocalFrameAt = now
+                self.frameAgeMS = fresh ? Int(age*1000) : nil
+                self.lastLocalFrameAt = captured
                 if fresh { self.onFrame?(frame) } else { self.onReset?() }
                 self.latencyMS = elapsed
                 self.bufferedFrames = count
                 self.frameSize = CGSize(width: width, height: height)
                 if let measuredFPS { self.fps = measuredFPS }
-                self.status = detected.isEmpty ? "Looking for hands" : "Tracking \(detected.count) \(detected.count == 1 ? "hand" : "hands")"
+                self.status = !fresh ? "Waiting for fresh camera frames" :
+                    detected.isEmpty ? "Looking for hands" : "Tracking \(detected.count) \(detected.count == 1 ? "hand" : "hands")"
             }
         } catch { report(error) }
     }

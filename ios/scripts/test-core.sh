@@ -9,3 +9,5 @@ swiftc -parse-as-library Signloop/Recognition.swift Signloop/LiveWindowPolicy.sw
 "$binary"
 swiftc -parse-as-library Signloop/Recognition.swift Signloop/LiveWindowPolicy.swift Signloop/CaptureCadence.swift Tests/CaptureCadenceTests.swift -o "$binary"
 "$binary"
+swiftc -parse-as-library Signloop/CaptureFreshness.swift Signloop/CaptureCadence.swift Tests/CaptureFreshnessTests.swift -o "$binary"
+"$binary"
