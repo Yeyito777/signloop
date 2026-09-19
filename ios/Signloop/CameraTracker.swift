@@ -17,7 +17,7 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     @Published private(set) var fps = 0
     @Published private(set) var bufferedFrames = 0
     @Published private(set) var frameSize = CGSize(width: 720, height: 1280)
-    @Published var showJoints = true
+    @Published var showJoints = false
     @Published var showNumbers = false
     @Published private(set) var snapshotURL: URL?
 
@@ -131,6 +131,15 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     }
 
     func clearExport() { snapshotURL = nil }
+
+    func recentFrames() async -> [LandmarkFrame] {
+        await withCheckedContinuation { continuation in
+            queue.async {
+                let cutoff = (self.buffer.frames.last?.timestampMS ?? 0) - 1200
+                continuation.resume(returning: self.buffer.frames.filter { $0.timestampMS >= cutoff })
+            }
+        }
+    }
 
     private func startOnQueue() {
         do {

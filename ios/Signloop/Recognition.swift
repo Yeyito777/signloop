@@ -47,6 +47,8 @@ struct Classification: Codable {
     }
     let candidates: [Candidate]
     let unknown: Bool
+    var reason: String? = nil
+    var model: String? = nil
 }
 
 protocol SignClassifier {
@@ -59,6 +61,19 @@ struct UnconfiguredClassifier: SignClassifier {
     func classify(frames: [LandmarkFrame]) async throws -> Classification {
         Classification(candidates: [], unknown: true)
     }
+}
+
+/// Two consecutive results agree before displaying a label. Unknown/release
+/// clears immediately; this is jitter suppression, not accuracy calibration.
+struct LiveSignFilter {
+    private var pending: String?
+    private var count = 0
+    mutating func update(_ label: String?) -> String? {
+        guard let label else { reset(); return nil }
+        if pending == label { count += 1 } else { pending = label; count = 1 }
+        return count >= 2 ? label : nil
+    }
+    mutating func reset() { pending = nil; count = 0 }
 }
 
 /// Aspect-fill mapping shared by portrait video and the joint overlay.

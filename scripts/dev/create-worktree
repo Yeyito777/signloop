@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# create-worktree <name> [base-ref] — branch from this checkout's HEAD by default.
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+source "$SCRIPT_DIR/worktree-common.sh"
+
+[[ $# -ge 1 && $# -le 2 ]] || worktree_die "Usage: create-worktree <name> [base-ref]"
+NAME="$1"
+validate_worktree_name "$NAME"
+WORKTREE_DIR="$(resolve_worktree_dir "$NAME")"
+START="$(git -C "$SIGNLOOP_CHECKOUT" rev-parse --verify "${2:-HEAD}^{commit}")"
+[[ ! -e "$WORKTREE_DIR" ]] || worktree_die "Already exists: $WORKTREE_DIR"
+if git -C "$SIGNLOOP_ROOT" show-ref --verify --quiet "refs/heads/$NAME"; then
+  worktree_die "Branch already exists: $NAME (existing branches are never reused)."
+fi
+command -v xcodegen >/dev/null || worktree_die "Install XcodeGen first: brew install xcodegen"
+git -C "$SIGNLOOP_CHECKOUT" cat-file -e "$START:ios/scripts/bootstrap.sh" ||
+  worktree_die "Base revision has no iOS project."
+
+CREATED=0
+rollback() {
+  local result=$?
+  trap - EXIT
+  if [[ "$result" -ne 0 && "$CREATED" == 1 ]]; then
+    # No force-removal: keep the worktree if bootstrap or the user changed source.
+    if git -C "$SIGNLOOP_ROOT" worktree remove "$WORKTREE_DIR"; then
+      if [[ "$(git -C "$SIGNLOOP_ROOT" rev-parse "refs/heads/$NAME")" == "$START" ]]; then
+        git -C "$SIGNLOOP_ROOT" branch -D "$NAME"
+      fi
+    else
+      printf 'Bootstrap failed; preserving changes at %s for inspection.\n' "$WORKTREE_DIR" >&2
+    fi
+  fi
+  exit "$result"
+}
+trap rollback EXIT
+mkdir -p "$SIGNLOOP_ROOT/.worktrees"
+SIGNLOOP_SKIP_POST_CHECKOUT=1 git -C "$SIGNLOOP_ROOT" worktree add --no-track -b "$NAME" "$WORKTREE_DIR" "$START"
+CREATED=1
+# Local ownership metadata. Never contains credentials.
+printf '%s\n%s\n' "$NAME" "$START" > "$WORKTREE_DIR/.signloop-worktree"
+bootstrap_worktree "$WORKTREE_DIR"
+printf '\nCreated %s\n  branch: %s\n  base:   %s\n  test:   scripts/dev/signlooptest %s\n' \
+  "$WORKTREE_DIR" "$NAME" "$START" "$NAME"
