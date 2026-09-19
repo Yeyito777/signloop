@@ -5,6 +5,20 @@ enum ExpressionCue: String, CaseIterable, Identifiable {
     case joy, anger, fear, sadness, disgust
     var id: String { rawValue }
     var title: String { rawValue.capitalized }
+    // Starting values for phone testing, not calibrated emotion probabilities.
+    var defaultThreshold: Double {
+        switch self {
+        case .joy, .sadness: return 0.50
+        case .anger, .disgust: return 0.30
+        case .fear: return 0.25
+        }
+    }
+    var minimumCalibrationRange: Double {
+        switch self {
+        case .joy, .sadness: return 0.10
+        case .anger, .fear, .disgust: return 0.04
+        }
+    }
     var movement: String {
         switch self {
         case .joy: return "Smile"
@@ -70,7 +84,6 @@ struct ExpressionCueEngine {
     static let maximumGapMS = 400
     static let calibrationMS = 2000
     static let minimumCalibrationSamples = 8
-    static let minimumRange = 0.10
     static let releaseMargin = 0.12
 
     private(set) var raw: [ExpressionCue: Double] = [:]
@@ -85,12 +98,24 @@ struct ExpressionCueEngine {
     private var pending: ExpressionCue?
     private var pendingSinceMS: Int?
     private var active: ExpressionCue?
+    private var baselineSpreads: [ExpressionCue: Double] = [:]
 
     var hasBaseline: Bool { baselines.count == ExpressionCue.allCases.count }
     var hasCompleteFace: Bool { raw.count == ExpressionCue.allCases.count }
-    func threshold(for cue: ExpressionCue) -> Double { thresholds[cue] ?? 0.55 }
+    func threshold(for cue: ExpressionCue) -> Double { thresholds[cue] ?? cue.defaultThreshold }
     func releaseThreshold(for cue: ExpressionCue) -> Double {
-        max(0, threshold(for: cue) - Self.releaseMargin)
+        let activation = threshold(for: cue)
+        // A fixed 0.12 gap is too wide for the more sensitive thresholds:
+        // ordinary resting scores could otherwise keep a weak cue latched on.
+        return activation - min(Self.releaseMargin, activation * 0.25)
+    }
+
+    private func minimumRange(for cue: ExpressionCue) -> Double {
+        // Weak but repeatable movement can calibrate; resting variation cannot
+        // become a full-strength cue just because its absolute scores are low.
+        // Five spreads keep the resting 90th-percentile level at or below 0.20,
+        // beneath even the lowest default activation threshold (fear: 0.25).
+        max(cue.minimumCalibrationRange, 5 * baselineSpreads[cue, default: 0])
     }
 
     mutating func setThreshold(_ value: Double, for cue: ExpressionCue) {
@@ -160,7 +185,7 @@ struct ExpressionCueEngine {
         let alpha = elapsed.map { 1 - exp(-$0 / 120) } ?? 1
         for cue in ExpressionCue.allCases {
             let baseline = baselines[cue] ?? 0
-            let range = max(Self.minimumRange, (peaks[cue] ?? 1) - baseline)
+            let range = max(minimumRange(for: cue), (peaks[cue] ?? 1) - baseline)
             let value = min(1, max(0, (raw[cue]! - baseline) / range))
             levels[cue] = levels[cue].map { $0 + alpha * (value - $0) } ?? value
         }
@@ -222,12 +247,15 @@ struct ExpressionCueEngine {
         switch capture.target {
         case .baseline:
             baselines = Dictionary(uniqueKeysWithValues: ExpressionCue.allCases.map { ($0, percentile($0, 0.5)) })
+            baselineSpreads = Dictionary(uniqueKeysWithValues: ExpressionCue.allCases.map {
+                ($0, percentile($0, 0.9) - percentile($0, 0.1))
+            })
             peaks.removeAll()
             calibrationMessage = "Relaxed baseline saved. Now capture each cue at a comfortable strength."
         case .cue(let cue):
             let peak = percentile(cue, 0.9)
-            guard peak - baselines[cue, default: 0] >= Self.minimumRange else {
-                calibrationMessage = "\(cue.movement) barely changed. Try again; the previous range is unchanged."
+            guard peak - baselines[cue, default: 0] >= minimumRange(for: cue) else {
+                calibrationMessage = "\(cue.movement) barely changed compared with your relaxed face. Hold still and try again; the previous range is unchanged."
                 decision = .none
                 return
             }

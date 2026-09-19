@@ -40,6 +40,82 @@ struct ExpressionCueTests {
             expect(engine.decision == .none, "\(cue): relaxing releases")
         }
 
+        // Regressions from phone feedback: these movements never reached the
+        // former shared 0.55 cutoff. They must activate, but only when sustained.
+        let gentleSignals: [ExpressionCue: Float] = [
+            .joy: 0.52, .sadness: 0.52, .anger: 0.34, .fear: 0.29, .disgust: 0.34,
+        ]
+        for cue in ExpressionCue.allCases {
+            var gentle = ExpressionCueEngine()
+            feed(&gentle, from: 0, through: 300)
+            feed(&gentle, from: 400, through: 1200, values: [cue: gentleSignals[cue]!])
+            expect(gentle.decision == .active(cue), "\(cue): gentler movement now activates")
+            feed(&gentle, from: 1300, through: 2200, values: [cue: 0.15])
+            expect(gentle.decision == .none, "\(cue): moderate resting level does not latch a sensitive preset")
+            gentle.resetTracking()
+            feed(&gentle, from: 0, through: 200)
+            feed(&gentle, from: 300, through: 400, values: [cue: gentleSignals[cue]!])
+            expect(gentle.decision != .active(cue), "\(cue): a short pulse still cannot activate")
+            feed(&gentle, from: 500, through: 1100)
+            expect(gentle.decision == .none, "\(cue): short pulse clears without activation")
+        }
+
+        var resting = ExpressionCueEngine()
+        for sample in 0...30 {
+            let level: Float = sample.isMultiple(of: 2) ? 0.10 : 0.15
+            resting.observe(timestampMS: sample * 100, hasFace: true,
+                            coefficients: signals(Dictionary(uniqueKeysWithValues:
+                                ExpressionCue.allCases.map { ($0, level) })))
+            expect(resting.decision == .none, "resting variation must not select a sensitive preset")
+        }
+        feed(&resting, from: 3100, through: 3900, values: [.anger: 0.34, .fear: 0.29])
+        expect(resting.decision == .ambiguous([.anger, .fear]), "gentler conflicting cues still abstain")
+
+        for cue in [ExpressionCue.anger, .fear, .disgust] {
+            var calibrated = ExpressionCueEngine()
+            calibrated.observe(timestampMS: 0, hasFace: true, coefficients: signals())
+            calibrate(&calibrated, target: .baseline, start: 100)
+            calibrate(&calibrated, target: .cue(cue), start: 2200, values: [cue: 0.11])
+            expect(calibrated.peaks[cue] != nil, "\(cue): small, stable response can calibrate")
+            feed(&calibrated, from: 4300, through: 4900)
+            feed(&calibrated, from: 5000, through: 6000, values: [cue: 0.08])
+            expect(calibrated.decision == .active(cue), "\(cue): calibrated low-amplitude movement activates")
+            feed(&calibrated, from: 6100, through: 7000)
+            expect(calibrated.decision == .none, "\(cue): calibrated movement clears at rest")
+            calibrate(&calibrated, target: .cue(cue), start: 7100, values: [cue: 0.055])
+            expect(abs(calibrated.peaks[cue]! - 0.11) < 0.0001,
+                   "\(cue): almost-flat response cannot overwrite a usable range")
+        }
+
+        var noisy = ExpressionCueEngine()
+        noisy.observe(timestampMS: 0, hasFace: true, coefficients: signals())
+        noisy.startCalibration(.baseline)
+        for sample in 0...20 {
+            let level: Float = sample.isMultiple(of: 2) ? 0.04 : 0.08
+            noisy.observe(timestampMS: 100 + sample * 100, hasFace: true,
+                          coefficients: signals([.anger: level, .fear: level, .disgust: level]))
+        }
+        for (index, cue) in [ExpressionCue.anger, .fear, .disgust].enumerated() {
+            calibrate(&noisy, target: .cue(cue), start: 2200 + index * 2100, values: [cue: 0.18])
+            expect(noisy.peaks[cue] == nil, "\(cue): movement too close to resting variation is rejected")
+        }
+        var guarded = noisy
+        calibrate(&guarded, target: .cue(.fear), start: 8500, values: [.fear: 0.30])
+        expect(guarded.peaks[.fear] != nil, "movement clearly above resting variation can calibrate")
+        for sample in 0...30 {
+            let level: Float = (sample / 6).isMultiple(of: 2) ? 0.04 : 0.08
+            guarded.observe(timestampMS: 10600 + sample * 100, hasFace: true,
+                            coefficients: signals([.fear: level]))
+            expect(guarded.decision == .none, "calibration must not amplify sustained resting variation into fear")
+        }
+        noisy.resetTracking()
+        noisy.observe(timestampMS: 0, hasFace: true, coefficients: signals())
+        calibrate(&noisy, target: .cue(.fear), start: 100, values: [.fear: 0.14])
+        expect(noisy.peaks[.fear] == nil, "resting-variation guard survives a tracking reset")
+        calibrate(&noisy, target: .baseline, start: 2200)
+        calibrate(&noisy, target: .cue(.fear), start: 4300, values: [.fear: 0.11])
+        expect(noisy.peaks[.fear] != nil, "a new stable baseline replaces the old variation bound")
+
         var engine = ExpressionCueEngine()
         var asymmetric = signals()
         asymmetric["mouthSmileLeft"] = 0.8

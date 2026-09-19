@@ -157,6 +157,7 @@ struct ExpressionTesterView: View {
                 Text(String(format: "Activate %.2f · Release %.2f",
                             engine.threshold(for: cue), engine.releaseThreshold(for: cue)))
                     .font(.caption).foregroundStyle(.secondary)
+                Text("Lower = more sensitive").font(.caption2).foregroundStyle(.secondary)
                 Slider(value: Binding(get: { engine.threshold(for: cue) },
                                       set: { engine.setThreshold($0, for: cue) }),
                        in: 0.15...0.95, step: 0.01)
