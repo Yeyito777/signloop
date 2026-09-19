@@ -9,6 +9,21 @@ portable tokens, React Native text styles, CSS variables, and reusable UI icons.
 Screen layouts are still drafts. A teammate is developing the future 3D goose;
 the design system keeps character rendering and animation assets replaceable.
 
+## Consumer mobile app: initial screens
+
+The Expo app lives in [`mobile/`](mobile/README.md): Home, Conversation, and local
+transcript/correction sheets in the Playroom style. Camera, translation, goose, and voice
+are replaceable adapters; this first UI build uses labeled sample data and silent playback.
+See the [frontend integration handoff](docs/frontend-flow-and-handoff.md).
+
+```sh
+cd mobile
+npm ci
+npm run ios
+```
+
+This generates `mobile/ios/` separately from the native scanner prototype below.
+
 ## Developer MVP: real on-device hand tracking
 
 Native iPhone app with **Google MediaPipe Hand Landmarker**, not simulated joints.

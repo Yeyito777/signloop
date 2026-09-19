@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "Signloop",
+    "slug": "signloop",
+    "scheme": "signloop",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.signloop.mobile"
+    },
+    "android": {
+      "package": "com.signloop.mobile",
+      "predictiveBackGestureEnabled": true
+    },
+    "plugins": ["expo-router", "expo-font", ["expo-splash-screen", {"backgroundColor": "#FFF2BA"}], "./plugins/with-quoted-bundle-path.cjs"]
+  }
+}
