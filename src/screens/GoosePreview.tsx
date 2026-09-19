@@ -34,8 +34,8 @@ export function GoosePreview() {
         <View style={styles.controls}>
           <Text style={styles.caption}>Your sign language companion.</Text>
           <TextInput
-            accessibilityLabel="English from ASR"
-            placeholder="Type what ASR would output…"
+            accessibilityLabel="Text for Mr. Goose to say"
+            placeholder="Type anything for Mr. Goose to say…"
             placeholderTextColor="#A39E93"
             value={asrText}
             onChangeText={setAsrText}
@@ -44,7 +44,7 @@ export function GoosePreview() {
           />
           <View style={styles.row}>
             <Pressable accessibilityRole="button" accessibilityLabel="Speak" disabled={speakDisabled}
-              accessibilityHint="Sends the English text to Mr. Goose’s ElevenLabs voice."
+              accessibilityHint="Speaks whatever you typed in Mr. Goose’s ElevenLabs voice."
               onPress={() => { void voice.speak(asrText); }}
               style={({ pressed }) => [styles.button, styles.half, speakDisabled && styles.buttonDisabled, pressed && !speakDisabled && styles.buttonPressed]}>
               <Text style={styles.buttonText}>Speak</Text>

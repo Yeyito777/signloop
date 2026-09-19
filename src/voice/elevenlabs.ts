@@ -2,6 +2,21 @@ import { voiceConfig } from './config.ts';
 
 export const ELEVENLABS_MODEL_ID = 'eleven_turbo_v2_5';
 export const ELEVENLABS_OUTPUT_FORMAT = 'mp3_44100_128';
+export const ELEVENLABS_VOICE_SETTINGS = {
+  stability: 0.85,
+  similarity_boost: 0.9,
+  style: 0,
+  use_speaker_boost: true,
+};
+
+export function seedForSpeechText(text: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
 
 export class VoiceError extends Error {
   constructor(message: string) {
@@ -24,7 +39,12 @@ export function buildSpeechRequest(text: string, voiceId: string, apiKey: string
       'Content-Type': 'application/json',
       Accept: 'audio/mpeg',
     },
-    body: JSON.stringify({ text, model_id: ELEVENLABS_MODEL_ID }),
+    body: JSON.stringify({
+      text,
+      model_id: ELEVENLABS_MODEL_ID,
+      seed: seedForSpeechText(text),
+      voice_settings: ELEVENLABS_VOICE_SETTINGS,
+    }),
   };
 }
 

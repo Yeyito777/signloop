@@ -4,6 +4,8 @@ import {
   buildSpeechRequest,
   ELEVENLABS_MODEL_ID,
   ELEVENLABS_OUTPUT_FORMAT,
+  ELEVENLABS_VOICE_SETTINGS,
+  seedForSpeechText,
   messageForSpeechError,
   prepareSpeechText,
   VoiceError,
@@ -24,7 +26,17 @@ test('speech request uses the convert endpoint, key header, and turbo model', ()
   assert.equal(request.headers['xi-api-key'], 'test-key');
   assert.equal(request.headers['Content-Type'], 'application/json');
   assert.equal(request.headers.Accept, 'audio/mpeg');
-  assert.deepEqual(JSON.parse(request.body), { text: 'Hi from SignLoop.', model_id: ELEVENLABS_MODEL_ID });
+  assert.deepEqual(JSON.parse(request.body), {
+    text: 'Hi from SignLoop.',
+    model_id: ELEVENLABS_MODEL_ID,
+    seed: seedForSpeechText('Hi from SignLoop.'),
+    voice_settings: ELEVENLABS_VOICE_SETTINGS,
+  });
+});
+
+test('the same line always uses the same speech seed', () => {
+  assert.equal(seedForSpeechText('Hello from SignLoop.'), seedForSpeechText('Hello from SignLoop.'));
+  assert.notEqual(seedForSpeechText('Hello from SignLoop.'), seedForSpeechText('Goodbye from SignLoop.'));
 });
 
 test('voice ids are encoded in the request URL', () => {
