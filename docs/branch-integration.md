@@ -14,15 +14,21 @@ tracked credential or overwriting root documentation and app manifests.
 
 ## Shared camera resolution
 
-- Both camera shells compile the same `CameraTracker.swift`.
-- Gesture Recognizer replaces the old Hand Landmarker-only inference path.
+- The Expo consumer app retains `CameraTracker.swift` and its Gesture Recognizer
+  flow, including tentative ILY estimates and optional sign-engine callbacks.
+- The standalone native app uses `SkeletonCameraTracker.swift` for synchronized
+  hand, upper-body and face tracking. Its inspector does not classify signs.
+- Both trackers use the lock-protected `CaptureLifecycle`, capture timestamps,
+  pacing and stale-result checks; pausing invalidates pending permission replies
+  and queued capture starts.
 - Expo's injectable model path and lock-protected capture lifecycle are retained.
 - The newer capture timestamps, pacing, stale-result checks, local gesture filter,
   and callback interfaces are retained.
 - The Expo pod includes the new cadence/freshness sources and packages the
   Gesture Recognizer model in its resource bundle.
-- `npm run camera:assets` fetches both public MediaPipe assets and verifies the
-  Gesture Recognizer checksum. Native bootstrap reuses that same script.
+- `npm run camera:assets` fetches the hand and gesture models and verifies the
+  Gesture Recognizer checksum. Native bootstrap reuses that script, verifies
+  the hand model, and adds checksum-verified pose-lite and face models.
 - The Expo wrapper runs a timer to expire stalled overlays.
 
 ## Unified live flow

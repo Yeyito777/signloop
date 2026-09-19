@@ -11,5 +11,7 @@ swiftc -parse-as-library Signloop/Recognition.swift Signloop/LiveWindowPolicy.sw
 "$binary"
 swiftc -parse-as-library Signloop/CaptureFreshness.swift Signloop/CaptureCadence.swift Tests/CaptureFreshnessTests.swift -o "$binary"
 "$binary"
+swiftc -parse-as-library Signloop/Skeleton.swift Tests/SkeletonTests.swift -o "$binary"
+"$binary"
 swiftc -parse-as-library Signloop/Recognition.swift Signloop/SignEngineFeatures.swift Signloop/SignSegmenter.swift Signloop/SignEngine.swift Tests/SignEngineParity.swift -o "$binary"
 "$binary" Tests/Fixtures/sign_engine_golden.json

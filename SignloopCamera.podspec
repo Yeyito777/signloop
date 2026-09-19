@@ -1,4 +1,4 @@
-# Rooted here so Expo and the standalone iOS app compile the SAME scanner sources.
+# Rooted here so Expo compiles its gesture tracker directly from ios/Signloop/.
 Pod::Spec.new do |s|
   s.name = 'SignloopCamera'
   s.version = '1.0.0'

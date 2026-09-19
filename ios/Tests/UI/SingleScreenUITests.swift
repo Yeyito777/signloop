@@ -67,8 +67,8 @@ final class SingleScreenUITests: XCTestCase {
         let pause = app.buttons["pause-resume"]
         XCTAssertTrue(pause.waitForExistence(timeout: 10))
         pause.tap()
-        XCTAssertTrue(app.staticTexts["current-sign"].label.contains("Paused"))
-        XCTAssertTrue(app.staticTexts["recognition-status"].label.contains("paused"))
+        XCTAssertTrue(app.staticTexts["tracking-title"].label.contains("Paused"))
+        XCTAssertTrue(app.staticTexts["tracking-status"].label.contains("paused"))
         pause.tap()
         XCTAssertTrue(app.buttons["Allow camera in Settings"].waitForExistence(timeout: 5))
     }
@@ -78,7 +78,7 @@ final class SingleScreenUITests: XCTestCase {
         app.buttons["camera-settings"].tap()
         XCTAssertFalse(app.switches["Experimental cloud signs"].exists)
         let privacy = app.staticTexts["offline-privacy"]
-        for _ in 0..<6 {
+        for _ in 0..<10 {
             if privacy.exists && privacy.isHittable { break }
             app.collectionViews.firstMatch.swipeUp()
         }
@@ -86,6 +86,22 @@ final class SingleScreenUITests: XCTestCase {
         XCTAssertTrue(privacy.label.contains("nothing is recorded or sent"))
         app.buttons["Done"].tap()
         XCTAssertTrue(app.staticTexts["analysis-mode"].label.contains("Offline"))
+    }
+
+    func testInspectorShowsMissingDataNotInventedCoordinates() {
+        XCTAssertTrue(app.buttons["skeleton-inspector"].waitForExistence(timeout: 10))
+        app.buttons["skeleton-inspector"].tap()
+        XCTAssertTrue(app.staticTexts["probe-missing"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["current-sign"].exists)
+        app.buttons["Done"].tap()
+    }
+
+    func testAllThreeOverlayControlsAvailable() {
+        app.buttons["camera-settings"].tap()
+        XCTAssertTrue(actualSwitch("Show hand joints").exists)
+        XCTAssertTrue(actualSwitch("Show upper-body pose").exists)
+        XCTAssertTrue(actualSwitch("Show facial features").exists)
+        app.buttons["Done"].tap()
     }
 
     func testLargeTextKeepsCoreControlsReachable() {

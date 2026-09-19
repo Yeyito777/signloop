@@ -103,6 +103,10 @@ For live cloud inference, see [backend setup](backend.md). `.env` files are
 never seeded automatically; pass an explicit `--env-file` path. No live samples
 or reference recordings are saved. Stop a worktree's backend before cleaning.
 
+Build 11's camera uses the offline [multimodal skeleton](multimodal-skeleton.md).
+Seeding includes official hand, gesture, pose-lite and face task bundles.
+Legacy cloud research is not connected to the camera UI.
+
 Adapted from Exocortex's `create-worktree`, `clean-worktree`, `worktree-common.sh`,
 `post-checkout`, and `exotest`. On this Mac those references were found under
 `~/Desktop/Exocortex`; the supplied `~/Workspace/.../record` reference was not

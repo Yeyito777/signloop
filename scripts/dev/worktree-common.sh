@@ -70,6 +70,10 @@ seed_dependency_artifacts() {
     "$target/ios/Signloop/Resources/hand_landmarker.task"
   copy_artifact "$SIGNLOOP_ROOT/ios/Signloop/Resources/gesture_recognizer.task" \
     "$target/ios/Signloop/Resources/gesture_recognizer.task"
+  copy_artifact "$SIGNLOOP_ROOT/ios/Signloop/Resources/pose_landmarker_lite.task" \
+    "$target/ios/Signloop/Resources/pose_landmarker_lite.task"
+  copy_artifact "$SIGNLOOP_ROOT/ios/Signloop/Resources/face_landmarker.task" \
+    "$target/ios/Signloop/Resources/face_landmarker.task"
 }
 
 bootstrap_worktree() {
