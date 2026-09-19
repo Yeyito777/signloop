@@ -30,6 +30,13 @@ export function CaptionPanel({ state, mode, dispatch }: { state: Session; mode: 
       <Copy role="label" style={styles.muted}>{label}</Copy>
       {corrected && <Animated.View entering={enter}><Icon name="check" color={tokens.color.successInk} size={18} /></Animated.View>}
     </View>
+    {state.candidate && !state.paused && <View style={styles.notice}>
+      <View style={{ flex: 1, gap: 8 }}>
+        <Copy role="supporting">Possible ILY handshape · please confirm</Copy>
+        <Copy role="caption">{state.candidate.text}</Copy>
+        <Button icon="check" onPress={() => dispatch({ type: 'confirm-candidate' })}>Confirm these words</Button>
+      </View>
+    </View>}
     <ScrollView ref={scroll} style={styles.textScroll} contentContainerStyle={styles.textContent} showsVerticalScrollIndicator keyboardShouldPersistTaps="handled">
       <Animated.View key={draft ? 'draft' : phrase?.id ?? 'empty'} entering={enter}>
         <Copy role="caption" selectable accessibilityLiveRegion={draft ? 'none' : 'polite'} style={!phrase && !draft ? styles.empty : undefined}>{text}</Copy>
@@ -44,7 +51,7 @@ export function CaptionPanel({ state, mode, dispatch }: { state: Session; mode: 
     </View>}
     {(state.phase === 'uncertain' || state.phase === 'offline') && <Button variant="plain" icon="repeat" onPress={() => dispatch({ type: 'retry' })}>{state.phase === 'offline' ? 'Try connection again' : 'Try that phrase again'}</Button>}
     {state.phase === 'voice-error' && <Button variant="plain" icon="volume" onPress={() => dispatch({ type: 'replay' })}>Try voice again</Button>}
-    {!phrase && !draft && !notice && mode === 'camera' && <Copy role="supporting" style={styles.muted}>Translation and voice are coming next.</Copy>}
+    {!phrase && !draft && !notice && mode !== 'demo' && <Copy role="supporting" style={styles.muted}>Limited offline ILY handshape preview—not full ASL translation. Extend thumb, index and pinky, then confirm. Voice is optional in Settings.</Copy>}
   </Animated.View>;
 }
 

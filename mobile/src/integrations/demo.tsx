@@ -48,10 +48,11 @@ export const demoKit: IntegrationKit = {
     },
   },
   voice: {
-    speak(_text, signal) {
+    speak(_text, signal, onPlaybackStart) {
       // Silent playback simulation. ElevenLabs must replace this adapter before live use.
       return new Promise<void>((resolve, reject) => {
         if (signal.aborted) { reject(new Error('Playback cancelled')); return; }
+        onPlaybackStart?.();
         const cancel = () => { clearTimeout(timer); reject(new Error('Playback cancelled')); };
         const timer = setTimeout(() => { signal.removeEventListener('abort', cancel); resolve(); }, 3200);
         signal.addEventListener('abort', cancel, { once: true });

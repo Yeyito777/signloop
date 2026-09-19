@@ -4,19 +4,35 @@
     "slug": "signloop",
     "scheme": "signloop",
     "version": "1.0.0",
+    "experiments": { "tsconfigPaths": false },
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.signloop.mobile",
       "infoPlist": {
-        "NSCameraUsageDescription": "Signloop uses your camera to track your hands on this device. No camera images or video are saved or uploaded."
+        "NSCameraUsageDescription": "Signloop uses your camera to track your hands on this device. No camera images or video are saved or uploaded.",
+        "NSLocalNetworkUsageDescription": "Connect to your own development backend for optional text-to-voice.",
+        "NSAppTransportSecurity": { "NSAllowsLocalNetworking": true }
       }
     },
     "android": {
       "package": "com.signloop.mobile",
       "predictiveBackGestureEnabled": true
     },
-    "plugins": ["expo-router", "expo-font", ["expo-splash-screen", {"backgroundColor": "#FFF2BA"}], "./plugins/with-quoted-bundle-path.cjs", "./plugins/with-native-camera.cjs"]
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FFF2BA"
+        }
+      ],
+      "./plugins/with-quoted-bundle-path.cjs",
+      "./plugins/with-native-camera.cjs",
+      "expo-asset",
+      ["expo-audio", { "microphonePermission": false, "recordAudioAndroid": false, "enableBackgroundPlayback": false }]
+    ]
   }
 }

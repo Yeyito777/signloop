@@ -10,12 +10,17 @@ Screen layouts are still drafts. The imported [3D goose prototype](goose/README.
 includes animation and experimental voice; the design system keeps character
 rendering and animation assets replaceable.
 
-## Consumer mobile app: initial screens
+## Unified consumer mobile app
 
 The Expo app lives in [`mobile/`](mobile/README.md): Home, Conversation, and local
 transcript/correction sheets in the Playroom style. The native Expo camera module reuses the
-Swift tracker below. Translation, goose, and voice are replaceable adapters; an explicit
-sample-conversation mode uses labeled sample data and silent playback.
+Swift tracker below. The app now renders the shared 3D goose and offers a complete
+limited flow: **offline ILY handshape estimate → explicit confirmation → caption
+→ optional backend-generated goose voice**. Voice uploads require foreground-session
+consent in Settings. Provider keys stay on the backend. This is not general ASL
+translation. An explicit sample-conversation mode still uses labeled sample data
+and silent playback.
+See [voice setup](docs/voice-backend.md) and [integration checks](docs/branch-integration.md).
 See the [frontend integration handoff](docs/frontend-flow-and-handoff.md).
 
 ```sh
@@ -32,14 +37,17 @@ Sanvi's character, emotion animation, lip sync, and ElevenLabs voice experiment
 are preserved in [`goose/`](goose/README.md), with their own lockfile and tests.
 Run `npm ci`, `npm run typecheck`, and `npm test` from that directory.
 
-This is a **separate Expo 57 preview**, not yet wired into the Expo 55 consumer
-app. Do not copy its dependency manifest over `mobile/package.json`: SDK 55 is
+The **standalone Expo 57 preview** remains available for character development.
+The Expo 55 consumer app reuses its rendering/animation sources but supplies its
+own SDK-compatible dependencies and authenticated backend voice adapter. Its
+experimental direct-provider/streaming client is not bundled in the consumer app.
+Do not copy its dependency manifest over `mobile/package.json`: SDK 55 is
 intentional for the camera app's Xcode compatibility. See
 [combined branch status](docs/branch-integration.md) for integration boundaries.
-No credentials were imported. Client-side `EXPO_PUBLIC_*` keys are not secret;
-move provider authentication to a backend before distributing voice-enabled builds.
+No credentials were imported. Client-side `EXPO_PUBLIC_*` keys in the standalone
+prototype are not secret; use the consumer app's backend path for shared builds.
 
-## One-screen offline handshape preview
+## Standalone native scanner: offline handshape preview
 
 Open the app, put one hand in view, and see the **current possible sign** update
 automatically over the full-screen camera. No settings workflow, reference

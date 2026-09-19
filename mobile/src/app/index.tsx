@@ -2,8 +2,8 @@ import { useCallback, useRef } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { demoKit } from '../integrations/demo';
-import { Button, Copy, Wordmark, useReducedMotion } from '../ui/primitives';
+import { GooseAvatar } from '../integrations/GooseAvatar';
+import { Button, Copy, IconButton, Wordmark, useReducedMotion } from '../ui/primitives';
 import { StageSlot, useSharedStage, type StageSlotHandle } from '../ui/SharedStage';
 import { tokens } from '../ui/theme';
 
@@ -22,14 +22,16 @@ export default function Home() {
     router.push('/conversation');
   };
   return <SafeAreaView style={styles.screen}>
-    <View style={styles.header}><Wordmark /></View>
+    <View style={styles.header}><Wordmark /><IconButton icon="settings" label="Voice settings" onPress={() => router.push('/settings')} /></View>
     <ScrollView ref={scroll} onLayout={() => scroll.current?.getNativeScrollRef()?.measureInWindow((_, y, __, h) => { homeViewport.value = { top: y, bottom: y + h }; })} onScroll={() => stage.current?.measure()} scrollEventThrottle={16} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <Copy role="hero" accessibilityRole="header" style={styles.title}>Ready when{ '\n' }you are.</Copy>
-      <StageSlot ref={stage} owner="home" Renderer={demoKit.Avatar} mode="idle" emotion="neutral" reducedMotion={reducedMotion} style={[styles.stage, { minHeight: height < 750 ? 200 : 270 }]} />
-      <Copy role="sectionTitle" style={styles.description}>Sign in ASL.{ '\n' }Your goose says it in English.</Copy>
+      <StageSlot ref={stage} owner="home" Renderer={GooseAvatar} mode="idle" emotion="neutral" reducedMotion={reducedMotion} style={[styles.stage, { minHeight: height < 750 ? 200 : 270 }]} />
+      <Copy role="sectionTitle" style={styles.description}>Try the ILY handshape.{ '\n' }Confirm it. Let your goose speak.</Copy>
+      <Copy role="supporting" style={{ textAlign: 'center' }}>Experimental, limited-vocabulary preview. Not full ASL translation.</Copy>
     </ScrollView>
     <View style={styles.actions}>
       <Button icon="arrow" onPress={start}>Start conversation</Button>
+      <Button variant="plain" onPress={() => router.push('/conversation?demo=1')}>Preview sample conversation</Button>
     </View>
   </SafeAreaView>;
 }

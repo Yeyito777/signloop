@@ -1,5 +1,6 @@
 import { createContext, forwardRef, useCallback, useContext, useEffect, useImperativeHandle, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import { AppState, StyleSheet, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
+import { usePathname } from 'expo-router';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import Animated, { cancelAnimation, interpolate, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 import type { AvatarProps } from '../integrations/contracts';
@@ -95,6 +96,7 @@ export const StageSlot = forwardRef<StageSlotHandle, Presentation & { owner: Own
 
 /** Fixed-size render surface: travel transforms its container without resizing a future 3D canvas each frame. */
 export function SharedStageLayer() {
+  const pathname = usePathname();
   const { frame, home, homeViewport, presentation } = useSharedStage();
   const { height } = useWindowDimensions();
   const reduced = useReducedMotion();
@@ -131,7 +133,7 @@ export function SharedStageLayer() {
     height: height - home.value * (homeViewport.value.top + Math.max(0, height - homeViewport.value.bottom)),
   }));
   const contents = useAnimatedStyle(() => ({ top: -home.value * homeViewport.value.top }));
-  if (!presentation) return null;
+  if (!presentation || pathname === '/settings') return null;
   const { Renderer } = presentation;
   return <Animated.View pointerEvents="none" style={[styles.clip, clip]} accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
     <Animated.View style={[styles.contents, { height }, contents]}>

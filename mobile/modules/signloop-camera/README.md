@@ -16,7 +16,11 @@ After modifying shared Swift files, rebuild the development app. If you add a ne
 
 ## React Native contract
 
-`SignloopCamera` accepts `active`, `captureId`, `showSkeleton`, standard view styles, and `onStatus`. Status payloads contain `captureId`, `status`, `handCount`, and a diagnostic `message`. The adapter validates the current generation before forwarding framing into the session reducer.
+`SignloopCamera` accepts `active`, `captureId`, `showSkeleton`, standard view styles,
+`onStatus`, and `onSign`. Status payloads contain `captureId`, `status`, `handCount`,
+and a diagnostic `message`. Tentative sign events carry `captureId`, `label`, and
+`observedAtMS`; a 250ms heartbeat refreshes a held candidate. The adapter validates
+the current generation and freshness before forwarding into the session reducer.
 
 | Native status | Frontend meaning |
 |---|---|
@@ -46,7 +50,12 @@ loaded from the pod's `gesture_recognizer.task` resource. The native view runs t
 same stale-frame watchdog as the standalone camera. The private five-sign
 LiteRT engine is still standalone-only and is not compiled into this pod.
 
-Expose tentative sign estimates separately from `TranslationEvent.accepted`. Only a completed, accepted English phrase belongs in the transcript/voice pipeline. `cameraKit` deliberately emits no translations and has no simulated successful voice playback.
+Tentative ILY estimates are exposed separately from `TranslationEvent.accepted`.
+`cameraKit` now maps only that public handshape to a confirmation candidate.
+The user must confirm a fresh candidate before it enters the transcript/voice
+pipeline. Unknown, cropped-out, or stale observations clear candidates. The
+goose and optional real backend voice adapter are connected; no simulated
+successful voice playback is used outside the explicitly labelled UI demo.
 
 ## Build and check
 

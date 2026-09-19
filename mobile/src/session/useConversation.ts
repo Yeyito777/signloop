@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useReducer, useState } from 'react';
 import { AppState } from 'react-native';
-import type { Framing, IntegrationKit } from '../integrations/contracts';
+import type { Framing, IntegrationKit, TranslationEvent } from '../integrations/contracts';
 import { canCapture, initialSession, sessionReducer, type Action } from './model';
+import { getVoiceSettings, subscribeVoiceSettings } from '../integrations/voiceSettings';
 
 export function useConversation(kit: IntegrationKit) {
-  const [state, send] = useReducer(sessionReducer, undefined, initialSession);
+  const [state, send] = useReducer(sessionReducer, undefined, () => ({
+    ...initialSession(), muted: kit.mode !== 'demo' && !getVoiceSettings().enabled,
+  }));
+  useEffect(() => subscribeVoiceSettings(() => {
+    if (kit.mode !== 'demo' && !getVoiceSettings().enabled) send({ type: 'disable-voice' });
+  }), [kit.mode]);
   const [demoAutoplay, setDemoAutoplay] = useState(true);
   const dispatch = useCallback((action: Action) => {
     if (kit.mode === 'demo') {
@@ -29,12 +35,14 @@ export function useConversation(kit: IntegrationKit) {
     if (!state.speech) return;
     const request = state.speech;
     const controller = new AbortController();
-    kit.voice.speak(request.text, controller.signal).then(
+    kit.voice.speak(request.text, controller.signal, () => {
+      if (!controller.signal.aborted) dispatch({ type: 'speech-started', id: request.id });
+    }).then(
       () => { if (!controller.signal.aborted) dispatch({ type: 'speech-ended', id: request.id }); },
       () => { if (!controller.signal.aborted) dispatch({ type: 'speech-ended', id: request.id, failed: true }); },
     );
     return () => controller.abort();
-  }, [state.speech, kit]);
+  }, [state.speech?.id, kit]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', next => {
@@ -48,5 +56,9 @@ export function useConversation(kit: IntegrationKit) {
     dispatch({ type: 'framing', framing, captureId });
   }, []);
 
-  return { state, dispatch, captureActive, onFraming };
+  const onTranslation = useCallback((event: TranslationEvent, captureId: number) => {
+    dispatch({ type: 'translation', event, captureId });
+  }, [dispatch]);
+
+  return { state, dispatch, captureActive, onFraming, onTranslation };
 }

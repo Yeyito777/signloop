@@ -18,7 +18,7 @@ import { tokens } from '../ui/theme';
 export default function Conversation() {
   const { demo } = useLocalSearchParams<{ demo?: string }>();
   const kit = demo === '1' ? demoKit : cameraKit;
-  const { state: liveState, dispatch, captureActive, onFraming } = useConversation(kit);
+  const { state: liveState, dispatch, captureActive, onFraming, onTranslation } = useConversation(kit);
   const { reduced, enter, exit } = useMotion();
   const entrance = useConversationEntrance();
   const uncovered = useRef(liveState);
@@ -34,7 +34,7 @@ export default function Conversation() {
     return () => subscription.remove();
   }, []);
   const mode: AvatarMode = paused || covered || state.framing.startsWith('camera-') ? 'idle'
-    : state.speech ? 'speaking' : state.phase === 'thinking' ? 'thinking' : 'listening';
+    : state.speech?.started ? 'speaking' : state.speech || state.phase === 'thinking' ? 'thinking' : 'listening';
   return <SafeAreaView style={styles.screen}>
     <View style={styles.header} pointerEvents={covered ? 'none' : 'auto'} accessibilityElementsHidden={covered} importantForAccessibility={covered ? 'no-hide-descendants' : 'auto'}>
       <IconButton icon="back" label="End conversation" onPress={openEnd} />
@@ -43,7 +43,7 @@ export default function Conversation() {
     </View>
     <View style={styles.split} pointerEvents={covered ? 'none' : 'auto'} accessibilityElementsHidden={covered} importantForAccessibility={covered ? 'no-hide-descendants' : 'auto'}>
       <Animated.View style={[styles.camera, entrance.camera]}>
-        <Camera active={captureActive} captureId={liveState.captureId} framing={liveState.framing} onFraming={onFraming} style={StyleSheet.absoluteFill} />
+        <Camera active={captureActive} captureId={liveState.captureId} framing={liveState.framing} onFraming={onFraming} onTranslation={onTranslation} style={StyleSheet.absoluteFill} />
         {!paused && <CameraGuidance framing={state.framing} active={captureActive} mode={kit.mode} dispatch={dispatch} demo={kit.mode === 'demo'} />}
         {paused && <Animated.View entering={enter} exiting={exit} style={styles.pauseLayer}>
           <Icon name="pause" size={28} /><Copy role="sheetTitle">Paused</Copy><Copy>Camera and voice are paused.</Copy>
