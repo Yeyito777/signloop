@@ -62,6 +62,10 @@ A separately calibrated [faster confirmation rule](docs/fast-confirmation.md)
 raises displayed coverage to **56/82 on that now-inspected development cohort**,
 with the same 1/35 unsupported false display. This is not a new holdout result.
 
+A [face-context calibration experiment](docs/face-context-research.md) found
+only a small, cadence-sensitive gain. Face tracking remains **disabled** rather
+than adding unproven camera overhead.
+
 ## Parallel development
 
 Use a separate branch/checkout per task while keeping `yeyito` available:
