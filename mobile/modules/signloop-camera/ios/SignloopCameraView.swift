@@ -36,8 +36,8 @@ final class SignloopCameraView: ExpoView {
         tracker.onPrediction = { [weak self] prediction in self?.emitPrediction(prediction) }
         clipsToBounds = true
         backgroundColor = .black
-        preview.previewLayer.session = tracker.session
-        preview.previewLayer.videoGravity = .resizeAspectFill
+        preview.mirrored = tracker.isFront
+        preview.attach(session: tracker.session)
         addSubview(preview)
         skeleton.strokeColor = UIColor(red: 1, green: 0.95, blue: 0.73, alpha: 1).cgColor
         skeleton.fillColor = UIColor.clear.cgColor
@@ -102,6 +102,8 @@ final class SignloopCameraView: ExpoView {
         lastSign = ""
         emit("starting")
         tracker.start()
+        preview.mirrored = tracker.isFront
+        preview.attach(session: tracker.session)
         expiryTimer?.invalidate()
         expiryTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             self?.tracker.expireLocalResult()
