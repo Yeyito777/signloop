@@ -19,7 +19,7 @@ The menu contains transcript, correction, voice on/off, and end conversation. Sy
 
 ## Behavior implemented for review
 
-- Start enters Conversation. The demo moves through framing → ready → draft → thinking → accepted caption → silent speech preview.
+- Start enters Conversation with native hand tracking. “Preview sample conversation” explicitly selects the demo: framing → ready → draft → thinking → accepted caption → silent speech preview.
 - Pause stops capture, recognition callbacks, current speech, and queued speech. Resume starts a fresh framing check. Backgrounding the app pauses it; returning requires Resume.
 - Opening a sheet temporarily stops capture and playback. Closing it resumes through framing if the user had been active; an explicit prior pause is preserved. This resumption behavior is a UX choice for review.
 - Only accepted phrases enter the transcript and automatic speech. Drafts and uncertain phrases are never spoken. Stable phrase IDs suppress duplicate acceptance events.
@@ -30,19 +30,19 @@ The menu contains transcript, correction, voice on/off, and end conversation. Sy
 
 ## Integration boundary
 
-See [contracts.ts](../mobile/src/integrations/contracts.ts). `demoKit` supplies four replaceable pieces. Screens know their contracts, not their implementation.
+See [contracts.ts](../mobile/src/integrations/contracts.ts). `cameraKit` supplies the native camera, temporary avatar, and unconnected translation/voice adapters. `demoKit` supplies four simulated pieces for explicit sample review. Screens know their contracts, not their implementation.
 
 ### Native camera / scanner
 
 `CameraProps` includes `active`, `captureId`, current `framing` presentation state, and `onFraming(framing, captureId)`. A native preview owns capture and processing together. Mount it in the existing camera slot; never open an extra Expo camera over it.
 
-Wrap the existing Swift capture/MediaPipe code with an Expo native view/module. Honor `active=false` immediately and release resources on unmount. Return normalized, throttled status events to JS; keep frames and heavy processing native. Tag asynchronous events with their originating generation. Compute framing from observations, not from the incoming presentation state.
+Implemented in [`mobile/modules/signloop-camera/`](../mobile/modules/signloop-camera/README.md). The local Expo view compiles the existing Swift scanner directly through the root podspec. It honors `active=false`, unmount, and application lifecycle; late permission replies and inference publications are rejected after pause. Preview, MediaPipe inference, and the skeleton stay native. JS receives deduplicated status changes tagged with `captureId`.
 
-The root `ios/` app uses **MediaPipe Hand Landmarker**, not an ASL classifier. It does not establish face visibility, lighting quality, or distance yet. The preview includes those states for design review, but live adapters must emit only diagnostics they support. Add camera permission and denied/unavailable handling when wiring capture; the demo requests no permission.
+The scanner uses **MediaPipe Hand Landmarker**, not an ASL classifier. A complete hand must be visible inside the actual split-screen crop to emit ready. That does not establish face visibility, lighting quality, distance, emotion, or sign confidence. Unsupported framing diagnoses remain demo-only. Camera permission, denied/Settings, startup failure/retry, and Simulator/unavailable states are implemented. The demo requests no permission.
 
 Expo builds its own project under `mobile/ios/`. Preserve the root `ios/` scanner scaffold. Swift/native processing plus React Native UI is the intended division of work.
 
-Remote checked before this push: `origin/main` at `66d403b` also contains `BackendClient.swift`, `RemoteRecognition.swift`, and a Python backend for live Jev sign estimates. These newer commits are not merged into this UI branch. For the next camera-integration step on `sunny`, bring in that work and reuse the native capture/backend components. Its current “possible sign” is a tentative label, not a completed English phrase eligible for speech. Phrase boundaries/acceptance and the existing caption endpoint need wiring separately. Validate recognition on a physical phone.
+Merged `origin/main` at `66d403b`, including `BackendClient.swift`, `RemoteRecognition.swift`, and the Python backend. The Expo camera wrapper currently makes no network requests. The module exposes `getRecentFrames()` on its native view ref for the next recognition integration; the shared Swift `recentFrames()` remains available for a native adapter. The backend's “possible sign” is a tentative label, not a completed English phrase eligible for speech. Phrase boundaries/acceptance and the caption endpoint still need wiring. Validate recognition on a physical phone.
 
 ### Translation
 
@@ -66,4 +66,4 @@ See [run instructions](../mobile/README.md). “Demo · try states” opens fram
 
 Review Home → Start, automatic captions, pause/resume, correction with the keyboard, transcript, mute, end/cancel, background/foreground, long captions, larger text, and Reduce Motion. Reducer tests cover cancellation, late events, deduplication, queue ordering, correction, mute, and recovery.
 
-Real camera/recognition quality, final 3D rendering, actual audio, Android behavior, and permissions need integration/device validation. This preview does not recognize ASL.
+Camera/permission behavior and skeleton alignment need physical iPhone validation. Simulator and unsigned iPhone compilation are checked. Recognition, final 3D rendering, actual audio, and Android capture remain integration work. Hand tracking does not recognize ASL.

@@ -12,8 +12,9 @@ the design system keeps character rendering and animation assets replaceable.
 ## Consumer mobile app: initial screens
 
 The Expo app lives in [`mobile/`](mobile/README.md): Home, Conversation, and local
-transcript/correction sheets in the Playroom style. Camera, translation, goose, and voice
-are replaceable adapters; this first UI build uses labeled sample data and silent playback.
+transcript/correction sheets in the Playroom style. The native Expo camera module reuses the
+Swift tracker below. Translation, goose, and voice are replaceable adapters; an explicit
+sample-conversation mode uses labeled sample data and silent playback.
 See the [frontend integration handoff](docs/frontend-flow-and-handoff.md).
 
 ```sh

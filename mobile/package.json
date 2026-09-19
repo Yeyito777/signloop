@@ -27,10 +27,13 @@
   "scripts": {
     "postinstall": "node scripts/patch-rn-paths.cjs",
     "start": "expo start --dev-client",
+    "camera:assets": "bash ../ios/scripts/fetch-hand-model.sh",
+    "preios": "npm run camera:assets",
     "ios": "expo run:ios",
     "android": "expo run:android",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test tests/*.test.ts"
   },
-  "private": true
+  "private": true,
+  "expo": { "autolinking": { "nativeModulesDir": "./modules" } }
 }

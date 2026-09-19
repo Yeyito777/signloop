@@ -10,7 +10,7 @@ export default function Home() {
   const { height } = useWindowDimensions();
   const Avatar = demoKit.Avatar;
   return <SafeAreaView style={styles.screen}>
-    <View style={styles.header}><Wordmark /><Copy role="label" style={styles.demo}>UI preview</Copy></View>
+    <View style={styles.header}><Wordmark /><Copy role="label" style={styles.demo}>Camera preview</Copy></View>
     <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <Copy role="hero" accessibilityRole="header" style={styles.title}>Ready when{ '\n' }you are.</Copy>
       <View style={[styles.stage, { minHeight: height < 750 ? 200 : 270 }]}>
@@ -22,7 +22,8 @@ export default function Home() {
     </ScrollView>
     <View style={styles.actions}>
       <Button icon="arrow" onPress={() => router.push('/conversation')}>Start conversation</Button>
-      <Copy role="supporting" style={styles.note}>Preview with sample captions and silent voice.</Copy>
+      <Copy role="supporting" style={styles.note}>Try live hand tracking. Translation and voice are coming next.</Copy>
+      <Button variant="plain" onPress={() => router.push('/conversation?demo=1')}>Preview sample conversation</Button>
     </View>
   </SafeAreaView>;
 }

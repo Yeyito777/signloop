@@ -26,7 +26,8 @@ export function useConversation(kit: IntegrationKit) {
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', next => {
-      if (next !== 'active') dispatch({ type: 'pause' });
+      // A camera permission prompt briefly makes iOS inactive; it is not an explicit pause.
+      if (next === 'background') dispatch({ type: 'pause' });
     });
     return () => subscription.remove();
   }, []);

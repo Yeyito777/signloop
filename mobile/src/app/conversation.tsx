@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
-import { router } from 'expo-router';
-import { BackHandler, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { BackHandler, Linking, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { demoKit } from '../integrations/demo';
+import { cameraKit } from '../integrations/nativeCamera';
 import type { AvatarMode, Framing } from '../integrations/contracts';
 import { ConversationSheets } from '../session/ConversationSheets';
 import { useConversation } from '../session/useConversation';
@@ -17,11 +18,15 @@ const framingCopy: Record<Framing, { title: string; hint: string; icon: IconName
   'too-far': { title: 'Move a little closer', hint: 'Make sure your face and hands are clearly visible.', icon: 'frame' },
   'low-light': { title: 'Find a little more light', hint: 'Try facing a window or a light.', icon: 'sun' },
   away: { title: 'Step into the frame', hint: 'Come back into view when you’re ready.', icon: 'frame' },
+  'camera-denied': { title: 'Camera access needed', hint: 'Allow camera access in Settings, then return and tap Resume.', icon: 'frame' },
+  'camera-unavailable': { title: 'Camera unavailable here', hint: 'Open the development build on an iPhone to try hand tracking.', icon: 'frame' },
+  'camera-error': { title: 'Camera couldn’t start', hint: 'Try starting the camera again.', icon: 'frame' },
 };
 
 export default function Conversation() {
   // Swap this kit at the integration boundary. Screen layout does not depend on the renderer or scanner.
-  const kit = demoKit;
+  const { demo } = useLocalSearchParams<{ demo?: string }>();
+  const kit = demo === '1' ? demoKit : cameraKit;
   const { state, dispatch, captureActive, onFraming } = useConversation(kit);
   const reducedMotion = useReducedMotion();
   const { fontScale } = useWindowDimensions();
@@ -29,8 +34,13 @@ export default function Conversation() {
   const Avatar = kit.Avatar;
   const phrase = state.phrases.at(-1);
   const paused = state.paused || !!state.sheet;
-  const framing = framingCopy[state.framing];
+  const framing = kit.mode === 'camera' && state.framing === 'ready'
+    ? { title: 'Hand detected', hint: 'Hand tracking is working. Translation and voice are coming next.', icon: 'check' as const }
+    : kit.mode === 'camera' && state.framing === 'finding'
+      ? { title: 'Finding your hands', hint: 'Bring your hands into the camera preview.', icon: 'frame' as const }
+      : framingCopy[state.framing];
   const issue = state.framing !== 'finding' && state.framing !== 'ready';
+  const cameraBlocked = state.framing.startsWith('camera-');
   const openEnd = () => dispatch({ type: 'open-sheet', sheet: 'end' });
 
   useEffect(() => {
@@ -46,6 +56,8 @@ export default function Conversation() {
   let mode: AvatarMode = 'listening';
   if (state.framing === 'finding' && !phrase) heading = 'Let’s find your frame';
   if (issue) { heading = 'A little adjustment'; caption = framing.hint; label = ''; }
+  if (kit.mode === 'camera' && state.framing === 'ready') heading = 'You’re in view';
+  if (cameraBlocked) { heading = 'Let’s get you connected'; mode = 'idle'; }
   if (state.phase === 'signing') { heading = 'Reading your signs'; caption = state.draft; label = 'Draft'; }
   if (state.phase === 'thinking') { heading = 'Putting it together'; caption = state.draft || 'One moment…'; label = 'Translating'; mode = 'thinking'; }
   if (state.speech) { heading = kit.mode === 'demo' ? 'Voice preview' : 'Goose is speaking'; mode = 'speaking'; }
@@ -65,7 +77,8 @@ export default function Conversation() {
       <View style={styles.camera}>
         <Camera active={captureActive} captureId={state.captureId} framing={state.framing} onFraming={onFraming} style={StyleSheet.absoluteFill} />
         {!paused && <>
-          <View pointerEvents="none" style={[styles.guide, { borderColor: state.framing === 'ready' ? tokens.color.successSurface : tokens.color.paper }]} />
+          {cameraBlocked && <View pointerEvents="none" style={styles.cameraNotice}><Icon name="frame" size={44} /></View>}
+          {!cameraBlocked && <View pointerEvents="none" style={[styles.guide, { borderColor: state.framing === 'ready' ? tokens.color.successSurface : tokens.color.paper }]} />}
           <View style={styles.cameraTop}>
             <View style={[styles.feedback, { backgroundColor: issue ? tokens.color.cautionSurface : state.framing === 'ready' ? tokens.color.successSurface : tokens.color.paper }]}>
               <Icon name={state.phase === 'offline' ? 'offline' : framing.icon} size={20} /><Copy role="label" style={{ flexShrink: 1 }}>{state.phase === 'offline' ? 'Translation paused' : framing.title}</Copy>
@@ -94,7 +107,12 @@ export default function Conversation() {
             <IconButton icon="edit" label="Correct this phrase" onPress={() => dispatch({ type: 'open-sheet', sheet: 'correction' })} />
             <IconButton icon="repeat" label="Replay this phrase" disabled={state.muted || state.paused} onPress={() => dispatch({ type: 'replay' })} />
           </View>}
-          {(issue || state.phase === 'uncertain' || state.phase === 'offline') && <Button variant="plain" icon="repeat" onPress={() => dispatch({ type: 'retry' })}>{state.phase === 'offline' ? 'Try connection again' : kit.mode === 'demo' ? 'Try sample again' : 'Try again'}</Button>}
+          {state.framing === 'camera-denied' && <Button variant="plain" onPress={() => {
+            dispatch({ type: 'pause' });
+            void Linking.openSettings();
+          }}>Open Settings</Button>}
+          {state.framing === 'camera-unavailable' && <Button variant="plain" onPress={() => router.replace('/conversation?demo=1')}>Try the UI demo</Button>}
+          {(!cameraBlocked && issue || state.framing === 'camera-error' || state.phase === 'uncertain' || state.phase === 'offline') && <Button variant="plain" icon="repeat" onPress={() => dispatch({ type: 'retry' })}>{state.phase === 'offline' ? 'Try connection again' : kit.mode === 'demo' ? 'Try sample again' : 'Try again'}</Button>}
           {state.phase === 'voice-error' && <Button variant="plain" icon="volume" onPress={() => dispatch({ type: 'replay' })}>Try voice again</Button>}
         </View>
       </View>
@@ -108,6 +126,7 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 12, minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   split: { flex: 1, paddingHorizontal: 16, paddingBottom: 12, gap: 12 },
   camera: { flex: 1, borderRadius: 28, overflow: 'hidden', backgroundColor: tokens.color.blue, borderWidth: 1.5, borderColor: tokens.color.ink },
+  cameraNotice: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: tokens.color.blue },
   guide: { position: 'absolute', top: 76, left: 28, right: 28, bottom: 24, borderWidth: 1.5, borderRadius: 24, borderStyle: 'dashed' },
   cameraTop: { position: 'absolute', top: 12, left: 12, right: 12, flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
   feedback: { minHeight: 44, borderRadius: 14, paddingVertical: 8, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },

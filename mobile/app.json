@@ -8,12 +8,15 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.signloop.mobile"
+      "bundleIdentifier": "com.signloop.mobile",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Signloop uses your camera to track your hands on this device. No camera images or video are saved or uploaded."
+      }
     },
     "android": {
       "package": "com.signloop.mobile",
       "predictiveBackGestureEnabled": true
     },
-    "plugins": ["expo-router", "expo-font", ["expo-splash-screen", {"backgroundColor": "#FFF2BA"}], "./plugins/with-quoted-bundle-path.cjs"]
+    "plugins": ["expo-router", "expo-font", ["expo-splash-screen", {"backgroundColor": "#FFF2BA"}], "./plugins/with-quoted-bundle-path.cjs", "./plugins/with-native-camera.cjs"]
   }
 }
