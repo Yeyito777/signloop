@@ -86,6 +86,8 @@ selection. Those tests are not sign-recognition accuracy evidence.
 - Test extra hand/body context and motion descriptors, especially fist nods,
   finger closing and body-relative THANK_YOU/PLEASE gestures.
 - Obtain distributable/consented phone recordings and fresh independent tests.
-- Evaluate rolling windows, segmentation and actual phone latency/UX.
+- [Rolling-window diagnosis](recognition-streaming-results.md) now demonstrates
+  the confirmation/cadence mismatch; continuous segmentation and actual phone
+  latency/UX still need validation.
 
 No phone deployment, cloud service, or transcription was enabled.
