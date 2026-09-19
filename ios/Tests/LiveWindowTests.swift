@@ -28,7 +28,7 @@ struct LiveWindowTests {
         fatalError("Cadence stalled")
     }
     static func main() {
-        var policy = LiveWindowPolicy()
+        var policy = LiveWindowPolicy(fastScore: nil) // retained baseline regression
         let a = firstJob(&policy)
         require(a.frames.count >= 6, "Short window inferred")
         policy.complete(a, result: result("HELLO"), nowMS: a.timestampMS+10)
@@ -126,5 +126,47 @@ struct LiveWindowTests {
         require((230...240).contains(calls), "Unexpected steady-state cadence")
         require(soak.visible == "PLEASE", "Long-session state drift")
         print("PASS: simulated 60-second stream, \(calls) requests, bounded memory")
+
+        var fast = LiveWindowPolicy(fastScore: 0.85)
+        let f1 = firstJob(&fast)
+        fast.complete(f1, result: result("HELLO", score: 0.85), nowMS: f1.timestampMS+5)
+        require(fast.visible == "HELLO", "High-confidence accepted estimate unnecessarily delayed")
+        let f2 = nextJob(&fast, after: f1.timestampMS)
+        fast.complete(f2, result: result("HELLO", score: 0.6), nowMS: f2.timestampMS+5)
+        require(fast.visible == "HELLO", "Same accepted sign flickered after fast admission")
+        let f3 = nextJob(&fast, after: f2.timestampMS)
+        let rejected = Classification(candidates: [.init(label: "HELLO", score: 0.99)],
+                                      unknown: true, reason: "insufficient_articulation")
+        fast.complete(f3, result: rejected, nowMS: f3.timestampMS+5)
+        require(fast.visible == nil, "High score bypassed explicit rejection")
+
+        var weak = LiveWindowPolicy(fastScore: 0.85)
+        let w1 = firstJob(&weak)
+        weak.complete(w1, result: result("YES", score: 0.849), nowMS: w1.timestampMS+5)
+        require(weak.visible == nil, "Sub-threshold estimate bypassed confirmation")
+        let w2 = nextJob(&weak, after: w1.timestampMS)
+        weak.complete(w2, result: result("YES", score: 0.6), nowMS: w2.timestampMS+5)
+        require(weak.visible == "YES", "Weak repeated result failed confirmation")
+        let w3 = nextJob(&weak, after: w2.timestampMS)
+        weak.complete(w3, result: result("NO", score: 0.6), nowMS: w3.timestampMS+5)
+        require(weak.visible == nil, "A new weak label kept old text or appeared prematurely")
+        let w4 = nextJob(&weak, after: w3.timestampMS)
+        weak.reset()
+        require(!weak.complete(w4, result: result("NO", score: 0.99), nowMS: w4.timestampMS+5),
+                "Fast mode accepted superseded result")
+
+        var staleFast = LiveWindowPolicy(fastScore: 0.85)
+        let staleJob = firstJob(&staleFast)
+        require(!staleFast.complete(staleJob, result: result("NO", score: 0.99), nowMS: staleJob.timestampMS+401),
+                "High confidence bypassed freshness")
+        require(staleFast.visible == nil, "Stale fast result was shown")
+        print("PASS: fast confirmation boundaries, weak evidence, rejection, resets and freshness")
+        for score in [Float(0.449), Float(0.45)] {
+            var deployed = LiveWindowPolicy()
+            let job = firstJob(&deployed)
+            deployed.complete(job, result: result("HELLO", score: score), nowMS: job.timestampMS+5)
+            require((deployed.visible == "HELLO") == (score >= 0.45), "Calibrated default boundary drifted")
+        }
+        print("PASS: default calibrated admission threshold, without changing classifier rejection")
     }
 }

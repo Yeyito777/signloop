@@ -1,6 +1,9 @@
 """Metadata selection and pacing mechanics; no images or model calls."""
 import unittest
+import tempfile
+from pathlib import Path
 from .research_holdout import select, identifier, Cadence
+from .research_confirmation import calibration_samples
 
 
 def row(name, signer, gloss):
@@ -8,6 +11,13 @@ def row(name, signer, gloss):
 
 
 class Tests(unittest.TestCase):
+    def test_confirmation_calibration_refuses_unpinned_cohort(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/"test.json"
+            path.write_text('{"samples": [{"split": "calibration"}]}')
+            with self.assertRaisesRegex(ValueError, "original, pinned"):
+                calibration_samples(path)
+
     def test_old_clips_excluded_but_known_signer_positive_disclosed(self):
         rows = [row("seen", "A", "HELLO"), row("new", "A", "YES"),
                 row("oldperson-negative", "A", "CAT"), row("newperson-negative", "B", "DOG")]

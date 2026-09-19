@@ -58,6 +58,10 @@ correct displayed sign; 1/35 unsupported recordings falsely displayed PLEASE.
 [Full protocol and limitations](docs/frozen-additional-evaluation.md).
 This is still a research prototype; good live accuracy has not been established.
 
+A separately calibrated [faster confirmation rule](docs/fast-confirmation.md)
+raises displayed coverage to **56/82 on that now-inspected development cohort**,
+with the same 1/35 unsupported false display. This is not a new holdout result.
+
 ## Parallel development
 
 Use a separate branch/checkout per task while keeping `yeyito` available:

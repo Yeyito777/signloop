@@ -3,6 +3,13 @@ import Foundation
 /// Main-thread owned scheduling/state, separated from SDKs for deterministic tests.
 /// All clock values are monotonic milliseconds. One outstanding job, no backlog.
 struct LiveWindowPolicy {
+    // Chosen on the original calibration cohort; not a probability of correctness.
+    static let defaultFastScore: Float? = 0.45
+    private let fastScore: Float?
+    init(fastScore: Float? = LiveWindowPolicy.defaultFastScore) {
+        precondition(fastScore == nil || (fastScore!.isFinite && (0.45...1).contains(fastScore!)))
+        self.fastScore = fastScore
+    }
     struct Job {
         let id: Int
         let generation: Int
@@ -103,6 +110,11 @@ struct LiveWindowPolicy {
         let label = result?.unknown == false && candidate?.score.isFinite == true &&
             candidate.map({ allowed.contains($0.label) && (0...1).contains($0.score) }) == true ? candidate?.label : nil
         visible = filter.update(label)
+        // Only an already accepted, fresh, supported and motion-gated estimate
+        // may bypass the second overlapping window. Unknown never bypasses.
+        if let label, let fastScore, let candidate, candidate.score >= fastScore {
+            visible = label
+        }
         lastResult = job.timestampMS
         return true
     }

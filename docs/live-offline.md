@@ -2,7 +2,7 @@
 
 Camera → MediaPipe hand landmarks → latest 1.2 seconds → 15Hz observed-frame
 sampling → native pretrained model → uncertainty/articulation rejection →
-two-result confirmation → current possible sign. No backend, Jev, transcription,
+calibrated display confirmation → current possible sign. No backend, Jev, transcription,
 network request, recording or reference-capture step.
 
 ## Availability
@@ -44,7 +44,9 @@ local Mac simulator research replay.
 - Input and completed result must be at most 400ms old. The 250ms UI watchdog
   clears a stalled visible result within about 650ms, even if hand tracking
   continues while the learned model hangs.
-- Two matching accepted results are required. Unknown clears immediately.
+- Accepted results with score >=.45 may display immediately; weaker accepted
+  results require two matches. Unknown clears immediately. This score is not a
+  probability; see [calibration and limitations](fast-confirmation.md).
   The [NO articulation guard](recognition-motion-guard.md) is applied.
 - Hand loss, tracking gaps, metadata changes, pause, camera switch, background,
   interruption and camera error invalidate pending evidence.
