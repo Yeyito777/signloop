@@ -2,10 +2,56 @@
 
 Hack the North · limited-vocabulary ASL-to-English prototype.
 
-## One-screen offline skeleton
+## Consumer app design system
 
-The current build is **tracking only**: camera → MediaPipe hand, upper-body and
-face landmarkers → one synchronized, inspectable skeleton. No sign guesses,
+The [Playroom design system](design-system/README.md) contains the agreed visual foundation,
+portable tokens, React Native text styles, CSS variables, and reusable UI icons.
+Screen layouts are still drafts. The imported [3D goose prototype](goose/README.md)
+includes animation and experimental voice; the design system keeps character
+rendering and animation assets replaceable.
+
+## Unified consumer mobile app
+
+The Expo app lives in [`mobile/`](mobile/README.md): Home, Conversation, and local
+transcript/correction sheets in the Playroom style. The native Expo camera module
+uses the gesture tracker in `ios/Signloop/CameraTracker.swift`. The app renders
+the shared 3D goose and offers a complete
+limited flow: **offline ILY handshape estimate → explicit confirmation → caption
+→ optional backend-generated goose voice**. Voice uploads require foreground-session
+consent in Settings. Provider keys stay on the backend. This is not general ASL
+translation. An explicit sample-conversation mode still uses labeled sample data
+and silent playback.
+See [voice setup](docs/voice-backend.md) and [integration checks](docs/branch-integration.md).
+See the [frontend integration handoff](docs/frontend-flow-and-handoff.md).
+
+```sh
+cd mobile
+npm ci
+npm run ios
+```
+
+This generates `mobile/ios/` separately from the native scanner prototype below.
+
+## Goose and voice prototype
+
+Sanvi's character, emotion animation, lip sync, and ElevenLabs voice experiment
+are preserved in [`goose/`](goose/README.md), with their own lockfile and tests.
+Run `npm ci`, `npm run typecheck`, and `npm test` from that directory.
+
+The **standalone Expo 57 preview** remains available for character development.
+The Expo 55 consumer app reuses its rendering/animation sources but supplies its
+own SDK-compatible dependencies and authenticated backend voice adapter. Its
+experimental direct-provider/streaming client is not bundled in the consumer app.
+Do not copy its dependency manifest over `mobile/package.json`: SDK 55 is
+intentional for the camera app's Xcode compatibility. See
+[combined branch status](docs/branch-integration.md) for integration boundaries.
+No credentials were imported. Client-side `EXPO_PUBLIC_*` keys in the standalone
+prototype are not secret; use the consumer app's backend path for shared builds.
+
+## Standalone native scanner: offline skeleton
+
+The standalone native build uses `SkeletonCameraTracker` and is **tracking only**:
+camera → MediaPipe hand, upper-body and face landmarkers → one synchronized, inspectable skeleton. No sign guesses,
 backend, API key, transcription, recording or uploads.
 
 - Up to two hands, 21 points each.
@@ -19,8 +65,8 @@ Facial signals are **not sentiment/emotion labels or recognized ASL grammar**.
 Coordinates share the camera image plane, not a calibrated 3D coordinate system.
 See [architecture, probe schema and testing](docs/multimodal-skeleton.md).
 
-This replaces the camera's earlier ILY/five-sign research display; old recognition
-experiments remain below for reference and are not called by the new camera UI.
+This replaces the standalone camera's earlier ILY/five-sign research display;
+old recognition experiments remain below for reference and are not called by the new camera UI.
 No private sign-model assets are needed. Installing build 11 replaces the previous
 app UI; installation is a separate explicit step.
 

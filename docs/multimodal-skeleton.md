@@ -1,7 +1,8 @@
 # Hands + upper body + face, on device
 
-Build 11 is a tracking/probing foundation, **not ASL recognition**. It removes
-the live sign classifier from the camera path. No backend or transcription is
+Standalone native build 11 is a tracking/probing foundation, **not ASL recognition**.
+Its `SkeletonCameraTracker` replaces the live sign classifier in the native camera
+path. The Expo consumer app retains its separate `CameraTracker` gesture flow. No backend or transcription is
 started. Existing private research weights, even if present in Documents, are
 not loaded by the camera UI.
 
@@ -73,7 +74,7 @@ expressions: { MediaPipe blendshape name: coefficient }
 timingsMS: { hands, pose, face, total }
 ```
 
-`CameraTracker.onSkeletonFrame` is an optional main-thread callback for future
+`SkeletonCameraTracker.onSkeletonFrame` is an optional main-thread callback for future
 in-process probing. The `probeBuffer` retains at most two seconds / 60 frames.
 No live pixel buffers or coordinate files are saved, no automatic export, and
 no network consumer is attached. The old remote-recognition adapter is excluded

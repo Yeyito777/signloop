@@ -8,7 +8,7 @@ private enum CameraTheme {
 
 /// Tracking only. No sign classifier, transcription, backend or file export.
 struct ContentView: View {
-    @StateObject private var tracker = CameraTracker()
+    @StateObject private var tracker = SkeletonCameraTracker()
     @Environment(\.scenePhase) private var scenePhase
     @State private var paused = false
     @State private var showSettings = false
@@ -135,7 +135,7 @@ struct ContentView: View {
 }
 
 private struct CameraSettings: View {
-    @ObservedObject var tracker: CameraTracker
+    @ObservedObject var tracker: SkeletonCameraTracker
     @Binding var showTrackingStats: Bool
     @Environment(\.dismiss) private var dismiss
     var body: some View {
@@ -172,7 +172,7 @@ private struct CameraSettings: View {
 }
 
 private struct SkeletonInspector: View {
-    @ObservedObject var tracker: CameraTracker
+    @ObservedObject var tracker: SkeletonCameraTracker
     @Binding var probe: SkeletonProbe
     @Environment(\.dismiss) private var dismiss
     private let channels = ["browInnerUp", "browDownLeft", "browDownRight", "eyeBlinkLeft",
