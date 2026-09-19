@@ -1,6 +1,10 @@
 # Signloop mobile
 
-Expo / React Native Playroom screens: Home and Conversation, with transcript and correction sheets. Start conversation opens the **native Swift camera and MediaPipe hand tracker** on iPhone. Sanvi’s 3D goose is connected through the shared avatar adapter. Translation and ElevenLabs are not connected yet. A separate sample conversation preserves the UI review flow; real hand detection never generates sample captions.
+Expo SDK 55 / React Native Playroom app with the **shared 3D goose, native Swift
+camera, offline ILY handshape preview, explicit confirmation, captions, and
+optional server-proxied ElevenLabs voice**. A separate sample conversation
+preserves the UI review flow; real hand detection never generates sample captions.
+The goose is expressive animation, not an ASL signing avatar.
 
 ## Run on iOS
 
@@ -13,7 +17,10 @@ npm ci
 npm run ios
 ```
 
-`preios` downloads Google's pinned Hand Landmarker float16 v1 model if missing. CocoaPods installs MediaPipe 0.10.21. Expo generates `mobile/ios/`, builds a development app, opens Simulator, and starts Metro. Native folders are generated and ignored by Git. The camera requires iOS 17+.
+`preios` downloads Google's public Hand Landmarker and checksum-verified Gesture
+Recognizer models. CocoaPods installs MediaPipe 0.10.21. Expo generates `mobile/ios/`,
+builds a development app, opens Simulator, and starts Metro. Native folders are
+generated and ignored by Git. The camera requires iOS 17+.
 
 The local Expo module compiles the shared Swift sources under root `ios/Signloop/`; it does not copy them. The standalone native app remains separately buildable. If running `expo prebuild` or `pod install` manually, run `npm run camera:assets` first. Do not prebuild the repository root.
 
@@ -25,9 +32,26 @@ After the first build, `npm start` and then `i` reopens the installed app. To op
 
 Start conversation requests camera permission on iPhone and shows a mirrored preview, native joint overlay, and hand visibility feedback. Permission denial offers Settings. Simulator and platforms without the module show an unavailable state with an explicit UI demo option.
 
-Home has one Start conversation action. For UI testing, `/conversation?demo=1` runs a finite sample: framing → ready → draft → thinking → accepted phrase → silent voice preview. “Demo · try states” opens additional scenarios. Use the caption pencil to correct and the top-right menu to read the transcript, mute voice, or end. Back also confirms End. Transcript data clears on ending.
+Home offers Start conversation and Voice settings. Simulator camera guidance
+links to an explicitly labelled sample preview. Live capture recognizes only the public model's ILY handshape: extend
+thumb, index, and pinky; fold the other two fingers. A tentative result is **not**
+spoken until Confirm. Unknown gestures and expired results produce no words.
+Release the handshape before repeating it. This is not validated general ASL
+translation; private five-sign research weights are not included.
 
-Fonts are bundled locally. The UI imports canonical `../design-system/` tokens/icons and respects system text size and Reduce Motion. The procedural 3D goose comes from `sanvi-signloop` at `575074e`; see [character handoff](src/avatar/README.md).
+For UI testing, `/conversation?demo=1` runs a finite sample: framing → ready → draft
+→ thinking → accepted phrase → silent voice preview. “Demo · try states” opens
+additional scenarios. Use the caption pencil to correct and the top-right menu
+to read the transcript, mute voice, or end. Back also confirms End. Transcript
+data clears on ending.
+
+Fonts are bundled locally. The UI imports canonical `../design-system/` tokens/icons
+and respects system text size and Reduce Motion. The live app imports Sanvi's
+reusable `../goose/src/components/MrGoose` renderer. Metro resolves shared-source
+dependencies from `mobile/node_modules`, never the standalone Expo 57 runtime.
+See [character handoff](src/avatar/README.md) for native rendering adaptations.
+TypeScript-only path mappings are disabled in Metro (`experiments.tsconfigPaths:
+false`) so declaration files cannot become runtime modules.
 
 The selected Go big direction uses “You were saying?” on Home, oversized artwork, one ink Start button, open captions, and dark sheets. Home and Conversation share one avatar container: the large character moves into a centered, reserved stage while the camera and caption area appear. Its blue backdrop recedes and a decorative curved line changes shape during the transition. The character renderer stays mounted; only its outer container moves. Direct entry and Reduce Motion skip this movement. Navigation also uses a short native crossfade. Reanimated drives press/release springs, stage travel, and pause/status fades. Gorhom sheets support dragging, a fading backdrop, content resizing, and keyboard-aware correction. Their content remains mounted until dismissal finishes; capture resumes and correction playback begins only afterward. Ending a session keeps capture stopped through the return to Home. OS Reduce Motion disables animation. Expo Haptics supplements completed taps where supported; iOS suppresses haptics while its camera is active, so all meaningful feedback is visual.
 
@@ -52,4 +76,29 @@ npm run typecheck
 npm test
 ```
 
-See [integration handoff](../docs/frontend-flow-and-handoff.md) and [native camera module](modules/signloop-camera/README.md). Actual capture, permission changes, and skeleton alignment need verification on a physical iPhone. Android capture is not implemented. Live translation, continuous speech backpressure, ElevenLabs audio, and native lip-sync remain integration work. Rebuild the development app once to include Expo GL; the 3D character and scanner need combined performance checks on a physical iPhone.
+## Optional voice
+
+1. Configure the [backend voice proxy](../docs/voice-backend.md). For a trusted
+   LAN, run `python3 -m backend.server --voice-only --host 0.0.0.0` from the repo root.
+2. Open Voice settings on Home. Enter `http://<your-mac>.local:8787` (or an HTTPS
+   deployed origin) and **SIGNLOOP_BACKEND_TOKEN**, never an ElevenLabs key.
+3. Enable text-upload consent, save, and tap Test voice. Provider keys and voice
+   selection are configured on the backend. Settings are held in app memory only.
+4. Start a conversation. Confirm a recognized ILY estimate. The caption appears
+   immediately; optional speech follows. Corrections require explicit Save & speak.
+
+Backgrounding revokes upload consent and cancels local playback. Pause, mute,
+ending, and replacement speech also cancel local playback and clean temporary
+audio files. Cancellation cannot retract already submitted provider text or
+guarantee cancellation of an already-started billed request. Voice is off by
+default; captions continue working without a backend.
+
+The production mobile path uses bounded MP3 responses and timing-driven character
+gestures. Newer streaming experiments remain in the standalone `goose/` preview,
+not the secure consumer adapter.
+
+See [integration handoff](../docs/frontend-flow-and-handoff.md),
+[combined status](../docs/branch-integration.md), and
+[native camera module](modules/signloop-camera/README.md). Actual capture,
+permissions, GL rendering, audio playback, and skeleton alignment require a
+physical iPhone build. Android capture and general ASL translation are not implemented.

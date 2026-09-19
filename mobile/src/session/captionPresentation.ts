@@ -12,7 +12,8 @@ export function captionPresentation(state: Session, mode: IntegrationKit['mode']
   if (phrase) {
     if (state.paused) delivery = 'Paused';
     else if (state.muted) delivery = 'Voice off';
-    else if (state.speech?.phraseId === phrase.id) delivery = mode === 'demo' ? 'Playing · silent preview' : 'Speaking';
+    else if (state.speech?.phraseId === phrase.id) delivery = mode === 'demo' ? 'Playing · silent preview'
+      : state.speech.started ? 'Speaking' : 'Preparing voice…';
     else if (state.speechQueue.includes(phrase.id)) delivery = 'Waiting to speak';
     else if (phrase.status === 'played') delivery = mode === 'demo' ? 'Preview finished' : 'Spoken';
     else if (phrase.status === 'failed') delivery = 'Voice unavailable';

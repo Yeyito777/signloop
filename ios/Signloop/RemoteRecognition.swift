@@ -100,7 +100,9 @@ final class RemoteRecognition: ObservableObject {
                     lastResultAt = Date()
                     failures = 0
                     let match = !result.unknown ? result.candidates.first : nil
-                    let label = match.flatMap { labels.contains($0.label) && $0.score >= 0.8 ? $0.label : nil }
+                    // Backend owns model-specific rejection. DTW similarities
+                    // are not Jev scores or calibrated probabilities.
+                    let label = match.flatMap { labels.contains($0.label) ? $0.label : nil }
                     let visible = filter.update(label)
                     currentSign = visible?.replacingOccurrences(of: "_", with: " ").capitalized ?? "Unknown"
                     status = visible == nil ? "No clear sign yet" : "Possible sign · live estimate"

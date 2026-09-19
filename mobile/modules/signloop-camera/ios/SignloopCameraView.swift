@@ -1,9 +1,12 @@
 import AVFoundation
 import Combine
 import ExpoModulesCore
+import UIKit
+import QuartzCore
 
 final class SignloopCameraView: ExpoView {
     let onStatus = EventDispatcher()
+    let onSign = EventDispatcher()
     let tracker: CameraTracker
     var active = false
     var captureId = 0
@@ -16,12 +19,15 @@ final class SignloopCameraView: ExpoView {
     private var observers: [NSObjectProtocol] = []
     private var appliedCaptureId = -1
     private var lastStatus = ""
+    private var lastSign = ""
+    private var lastSignAt = 0.0
     private var renderScheduled = false
+    private var expiryTimer: Timer?
 
     required init(appContext: AppContext? = nil) {
         let resourceURL = Bundle(for: SignloopCameraView.self).url(forResource: "SignloopCameraModels", withExtension: "bundle")
             ?? Bundle.main.url(forResource: "SignloopCameraModels", withExtension: "bundle")
-        let model = resourceURL.flatMap(Bundle.init(url:))?.path(forResource: "hand_landmarker", ofType: "task")
+        let model = resourceURL.flatMap(Bundle.init(url:))?.path(forResource: "gesture_recognizer", ofType: "task")
         tracker = CameraTracker(modelPath: model)
         super.init(appContext: appContext)
         clipsToBounds = true
@@ -55,6 +61,7 @@ final class SignloopCameraView: ExpoView {
     }
 
     deinit {
+        expiryTimer?.invalidate()
         subscription?.cancel()
         observers.forEach(NotificationCenter.default.removeObserver)
         tracker.pause()
@@ -88,12 +95,19 @@ final class SignloopCameraView: ExpoView {
         isCapturing = true
         appliedCaptureId = captureId
         lastStatus = ""
+        lastSign = ""
         emit("starting")
         tracker.start()
+        expiryTimer?.invalidate()
+        expiryTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            self?.tracker.expireLocalResult()
+        }
         #endif
     }
 
     private func stop() {
+        expiryTimer?.invalidate()
+        expiryTimer = nil
         guard isCapturing else { return }
         isCapturing = false
         skeleton.path = nil
@@ -105,6 +119,18 @@ final class SignloopCameraView: ExpoView {
         guard key != lastStatus else { return }
         lastStatus = key
         onStatus(["captureId": captureId, "status": status, "handCount": handCount, "message": message])
+        if status != "tracking" { emitSign(nil) }
+    }
+
+    private func emitSign(_ label: String?) {
+        let key = "\(captureId):\(label ?? "unknown")"
+        let now = Date().timeIntervalSince1970 * 1000
+        // Refresh candidate expiry while held, without flooding the JS bridge.
+        guard key != lastSign || (label != nil && now - lastSignAt >= 250) else { return }
+        lastSign = key
+        lastSignAt = now
+        let observed = now - Double(tracker.frameAgeMS ?? 0)
+        onSign(["captureId": captureId, "label": label as Any? ?? NSNull(), "observedAtMS": observed])
     }
 
     private func renderTracking() {
@@ -146,6 +172,7 @@ final class SignloopCameraView: ExpoView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         skeleton.path = showSkeleton ? path.cgPath : nil
+        emitSign(visibleHands > 0 ? tracker.localSign : nil)
         CATransaction.commit()
         // No face, distance, lighting, emotion, or sign-confidence inference here.
         emit(visibleHands > 0 ? "tracking" : "searching", handCount: visibleHands)

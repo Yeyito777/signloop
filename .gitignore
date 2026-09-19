@@ -1,6 +1,9 @@
 .DS_Store
 ios/Vendor/
 ios/Signloop/Resources/hand_landmarker.task
+ios/Signloop/Resources/gesture_recognizer.task
+ios/Signloop/Resources/MediaPipeTasks*-LICENSE.txt
+ios/Signloop/Resources/TensorFlowLite-LICENSE.txt
 ios/build/
 ios/Signloop.xcodeproj/
 *.xcuserstate

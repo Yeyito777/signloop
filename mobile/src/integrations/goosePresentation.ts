@@ -1,5 +1,5 @@
 import type { AvatarMode, Emotion } from './contracts';
-import type { GooseActivity, GooseEmotion } from '../avatar/components/goose/motion';
+import type { GooseActivity, GooseEmotion } from '../../../goose/src/components/goose/motion';
 
 const activities: Record<AvatarMode, GooseActivity> = {
   idle: 'idle', listening: 'watching', thinking: 'thinking', speaking: 'speaking',

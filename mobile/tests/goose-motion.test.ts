@@ -10,8 +10,8 @@ import {
   gooseGestures,
   idlePose,
   stepPose,
-} from '../src/avatar/components/goose/motion.ts';
-import { motion, poseLimits } from '../src/avatar/components/goose/settings.ts';
+} from '../../goose/src/components/goose/motion.ts';
+import { motion, poseLimits } from '../../goose/src/components/goose/settings.ts';
 
 test('pause holds a pose and resume advances from the held time', () => {
   let time = advanceTime(2, 1 / 60, true);

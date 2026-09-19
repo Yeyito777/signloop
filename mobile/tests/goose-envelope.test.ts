@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { envelopeFromPcm, levelAt } from '../src/avatar/voice/envelope.ts';
+import { envelopeFromPcm, levelAt } from '../../goose/src/voice/envelope.ts';
 
 test('silence stays closed', () => {
   const envelope = envelopeFromPcm(new Float32Array(44100), 44100);

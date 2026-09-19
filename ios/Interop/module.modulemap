@@ -1,0 +1,7 @@
+// Header-only bridge to the C symbols ALREADY exported by pinned MediaPipe
+// TasksCommon 0.10.21. Do not link a second TensorFlowLiteC binary: it duplicates
+// the existing runtime's globals. Revalidate ABI/model parity on SDK upgrades.
+module TensorFlowLiteC [system] {
+  umbrella "../Vendor/TensorFlowLiteHeaders/TensorFlowLiteC"
+  export *
+}

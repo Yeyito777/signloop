@@ -13,11 +13,11 @@ Pod::Spec.new do |s|
   s.dependency 'ExpoModulesCore'
   s.dependency 'MediaPipeTasksVision', '0.10.21'
   s.source_files = 'mobile/modules/signloop-camera/ios/*.swift',
-    'ios/Signloop/{CameraTracker,CameraPreview,CaptureLifecycle,Recognition}.swift'
-  s.resource_bundles = { 'SignloopCameraModels' => ['ios/Signloop/Resources/hand_landmarker.task'] }
-  s.frameworks = 'AVFoundation', 'UIKit', 'Combine', 'SwiftUI'
+    'ios/Signloop/{CameraTracker,CameraPreview,CaptureLifecycle,CaptureCadence,CaptureFreshness,Recognition}.swift'
+  s.resource_bundles = { 'SignloopCameraModels' => ['ios/Signloop/Resources/gesture_recognizer.task'] }
+  s.frameworks = 'AVFoundation', 'CoreMedia', 'CoreVideo', 'QuartzCore', 'UIKit', 'Combine', 'SwiftUI'
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
-  unless File.exist?(File.join(__dir__, 'ios/Signloop/Resources/hand_landmarker.task'))
+  unless File.exist?(File.join(__dir__, 'ios/Signloop/Resources/gesture_recognizer.task'))
     raise 'Missing hand model. Run npm run camera:assets from mobile/ before installing pods.'
   end
 end

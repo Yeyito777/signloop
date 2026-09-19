@@ -197,7 +197,8 @@ function Goose({ animate, reducedMotion, activity, emotion, lipSync }: {
   );
 }
 
-export function GooseScene(props: {
+export function GooseScene({ background = colors.background, ...props }: {
+  background?: string | null;
   animate: boolean;
   reducedMotion: boolean;
   activity: GooseActivity;
@@ -215,6 +216,7 @@ export function GooseScene(props: {
 
   return (
     <>
+      {background && <color attach="background" args={[background]} />}
       <hemisphereLight args={['#FFF9EF', '#B5A38C', 1.5]} />
       <directionalLight position={[-3, 5, 7]} color="#FFF8EC" intensity={2.5} />
       <directionalLight position={[4, 3, 5]} color="#EAF0FF" intensity={1} />

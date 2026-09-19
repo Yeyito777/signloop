@@ -6,6 +6,7 @@ This local Expo SDK 55 module embeds the shared Swift scanner in the Conversatio
 
 - `ios/Signloop/CameraTracker.swift`: capture, permissions, MediaPipe, bounded landmark buffer.
 - `ios/Signloop/CaptureLifecycle.swift`: generation checks for delayed permissions/start/inference work.
+- `ios/Signloop/CaptureCadence.swift` and `CaptureFreshness.swift`: frame pacing, capture-time validation, and stale-overlay expiry.
 - `ios/Signloop/CameraPreview.swift`: the shared portrait/aspect-fill preview view.
 - `ios/Signloop/Recognition.swift`: landmark schema, normalization, buffer, coordinate mapping.
 - This directory's `ios/`: Expo module and native view; native skeleton drawing and deduplicated status events.
@@ -15,7 +16,11 @@ After modifying shared Swift files, rebuild the development app. If you add a ne
 
 ## React Native contract
 
-`SignloopCamera` accepts `active`, `captureId`, `showSkeleton`, standard view styles, and `onStatus`. Status payloads contain `captureId`, `status`, `handCount`, and a diagnostic `message`. The adapter validates the current generation before forwarding framing into the session reducer.
+`SignloopCamera` accepts `active`, `captureId`, `showSkeleton`, standard view styles,
+`onStatus`, and `onSign`. Status payloads contain `captureId`, `status`, `handCount`,
+and a diagnostic `message`. Tentative sign events carry `captureId`, `label`, and
+`observedAtMS`; a 250ms heartbeat refreshes a held candidate. The adapter validates
+the current generation and freshness before forwarding into the session reducer.
 
 | Native status | Frontend meaning |
 |---|---|
@@ -40,7 +45,17 @@ It returns the most recent 1.2 seconds from the native bounded buffer, or an emp
 
 Keep at most one classification request in flight and request a fresh window after it completes. Cancel requests on pause/generation changes; reject stale results again on receipt. Keep provider API keys on the backend. You can also connect the existing Swift `RemoteRecognition` beside the tracker, avoiding landmark serialization through JS entirely. It is not compiled into this camera pod yet.
 
-Expose tentative sign estimates separately from `TranslationEvent.accepted`. Only a completed, accepted English phrase belongs in the transcript/voice pipeline. `cameraKit` deliberately emits no translations and has no simulated successful voice playback.
+The shared tracker now uses MediaPipe Gesture Recognizer (including hand landmarks),
+loaded from the pod's `gesture_recognizer.task` resource. The native view runs the
+same stale-frame watchdog as the standalone camera. The private five-sign
+LiteRT engine is still standalone-only and is not compiled into this pod.
+
+Tentative ILY estimates are exposed separately from `TranslationEvent.accepted`.
+`cameraKit` now maps only that public handshape to a confirmation candidate.
+The user must confirm a fresh candidate before it enters the transcript/voice
+pipeline. Unknown, cropped-out, or stale observations clear candidates. The
+goose and optional real backend voice adapter are connected; no simulated
+successful voice playback is used outside the explicitly labelled UI demo.
 
 ## Build and check
 

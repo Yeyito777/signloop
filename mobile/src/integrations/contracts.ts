@@ -19,10 +19,13 @@ export type CameraProps = {
   captureId: number;
   framing: Framing;
   onFraming: (framing: Framing, captureId: number) => void;
+  onTranslation: (event: TranslationEvent, captureId: number) => void;
   style?: StyleProp<ViewStyle>;
 };
 
 export type TranslationEvent =
+  | { type: 'candidate'; label: string; text: string; expiresAtMS: number }
+  | { type: 'clear-candidate' }
   | { type: 'draft'; text: string }
   | { type: 'thinking' }
   | { type: 'accepted'; id: string; text: string; emotion: Emotion }
@@ -35,7 +38,7 @@ export interface TranslationAdapter {
 }
 export interface VoiceAdapter {
   /** Resolve after playback ends, reject on failure, stop immediately on abort. */
-  speak(text: string, signal: AbortSignal): Promise<void>;
+  speak(text: string, signal: AbortSignal, onPlaybackStart?: () => void): Promise<void>;
 }
 
 export interface IntegrationKit {

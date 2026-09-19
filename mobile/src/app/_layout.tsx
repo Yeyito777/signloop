@@ -1,4 +1,7 @@
+import 'react-native-url-polyfill/auto';
 import { useEffect } from 'react';
+import { AppState } from 'react-native';
+import { disableVoiceUploads } from '../integrations/voiceSettings';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { MotionProvider, motion } from '../ui/motion';
@@ -15,6 +18,12 @@ import { useReducedMotion } from '../ui/primitives';
 void SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', state => {
+      if (state === 'background') disableVoiceUploads();
+    });
+    return () => subscription.remove();
+  }, []);
   const [loaded, error] = useFonts({
     SignloopDisplayRegular: Fredoka_400Regular,
     SignloopDisplayMedium: Fredoka_500Medium,
@@ -34,6 +43,7 @@ function Navigation() {
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: tokens.color.butter }, animation: reducedMotion ? 'none' : 'fade', animationDuration: motion.navigation }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="conversation" options={{ gestureEnabled: false }} />
+      <Stack.Screen name="settings" />
     </Stack>
   </>;
 }

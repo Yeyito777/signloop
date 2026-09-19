@@ -14,19 +14,33 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     @Published private(set) var permissionDenied = false
     @Published private(set) var errorMessage: String?
     @Published private(set) var latencyMS = 0
+    @Published private(set) var frameAgeMS: Int?
     @Published private(set) var fps = 0
     @Published private(set) var bufferedFrames = 0
     @Published private(set) var frameSize = CGSize(width: 720, height: 1280)
-    @Published var showJoints = false
-    @Published var showNumbers = false
+    @Published private(set) var localSign: String?
+    @Published var showJoints = UserDefaults.standard.bool(forKey: "showHandJoints") {
+        didSet { UserDefaults.standard.set(showJoints, forKey: "showHandJoints") }
+    }
+    @Published var showNumbers = UserDefaults.standard.bool(forKey: "showJointNumbers") {
+        didSet { UserDefaults.standard.set(showNumbers, forKey: "showJointNumbers") }
+    }
     @Published private(set) var snapshotURL: URL?
+    // Main-thread callbacks; frames stay in RAM on the phone.
+    var onFrame: ((LandmarkFrame) -> Void)?
+    var onReset: (() -> Void)?
+    private var uiGeneration = 0
+    private var captureGeneration = 0 // camera queue only
+    private var wantsRunning = false
 
     private let queue = DispatchQueue(label: "com.signloop.camera", qos: .userInitiated)
-    private var landmarker: HandLandmarker?
+    private var recognizer: GestureRecognizer?
+    private var localFilter = LocalGestureFilter()
+    private var displayLifetime = CaptureDisplayLifetime() // main queue only
     private var configured = false
     private var front = true
-    private var lastTimestamp = -1
-    private var lastInference = 0.0
+    private var freshness = CaptureFreshness()
+    private var cadence = CaptureCadence()
     private var rateStart = 0.0
     private var rateFrames = 0
     private var buffer = TemporalBuffer()
@@ -34,13 +48,14 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     private let lifecycle = CaptureLifecycle()
     private let modelPath: String?
 
-    init(modelPath: String? = Bundle.main.path(forResource: "hand_landmarker", ofType: "task")) {
+    init(modelPath: String? = Bundle.main.path(forResource: "gesture_recognizer", ofType: "task")) {
         self.modelPath = modelPath
         super.init()
         observers.append(NotificationCenter.default.addObserver(
             forName: .AVCaptureSessionWasInterrupted, object: session, queue: .main
         ) { [weak self] _ in
-            self?.hands = []
+            self?.invalidateDisplayedFrames()
+            if let self { self.queue.async { self.localFilter.reset() } }
             self?.isRunning = false
             self?.status = "Camera interrupted"
         })
@@ -56,25 +71,36 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
             guard let self, self.lifecycle.token != nil else { return }
             let error = notification.userInfo?[AVCaptureSessionErrorKey] as? NSError
             self.isRunning = false
-            self.hands = []
+            self.invalidateDisplayedFrames()
             self.errorMessage = error?.localizedDescription ?? "Camera error. Tap Resume to retry."
         })
     }
 
     deinit { observers.forEach(NotificationCenter.default.removeObserver) }
 
-    func start() {
+    private func invalidateDisplayedFrames() {
+        uiGeneration += 1
         hands = []
+        localSign = nil
+        frameAgeMS = nil
+        displayLifetime.reset()
+        onReset?()
+    }
+
+    func start() {
+        wantsRunning = true
+        invalidateDisplayedFrames()
         requestStart(token: lifecycle.begin())
     }
 
     private func requestStart(token: Int) {
         guard lifecycle.accepts(token) else { return }
+        let generation = uiGeneration
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             permissionDenied = false
             errorMessage = nil
-            queue.async { self.startOnQueue(token: token) }
+            queue.async { self.startOnQueue(token: token, generation: generation) }
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { [weak self] _ in
                 DispatchQueue.main.async { self?.requestStart(token: token) }
@@ -87,15 +113,21 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
 
     func pause() {
         lifecycle.end()
-        hands = []
+        wantsRunning = false
+        invalidateDisplayedFrames()
+        let generation = uiGeneration
         isRunning = false
         queue.async {
             self.session.stopRunning()
             self.buffer.reset()
+            self.localFilter.reset()
+            self.cadence.reset()
+            self.recognizer = nil
             DispatchQueue.main.async {
-                guard self.lifecycle.token == nil else { return }
+                guard self.lifecycle.token == nil, self.uiGeneration == generation else { return }
                 self.isRunning = false
                 self.hands = []
+                self.localSign = nil
                 self.bufferedFrames = 0
                 self.fps = 0
                 self.latencyMS = 0
@@ -105,18 +137,30 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     }
 
     func flipCamera() {
+        invalidateDisplayedFrames()
+        let generation = uiGeneration
         queue.async {
             guard self.configured else { return }
+            self.captureGeneration = generation
             let wasRunning = self.session.isRunning
             self.session.stopRunning()
             do {
                 try self.replaceInput(front: !self.front)
                 self.buffer.reset()
+                self.localFilter.reset()
+                self.cadence.reset()
+                self.rateStart = CACurrentMediaTime()
+                self.rateFrames = 0
+                self.recognizer = nil
+                try self.configureRecognizer()
+                self.freshness.reset(at: CaptureClock.now)
                 if wasRunning { self.session.startRunning() }
                 let nowFront = self.front
                 DispatchQueue.main.async {
+                    guard self.uiGeneration == generation else { return }
                     self.isFront = nowFront
                     self.hands = []
+                    self.localSign = nil
                     self.bufferedFrames = 0
                     self.status = wasRunning ? "Looking for hands" : "Camera paused"
                 }
@@ -129,7 +173,7 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
             guard !self.buffer.frames.isEmpty else { return }
             struct Export: Encodable {
                 let schemaVersion = 1
-                let tracker = "MediaPipe Hand Landmarker 0.10.21"
+                let tracker = "MediaPipe Gesture Recognizer / hand landmarks 0.10.21"
                 let coordinateSpace = "portrait mirrored for front camera; normalized image x,y; relative z"
                 let camera: String
                 let frames: [LandmarkFrame]
@@ -150,6 +194,19 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
 
     func clearExport() { snapshotURL = nil }
 
+    /// Main-thread watchdog; a stalled camera cannot leave an old sign visible.
+    func expireLocalResult() {
+        guard displayLifetime.expire(now: CaptureClock.now) else { return }
+        hands = []
+        localSign = nil
+        frameAgeMS = nil
+        bufferedFrames = 0
+        fps = 0
+        latencyMS = 0
+        onReset?()
+        if isRunning && wantsRunning { status = "Waiting for fresh camera frames" }
+    }
+
     func recentFrames() async -> [LandmarkFrame] {
         await withCheckedContinuation { continuation in
             queue.async {
@@ -159,22 +216,30 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
         }
     }
 
-    private func startOnQueue(token: Int) {
-        guard lifecycle.accepts(token) else { return }
-        do {
-            if landmarker == nil {
-                guard let model = modelPath else {
-                    throw TrackerError.message("Missing hand model. Run ios/scripts/bootstrap.sh and rebuild.")
-                }
-                let options = HandLandmarkerOptions()
-                options.baseOptions.modelAssetPath = model
-                options.runningMode = .video
-                options.numHands = 2
-                options.minHandDetectionConfidence = 0.55
-                options.minHandPresenceConfidence = 0.55
-                options.minTrackingConfidence = 0.55
-                landmarker = try HandLandmarker(options: options)
+    private func configureRecognizer() throws {
+        if recognizer == nil {
+            guard let model = modelPath else {
+                throw TrackerError.message("Missing hand model. Run ios/scripts/bootstrap.sh and rebuild.")
             }
+            let options = GestureRecognizerOptions()
+            options.baseOptions.modelAssetPath = model
+            options.runningMode = .video
+            options.numHands = 2
+            options.minHandDetectionConfidence = 0.55
+            options.minHandPresenceConfidence = 0.55
+            options.minTrackingConfidence = 0.55
+            let classifier = ClassifierOptions()
+            classifier.maxResults = 2
+            options.cannedGesturesClassifierOptions = classifier
+            recognizer = try GestureRecognizer(options: options)
+        }
+    }
+
+    private func startOnQueue(token: Int, generation: Int) {
+        guard lifecycle.accepts(token) else { return }
+        captureGeneration = generation
+        do {
+            try configureRecognizer()
             if !configured {
                 session.beginConfiguration()
                 session.sessionPreset = .hd1280x720
@@ -192,14 +257,17 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
                 configured = true
             }
             buffer.reset()
+            localFilter.reset()
+            cadence.reset()
             rateStart = CACurrentMediaTime()
             rateFrames = 0
             guard lifecycle.accepts(token) else { return }
+            freshness.reset(at: CaptureClock.now)
             session.startRunning()
             guard lifecycle.accepts(token) else { session.stopRunning(); return }
             let running = session.isRunning
             DispatchQueue.main.async {
-                guard self.lifecycle.accepts(token) else { return }
+                guard self.lifecycle.accepts(token), self.uiGeneration == generation else { return }
                 self.errorMessage = nil
                 self.isRunning = running
                 self.status = running ? "Looking for hands" : "Camera unavailable"
@@ -245,16 +313,32 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
 
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer,
                        from connection: AVCaptureConnection) {
-        guard session.isRunning, let landmarker, let token = lifecycle.token else { return }
+        guard session.isRunning, let recognizer, let token = lifecycle.token else { return }
         let now = CACurrentMediaTime()
-        guard now - lastInference >= 1.0 / 24.0 else { return }
-        lastInference = now
-        let timestamp = max(lastTimestamp + 1, Int(now * 1000))
-        lastTimestamp = timestamp
+        let generation = captureGeneration
+        guard let captured = CaptureClock.hostSeconds(
+            presentation: CMSampleBufferGetPresentationTimeStamp(sampleBuffer),
+            sourceClock: session.synchronizationClock),
+              let timestamp = freshness.timestamp(captured: captured, now: CaptureClock.now) else {
+            buffer.reset()
+            localFilter.reset()
+            DispatchQueue.main.async {
+                guard self.uiGeneration == generation, self.wantsRunning else { return }
+                self.hands = []
+                self.localSign = nil
+                self.frameAgeMS = nil
+                self.displayLifetime.reset()
+                self.bufferedFrames = 0
+                self.onReset?()
+                self.status = "Waiting for fresh camera frames"
+            }
+            return
+        }
+        guard cadence.admit(at: captured) else { return }
         do {
             // Pixel buffers are physically rotated/mirrored by the output connection.
             let image = try MPImage(sampleBuffer: sampleBuffer, orientation: .up)
-            let result = try landmarker.detect(videoFrame: image, timestampInMilliseconds: timestamp)
+            let result = try recognizer.recognize(videoFrame: image, timestampInMilliseconds: timestamp)
             let elapsed = Int((CACurrentMediaTime() - now) * 1000)
             let detected = result.landmarks.enumerated().map { index, landmarks in
                 let category = result.handedness[safe: index]?.first
@@ -262,11 +346,22 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
                                    handednessScore: category?.score ?? 0,
                                    joints: landmarks.map { Joint(x: $0.x, y: $0.y, z: $0.z) })
             }
-            buffer.append(LandmarkFrame(timestampMS: timestamp, hands: detected))
-            let count = buffer.frames.count
+            let gestures = result.gestures.map { categories -> LocalHandGesture in
+                let ranked = categories.sorted { $0.score > $1.score }
+                return LocalHandGesture(label: ranked.first?.categoryName ?? "None",
+                                        score: ranked.first?.score ?? 0,
+                                        runner: ranked.dropFirst().first?.score ?? 0)
+            }
+            let local = localFilter.update(gestures.count == detected.count ? gestures : [],
+                                           timestampMS: timestamp)
             let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
             let width = pixelBuffer.map { CVPixelBufferGetWidth($0) } ?? 720
             let height = pixelBuffer.map { CVPixelBufferGetHeight($0) } ?? 1280
+            let frame = LandmarkFrame(timestampMS: timestamp, hands: detected,
+                                      imageAspectRatio: Float(width) / Float(height),
+                                      mirrored: connection.isVideoMirrored)
+            buffer.append(frame)
+            let count = buffer.frames.count
             rateFrames += 1
             var measuredFPS: Int?
             if now - rateStart >= 1 {
@@ -276,20 +371,37 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
             }
             DispatchQueue.main.async {
                 guard self.lifecycle.accepts(token) else { return }
-                self.hands = detected
+                guard self.uiGeneration == generation, self.wantsRunning else { return }
+                let deliveredAt = CaptureClock.now
+                let age = deliveredAt - captured
+                let fresh = CaptureFreshness.isFresh(captured: captured, now: deliveredAt)
+                self.hands = fresh ? detected : []
+                self.localSign = fresh ? local : nil
+                self.frameAgeMS = fresh ? Int(age*1000) : nil
+                if fresh { self.displayLifetime.received(at: captured) }
+                else { self.displayLifetime.reset() }
+                if fresh { self.onFrame?(frame) } else { self.onReset?() }
                 self.latencyMS = elapsed
                 self.bufferedFrames = count
                 self.frameSize = CGSize(width: width, height: height)
                 if let measuredFPS { self.fps = measuredFPS }
-                self.status = detected.isEmpty ? "Looking for hands" : "Tracking \(detected.count) \(detected.count == 1 ? "hand" : "hands")"
+                self.status = !fresh ? "Waiting for fresh camera frames" :
+                    detected.isEmpty ? "Looking for hands" : "Tracking \(detected.count) \(detected.count == 1 ? "hand" : "hands")"
             }
         } catch { report(error, token: token) }
     }
 
     private func report(_ error: Error, token: Int? = nil) {
+        if let token, !lifecycle.accepts(token) { return }
+        localFilter.reset()
+        let generation = captureGeneration
+        // Called on the capture queue: do not enqueue a stop behind a newer start.
+        if session.isRunning { session.stopRunning() }
         DispatchQueue.main.async {
             if let token, !self.lifecycle.accepts(token) { return }
-            self.hands = []
+            guard self.uiGeneration == generation else { return }
+            self.invalidateDisplayedFrames()
+            self.isRunning = false
             self.errorMessage = error.localizedDescription
             self.status = "Tracking unavailable"
         }

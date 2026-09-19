@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { alignmentWithoutAudioTags, cuesFromText, cuesFromWords, gestureAt, wordsFromAlignment } from '../src/avatar/voice/gestures.ts';
+import { alignmentWithoutAudioTags, cuesFromText, cuesFromWords, gestureAt, wordsFromAlignment } from '../../goose/src/voice/gestures.ts';
 
 test('audio tags are stripped before word matching', () => {
   const cleaned = alignmentWithoutAudioTags({

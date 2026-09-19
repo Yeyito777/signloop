@@ -43,9 +43,9 @@ export function CameraGuidance({ framing, active, mode, dispatch, demo }: {
   const ready = shown === 'ready';
   const blocked = shown.startsWith('camera-');
   const issue = !ready && shown !== 'finding';
-  const guidance = mode === 'camera' && shown === 'ready'
+  const guidance = mode !== 'demo' && shown === 'ready'
     ? { title: 'Hand detected', hint: '', icon: 'check' as const }
-    : mode === 'camera' && shown === 'finding'
+    : mode !== 'demo' && shown === 'finding'
       ? { title: 'Finding your hands', hint: 'Bring your hands inside the corners.', icon: 'frame' as const }
       : copy[shown];
   const settled = useSharedValue(0);

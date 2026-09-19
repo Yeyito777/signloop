@@ -11,6 +11,8 @@ for name in MediaPipeTasksCommon MediaPipeTasksVision; do
     tar -xzf "$archive" -C "Vendor/$name"
     rm "$archive"
   fi
+  cp "Vendor/$name/LICENSE" "Signloop/Resources/$name-LICENSE.txt"
 done
 bash scripts/fetch-hand-model.sh
+bash scripts/bootstrap-litert.sh
 xcodegen generate

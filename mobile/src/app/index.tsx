@@ -2,8 +2,8 @@ import { useCallback, useRef } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { GooseAvatar } from '../integrations/goose';
-import { Button, Copy, Wordmark, useReducedMotion } from '../ui/primitives';
+import { GooseAvatar } from '../integrations/GooseAvatar';
+import { Button, Copy, IconButton, Wordmark, useReducedMotion } from '../ui/primitives';
 import { StageSlot, useSharedStage, type StageSlotHandle } from '../ui/SharedStage';
 import { tokens } from '../ui/theme';
 
@@ -25,7 +25,7 @@ export default function Home() {
     router.push('/conversation');
   };
   return <SafeAreaView style={styles.screen}>
-    <View style={styles.header}><Wordmark /></View>
+    <View style={styles.header}><Wordmark /><IconButton icon="settings" label="Voice settings" onPress={() => router.push('/settings')} /></View>
     <ScrollView ref={scroll} onLayout={() => scroll.current?.getNativeScrollRef()?.measureInWindow((_, y, __, h) => { homeViewport.value = { top: y, bottom: y + h }; })} onScroll={() => stage.current?.measure()} scrollEventThrottle={16} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <Copy role="poster" accessibilityRole="header" style={[styles.title, { fontSize: headlineSize, lineHeight: headlineSize * tokens.type.poster.lineHeight / tokens.type.poster.size }]}>You were{ '\n' }saying?</Copy>
       <StageSlot ref={stage} owner="home" Renderer={GooseAvatar} mode="idle" emotion="neutral" reducedMotion={reducedMotion} style={[styles.stage, { minHeight: width * 0.95 }]} />

@@ -4,7 +4,7 @@ public final class SignloopCameraModule: Module {
     public func definition() -> ModuleDefinition {
         Name("SignloopCamera")
         View(SignloopCameraView.self) {
-            Events("onStatus")
+            Events("onStatus", "onSign")
             Prop("active") { (view, active: Bool) in view.active = active }
             Prop("captureId") { (view, captureId: Int) in view.captureId = captureId }
             Prop("showSkeleton") { (view, show: Bool) in view.showSkeleton = show }

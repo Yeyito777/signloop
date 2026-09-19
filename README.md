@@ -6,15 +6,21 @@ Hack the North · limited-vocabulary ASL-to-English prototype.
 
 The [Playroom design system](design-system/README.md) contains the agreed visual foundation,
 portable tokens, React Native text styles, CSS variables, and reusable UI icons.
-Screen layouts are still drafts. A teammate is developing the future 3D goose;
-the design system keeps character rendering and animation assets replaceable.
+Screen layouts are still drafts. The imported [3D goose prototype](goose/README.md)
+includes animation and experimental voice; the design system keeps character
+rendering and animation assets replaceable.
 
-## Consumer mobile app: initial screens
+## Unified consumer mobile app
 
 The Expo app lives in [`mobile/`](mobile/README.md): Home, Conversation, and local
 transcript/correction sheets in the Playroom style. The native Expo camera module reuses the
-Swift tracker below. Translation, goose, and voice are replaceable adapters; an explicit
-sample-conversation mode uses labeled sample data and silent playback.
+Swift tracker below. The app now renders the shared 3D goose and offers a complete
+limited flow: **offline ILY handshape estimate → explicit confirmation → caption
+→ optional backend-generated goose voice**. Voice uploads require foreground-session
+consent in Settings. Provider keys stay on the backend. This is not general ASL
+translation. An explicit sample-conversation mode still uses labeled sample data
+and silent playback.
+See [voice setup](docs/voice-backend.md) and [integration checks](docs/branch-integration.md).
 See the [frontend integration handoff](docs/frontend-flow-and-handoff.md).
 
 ```sh
@@ -24,17 +30,101 @@ npm run ios
 ```
 
 This generates `mobile/ios/` separately from the native scanner prototype below.
-## One-screen live sign estimates
 
-Open the app, put your hands in view, and see the **current possible sign** update
+## Goose and voice prototype
+
+Sanvi's character, emotion animation, lip sync, and ElevenLabs voice experiment
+are preserved in [`goose/`](goose/README.md), with their own lockfile and tests.
+Run `npm ci`, `npm run typecheck`, and `npm test` from that directory.
+
+The **standalone Expo 57 preview** remains available for character development.
+The Expo 55 consumer app reuses its rendering/animation sources but supplies its
+own SDK-compatible dependencies and authenticated backend voice adapter. Its
+experimental direct-provider/streaming client is not bundled in the consumer app.
+Do not copy its dependency manifest over `mobile/package.json`: SDK 55 is
+intentional for the camera app's Xcode compatibility. See
+[combined branch status](docs/branch-integration.md) for integration boundaries.
+No credentials were imported. Client-side `EXPO_PUBLIC_*` keys in the standalone
+prototype are not secret; use the consumer app's backend path for shared builds.
+
+## Standalone native scanner: offline handshape preview
+
+Open the app, put one hand in view, and see the **current possible sign** update
 automatically over the full-screen camera. No settings workflow, reference
-capture, saving, or Analyze button. Pause, flip camera, and toggle the skeleton.
+capture, saving, or Analyze button. Pause/flip stay on the camera; the top-right
+settings button controls hand joints, joint numbers and tracking stats.
 
-MediaPipe runs locally; a server-only Backboard adapter asks Jev to evaluate a
-recent landmark window using built-in sign descriptions. It targets roughly one
-request/second with no backlog, stabilization and stale-result rejection.
-**This is experimental zero-shot inference, not validated ASL recognition.**
-See [backend setup, verified models and limitations](docs/backend.md).
+**The default offline preview currently recognizes only the ILY (“I love you”)
+handshape without extra model assets.** Extend thumb, index and pinky; fold middle
+and ring. A private Debug build with verified pretrained assets automatically
+enables the [five-sign offline research mode](docs/live-offline.md):
+HELLO, YES, NO, PLEASE and THANK_YOU. It requires no Mac connection, network or API key and does not
+upload images or landmarks. Thumbs-up is never relabeled as ASL YES.
+
+MediaPipe's pretrained Gesture Recognizer supplies both real landmarks and
+handshape estimates. This is not a general ASL model. See
+[the local evaluation and limitations](docs/local-gesture-preview.md).
+
+The camera screen is now **offline only**; the cloud toggle and automatic
+backend calls have been removed. Legacy [backend research tools](docs/backend.md)
+remain separate. The five-sign weights are not bundled or publicly distributed
+while their provenance/rights are clarified. Live iPhone and fresh-signer
+accuracy validation remain open project goals.
+
+## Local reference-matching experiment
+
+The zero-shot path has not demonstrated reliable recognition. A separate
+**nearest-reference + dynamic time warping** backend now supports developer-side
+labeled recordings, signer-disjoint calibration/testing, and inspectable distance
+and rejection diagnostics, without any model API calls. It is opt-in, not an
+automatic replacement for the deployed classifier.
+
+See [local recognition evaluation](docs/recognition-evaluation.md) for replay,
+dataset restrictions, results and the remaining phone-validation requirements.
+No research recordings or derived landmark references are distributed in this repo.
+
+The [native Swift temporal engine](docs/native-temporal-matcher.md) now implements
+the same V2 matcher without a server. It is parity-tested but **not enabled in the
+camera UI**: distributable references and live rejection validation are still needed.
+
+A [pretrained 250-word candidate](docs/pretrained-sign-research.md) now recognizes
+all five target words in local rolling-window research. A calibrated articulation
+gate rejects the synthetic stationary-NO failures. Natural nonsigning behavior,
+phone validation and model provenance remain unresolved.
+
+The [native runtime probe](docs/native-pretrained-runtime.md) matches Python
+model outputs and coexists with MediaPipe on the iOS simulator. It is a
+developer-only test entry. The separate live worker now uses the same native
+engine when exact private Debug assets are present; the screen clearly identifies
+that research mode instead of claiming it is available in every build.
+
+**Latest larger frozen check:** 43/82 additional supported recordings produced a
+correct displayed sign; 1/35 unsupported recordings falsely displayed PLEASE.
+[Full protocol and limitations](docs/frozen-additional-evaluation.md).
+This is still a research prototype; good live accuracy has not been established.
+
+A separately calibrated [faster confirmation rule](docs/fast-confirmation.md)
+raises displayed coverage to **56/82 on that now-inspected development cohort**,
+with the same 1/35 unsupported false display. This is not a new holdout result.
+
+A [face-context calibration experiment](docs/face-context-research.md) found
+only a small, cadence-sensitive gain. Face tracking remains **disabled** rather
+than adding unproven camera overhead.
+
+[Microsoft pretrained video/body-model benchmarks](docs/citizen-baselines.md)
+are now complete. On a separate official-split research cohort, a newer-hand +
+body hybrid accepted 47/72 complete signs, but displayed only 14/72 with causal
+windows. Neither model replaces the phone classifier; these are not sentence
+recognition or live-phone accuracy results.
+
+[Capture-time freshness checks](docs/capture-freshness.md) reject delayed and
+pre-switch camera frames instead of treating processing time as capture time.
+Camera frame age is available in settings; actual phone latency still needs
+measurement.
+
+Use the [live phone checklist](docs/live-phone-checklist.md) for offline,
+camera/lifecycle, ASL-fluent and held-out-signer validation. No recordings are
+required; these uncompleted checks cannot be replaced by simulator results.
 
 ## Parallel development
 
@@ -53,15 +143,19 @@ isolation, safety checks, and the create/clean smoke test.
 
 ## Developer MVP: real on-device hand tracking
 
-Native iPhone app with **Google MediaPipe Hand Landmarker**, not simulated joints.
-Hand tracking works locally. Live sign estimates require the provisioned Mac
-backend and network; provider API keys are never embedded in the phone.
+Native iPhone app with **Google MediaPipe Gesture Recognizer**, including its
+real hand-landmark model, not simulated joints. Tracking and the ILY preview work
+locally. Only optional cloud inference needs the backend; provider API keys are
+never embedded in the phone.
 
 - Live front/rear camera, portrait orientation and mirrored selfie preview.
 - Up to two hands, 21 joints per hand and an optional colored skeleton.
 - Camera-first Material-inspired design with a single current-sign overlay.
+- Persistent overlay preferences in the top-right settings sheet.
 - Pause/resume, permission handling, background suspension.
-- Two-second memory buffer; latest 1.2 seconds used for automatic inference.
+- Two-second memory buffer; optional cloud inference uses the latest 1.2 seconds.
+- On-device ILY handshape scoring, minimum 150 ms evidence, immediate rejection
+  clearing and a stalled-camera watchdog. Model scores are not sign probabilities.
 - Replaceable classifier protocol. The default unconfigured classifier returns
   `unknown`. Jev uses built-in criteria, not saved user examples. Uncertain or
   unsupported inputs show Unknown; this is **not validated ASL translation**.
@@ -81,9 +175,11 @@ Choose your Apple development team in Signing & Capabilities, select your connec
 and Run. Trust the Mac, enable Developer Mode, and allow camera access when asked.
 The bundle identifier is `com.yeyito.signloop`; change it if your team requires a unique ID.
 
-The bootstrap script downloads Google's pinned **MediaPipe 0.10.21** static XCFrameworks
-and the **Hand Landmarker float16 v1** model. These large artifacts and the generated Xcode
-project are ignored by Git. Google Apache license files ship in the downloaded Vendor folders.
+The bootstrap script downloads Google's pinned **MediaPipe 0.10.21** static XCFrameworks,
+the **Gesture Recognizer float16 v1** bundle (SHA-256 checked), and the Hand Landmarker
+model used by research tools (excluded from the app to avoid duplicate model assets).
+Large artifacts and the generated Xcode project are ignored by Git. SDK license
+notices are copied from Vendor into the app's resources.
 The app links the device/simulator graph archive explicitly, matching Google's CocoaPods spec.
 
 ```sh
@@ -104,7 +200,8 @@ xcodebuild -project Signloop.xcodeproj -scheme Signloop \
 3. Add a second hand, then remove both; the skeleton/current sign should clear.
 4. Try each camera; check overlay alignment, mirroring and left/right labels.
 5. Pause/resume and background/foreground the app; no stale signs should persist.
-6. Test live supported signs and unsupported gestures; no manual capture is needed.
+6. Test the one-handed ILY handshape, all other canned gestures, hand removal,
+   camera switching and low light. Other words are not supported locally yet.
 7. Test with another person. **Do not interpret hand tracking as sign-recognition validation.**
 
 ### Implementation
