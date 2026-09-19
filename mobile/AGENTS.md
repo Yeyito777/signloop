@@ -1,5 +1,7 @@
 # Mobile app
 
+Keep Sunny's work on the shared `sunny` branch. Do not create separate feature branches unless requested.
+
 Use the installed Expo SDK 55 docs: https://docs.expo.dev/versions/v55.0.0/.
 SDK 55 is intentional: the local Xcode 26.3 supports it. SDK 56/57 require Xcode 26.4+.
 

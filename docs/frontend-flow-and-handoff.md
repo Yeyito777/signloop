@@ -1,6 +1,8 @@
 # Signloop frontend handoff
 
-Sunny · September 19, 2026 · `sunny/app-flows`
+Sunny · September 19, 2026 · `sunny`
+
+Keep design, screens, animation, and subsequent integration work together on `sunny`.
 
 The initial Expo app is in `mobile/`. It uses the approved [Playroom design system](../design-system/README.md). Screen layouts are ready for native review, not final approval. The older HTML board includes explorations outside the current MVP.
 
@@ -40,7 +42,7 @@ The root `ios/` app uses **MediaPipe Hand Landmarker**, not an ASL classifier. I
 
 Expo builds its own project under `mobile/ios/`. Preserve the root `ios/` scanner scaffold. Swift/native processing plus React Native UI is the intended division of work.
 
-Remote checked before this push: `origin/main` at `66d403b` also contains `BackendClient.swift`, `RemoteRecognition.swift`, and a Python backend for live Jev sign estimates. These newer commits are not merged into this UI branch. In the next camera-integration feature branch, bring in that work and reuse the native capture/backend components. Its current “possible sign” is a tentative label, not a completed English phrase eligible for speech. Phrase boundaries/acceptance and the existing caption endpoint need wiring separately. Validate recognition on a physical phone.
+Remote checked before this push: `origin/main` at `66d403b` also contains `BackendClient.swift`, `RemoteRecognition.swift`, and a Python backend for live Jev sign estimates. These newer commits are not merged into this UI branch. For the next camera-integration step on `sunny`, bring in that work and reuse the native capture/backend components. Its current “possible sign” is a tentative label, not a completed English phrase eligible for speech. Phrase boundaries/acceptance and the existing caption endpoint need wiring separately. Validate recognition on a physical phone.
 
 ### Translation
 
