@@ -1,0 +1,9 @@
+.DS_Store
+ios/Vendor/
+ios/Signloop/Resources/hand_landmarker.task
+ios/build/
+ios/Signloop.xcodeproj/
+*.xcuserstate
+xcuserdata/
+.env
+ios/*.log
