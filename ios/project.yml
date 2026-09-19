@@ -25,10 +25,13 @@ targets:
     settings:
       base:
         TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_INCLUDE_PATHS: $(inherited) $(PROJECT_DIR)/Interop
+        HEADER_SEARCH_PATHS: $(inherited) $(PROJECT_DIR)/Vendor/TensorFlowLiteHeaders
     sources:
       - path: Signloop
         excludes:
           - Resources/hand_landmarker.task
+      - path: Vendor/TensorFlowLiteSwift
     info:
       path: Signloop/Info.plist
       properties:

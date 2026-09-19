@@ -8,6 +8,9 @@ ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
 if command -v xcodegen >/dev/null &&
   [[ -d "$ROOT/ios/Vendor/MediaPipeTasksVision/frameworks" &&
      -d "$ROOT/ios/Vendor/MediaPipeTasksCommon/frameworks" &&
+     -f "$ROOT/ios/Vendor/TensorFlowLiteSwift/Interpreter.swift" &&
+     -f "$ROOT/ios/Vendor/TensorFlowLiteHeaders/TensorFlowLiteC/c_api.h" &&
+     -f "$ROOT/ios/Signloop/Resources/gesture_recognizer.task" &&
      -f "$ROOT/ios/Signloop/Resources/hand_landmarker.task" ]]; then
   (cd "$ROOT/ios" && xcodegen generate) ||
     printf 'Signloop: regenerate manually with bash ios/scripts/bootstrap.sh\n' >&2

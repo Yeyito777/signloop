@@ -20,7 +20,7 @@ scripts/dev/create-worktree classifier-client origin/main
 
 scripts/dev/signlooptest camera-polish          # core Swift tests
 scripts/dev/signlooptest camera-polish backend  # offline Python backend tests
-scripts/dev/signlooptest camera-polish native   # Swift HTTP + temporal-matcher parity
+scripts/dev/signlooptest camera-polish native   # Swift HTTP, DTW and pretrained policy parity
 scripts/dev/signlooptest camera-polish build    # unsigned iPhone build
 scripts/dev/signlooptest camera-polish open     # open its own Xcode project
 
@@ -63,7 +63,7 @@ worktrees created by these scripts (identified by ignored local metadata).
 | Resource | Behavior |
 | --- | --- |
 | Git objects and refs | Shared normally by Git |
-| MediaPipe `ios/Vendor` + model | Seeded from the main checkout if bootstrap scripts match; APFS clone-copy or regular copy, **not symlinks** |
+| `ios/Vendor` + MediaPipe models | Seeded if bootstrap scripts and LiteRT source manifest match; APFS clone-copy or regular copy, **not symlinks**. Includes verified header/Swift bindings, never research models/data |
 | Xcode project | Generated independently per worktree |
 | DerivedData / products | Per-worktree `ios/build` for `signlooptest build` |
 | Signing / device deployment | Not automated by this flow; choose your team in Xcode |

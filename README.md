@@ -45,6 +45,10 @@ all five target words in local rolling-window research. It is **not enabled in
 the app**: stationary-pose false positives, phone validation and model provenance
 remain unresolved.
 
+The [native runtime probe](docs/native-pretrained-runtime.md) matches Python
+model outputs and coexists with MediaPipe on the iOS simulator. It is a
+developer-only test entry, not an enabled five-word camera mode.
+
 ## Parallel development
 
 Use a separate branch/checkout per task while keeping `yeyito` available:

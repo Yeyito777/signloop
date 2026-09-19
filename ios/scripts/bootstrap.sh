@@ -31,4 +31,5 @@ if [ ! -f "$gesture" ]; then
   trap - EXIT
 fi
 echo "$gesture_sha  $gesture" | shasum -a 256 --check
+bash scripts/bootstrap-litert.sh
 xcodegen generate

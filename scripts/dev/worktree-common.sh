@@ -60,6 +60,11 @@ seed_dependency_artifacts() {
   [[ "$target" != "$SIGNLOOP_ROOT" ]] || return 0
   # Do not seed a different dependency version after changing branches.
   cmp -s "$SIGNLOOP_ROOT/ios/scripts/bootstrap.sh" "$target/ios/scripts/bootstrap.sh" || return 0
+  for dependency in bootstrap-litert.sh litert-sources.sha256; do
+    if [[ -f "$SIGNLOOP_ROOT/ios/scripts/$dependency" || -f "$target/ios/scripts/$dependency" ]]; then
+      cmp -s "$SIGNLOOP_ROOT/ios/scripts/$dependency" "$target/ios/scripts/$dependency" || return 0
+    fi
+  done
   copy_artifact "$SIGNLOOP_ROOT/ios/Vendor" "$target/ios/Vendor"
   copy_artifact "$SIGNLOOP_ROOT/ios/Signloop/Resources/hand_landmarker.task" \
     "$target/ios/Signloop/Resources/hand_landmarker.task"

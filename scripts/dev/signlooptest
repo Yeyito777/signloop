@@ -21,7 +21,8 @@ case "${2:-core}" in
     ;;
   native)
     # Actual Swift HTTP adapter + local temporal engine; synthetic data only.
-    (cd "$TARGET" && python3 -m backend.test_native && python3 -m backend.test_temporal_native)
+    (cd "$TARGET" && python3 -m backend.test_native && python3 -m backend.test_temporal_native &&
+      python3 -m backend.test_pretrained_native)
     ;;
   build)
     bootstrap_worktree "$TARGET"
