@@ -4,6 +4,37 @@ The skeleton camera now feeds an on-device temporal reference matcher. The scree
 shows **Possible sign** / **Unknown**. No backend, keys, transcription, recordings,
 or camera uploads. This is a research baseline, **not reliable 16-sign recognition**.
 
+## Build 13: optional live score panel
+
+Settings → **Show all sign scores** enables a camera overlay with all 16 labels,
+stable vocabulary order, percentage bars and a highlighted nearest label.
+Scroll if needed; accessibility text sizes use one column. The setting is off
+by default, persists across launches, and the panel's close button turns it off.
+
+These are **independent similarity scores, not calibrated probabilities**:
+`similarity = 100 × exp(-DTW_distance / 0.08)`. This fixed display transform
+preserves the distance ranking; it is not fitted to probabilities and the scores
+do not sum to 100%. Zero distance displays 100%; distance 0.08 is about 37%.
+No evidence or missing usable references displays **—**, not a made-up zero or
+uniform probability distribution.
+
+Every label's distance comes from the same reference/window search that already
+drives recognition; the panel adds no model calls or reference examples. Scores
+remain visible when distance/margin rejection keeps the caption Unknown.
+They clear on pause, camera change, stale/delayed results, hand/pose loss and
+insufficient temporal evidence. A high score does not override rejection.
+The original classifier and rejection thresholds are unchanged; this is a
+debugging/visibility improvement, not an accuracy claim.
+
+Build 13 verification: 36 matcher/async-adapter checks and the rest of the Swift
+core suite passed; all candidate events across the 42 validation clips matched
+build 12 exactly. Ten Release simulator UI tests passed, including toggle
+persistence/hiding, missing-score placeholders, list access and large-text
+camera controls. The panel respects header/controls safe areas and has separate
+accessible rows. The signed Release iPhone build passed signing verification.
+Yeyito was unavailable at the final device check, so this update still needs
+installation after reconnection; build 12 remains the last installed version.
+
 ## Pipeline
 
 Same-frame MediaPipe hands + shoulders/elbows/wrists + facial movement coefficients
@@ -125,9 +156,10 @@ Use a Release build on the phone for optimized DTW.
   with no camera observations, and marked the private file excluded from backup.
 - Signed Release iPhone build 12 passed code-sign verification. Source and app
   scans found no provider credentials; private reference data is not bundled.
-- Phone installation was attempted but CoreDevice could no longer reach Yeyito;
-  a subsequent device listing reported it unavailable. The phone therefore
-  still needs reconnection, installation and private-bank provisioning.
+- After reconnecting, build 12 was installed, its 75-reference private bank
+  provisioned and the app launched successfully at 18:06 on September 19.
+  The user subsequently reported it “kind of works” but is not great; that
+  feedback is not a measured live accuracy result.
 
 ## Phone check
 

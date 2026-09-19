@@ -8,7 +8,8 @@ final class BasicLiveRecognition: ObservableObject {
     @Published private(set) var detail = "Loading private references…"
     @Published private(set) var ready = false
     @Published private(set) var matchMS = 0
-    @Published private(set) var labels: [String] = []
+    @Published private(set) var labels: [String] = BasicSignScore.vocabulary
+    @Published private(set) var scores = BasicSignScore.rows(labels: BasicSignScore.vocabulary)
     private let worker = DispatchQueue(label: "com.signloop.basic-matching", qos: .userInitiated)
     private var matcher: BasicSignMatcher? // worker only
     private var started = false
@@ -43,6 +44,7 @@ final class BasicLiveRecognition: ObservableObject {
                 try referenceURL.setResourceValues(values)
                 DispatchQueue.main.async {
                     self.labels = bank.labels
+                    self.clearScores()
                     self.ready = true
                     self.detail = "Sign one word, then relax your hands"
                 }
@@ -62,8 +64,13 @@ final class BasicLiveRecognition: ObservableObject {
         stability.reset()
         sign = nil
         matchMS = 0
+        clearScores()
         if ready { detail = "Sign one word, then relax your hands" }
         // Don't mark an in-flight job free: its completion owns the busy flag.
+    }
+
+    private func clearScores() {
+        scores = BasicSignScore.rows(labels: labels)
     }
 
     func receive(_ frame: SkeletonFrame) {
@@ -77,6 +84,7 @@ final class BasicLiveRecognition: ObservableObject {
         if frames.count > 60 { frames.removeFirst(frames.count-60) }
         if frame.hands.isEmpty || !frame.hasPose {
             sign = nil
+            clearScores()
             stability.reset()
             generation += 1 // reject any older result returning after hand loss
             detail = "Keep your hands and shoulders in view"
@@ -91,17 +99,19 @@ final class BasicLiveRecognition: ObservableObject {
         worker.async {
             let candidate = self.matcher?.candidate(snapshot) ?? BasicCandidate()
             let accepted = self.matcher?.accepted(candidate)
-            let elapsed = ProcessInfo.processInfo.systemUptime-started
             DispatchQueue.main.async {
+                let elapsed = ProcessInfo.processInfo.systemUptime-started
                 self.busy = false
                 guard token == self.generation else { return }
                 guard elapsed < 0.6 else {
                     self.sign = nil
+                    self.clearScores()
                     self.stability.reset()
                     self.detail = "Matching delayed · try again"
                     return
                 }
                 self.matchMS = Int(elapsed*1000)
+                self.scores = candidate.scores
                 self.sign = self.stability.update(accepted)
                 self.detail = self.sign != nil ? "Experimental match · not a translation"
                     : accepted != nil ? "Checking movement…" : "Unknown · try one supported sign"

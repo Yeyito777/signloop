@@ -62,6 +62,9 @@ supported clips, and a wrong label in **5/48**; this is not reliable 16-sign
 recognition. See [matching, tests and private provisioning](docs/basic-live-matching.md).
 Without references, the skeleton still works. This change does not wire the
 separate Expo consumer app's gesture flow.
+Build 13 adds Settings → **Show all sign scores**: live similarity bars for all
+16 candidates, including rejected matches. These are not calibrated probabilities
+and do not change recognition or rejection.
 
 - Up to two hands, 21 points each.
 - Upper-body pose through the hips (25 original MediaPipe landmark IDs).

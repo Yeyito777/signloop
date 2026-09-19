@@ -16,6 +16,9 @@ final class SingleScreenUITests: XCTestCase {
         let deny = system.alerts.firstMatch.buttons.matching(
             NSPredicate(format: "label BEGINSWITH %@", "Don")).firstMatch
         if deny.waitForExistence(timeout: 3) { deny.tap() }
+        // Independent tests start without a persisted debug overlay. The
+        // persistence test relaunches within its own method (not this setup).
+        if app.buttons["hide-sign-scores"].exists { app.buttons["hide-sign-scores"].tap() }
     }
 
     override func tearDownWithError() throws { app?.terminate() }
@@ -119,6 +122,46 @@ final class SingleScreenUITests: XCTestCase {
         settings.tap()
         XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Done"].isHittable)
+        app.buttons["Done"].tap()
+    }
+
+    func testAllSignScoresCanBeEnabledPersistedAndHidden() {
+        app.buttons["camera-settings"].tap()
+        let toggle = actualSwitch("Show all sign scores")
+        if toggle.value as? String != "1" { toggle.tap() }
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.staticTexts["scores-disclaimer"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["scores-disclaimer"].label.contains("not probability"))
+        let list = app.scrollViews["sign-scores-list"]
+        XCTAssertTrue(list.exists)
+        let hello = app.descendants(matching: .any)["score-HELLO"].firstMatch
+        XCTAssertTrue(hello.exists)
+        XCTAssertEqual(hello.value as? String, "No current score")
+        list.swipeUp()
+        XCTAssertTrue(app.descendants(matching: .any)["score-YOU"].firstMatch.exists)
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.buttons["hide-sign-scores"].waitForExistence(timeout: 5))
+        app.buttons["hide-sign-scores"].tap()
+        XCTAssertFalse(app.scrollViews["sign-scores-list"].exists)
+        app.buttons["camera-settings"].tap()
+        XCTAssertEqual(actualSwitch("Show all sign scores").value as? String, "0")
+        app.buttons["Done"].tap()
+    }
+
+    func testScorePanelLargeTextKeepsCameraControlsReachable() {
+        app.terminate()
+        app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL"]
+        app.launch()
+        app.buttons["camera-settings"].tap()
+        let toggle = actualSwitch("Show all sign scores")
+        if toggle.value as? String != "1" { toggle.tap() }
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.buttons["camera-settings"].isHittable)
+        XCTAssertTrue(app.buttons["pause-resume"].isHittable)
+        // Hide through Settings as well as the panel's close control.
+        app.buttons["camera-settings"].tap()
+        actualSwitch("Show all sign scores").tap()
         app.buttons["Done"].tap()
     }
 }

@@ -16,6 +16,7 @@ struct ContentView: View {
     @State private var showProbe = false
     @State private var probe = SkeletonProbe()
     @AppStorage("showTrackingStats") private var showTrackingStats = false
+    @AppStorage("showAllSignScores") private var showAllSignScores = false
     private let clock = Timer.publish(every: 0.25, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -50,6 +51,18 @@ struct ContentView: View {
                 Button("Camera unavailable · tap to retry") { paused = false; tracker.start() }
                     .padding().background(.ultraThinMaterial, in: Capsule())
             }
+            // UI respects header/controls safe areas; only the camera itself
+            // extends behind them. Keep the close button clear of the notch.
+            if showAllSignScores {
+                GeometryReader { geometry in
+                    VStack {
+                        SignScoresPanel(scores: recognition.scores, isPresented: $showAllSignScores)
+                            .frame(height: min(340, max(0, geometry.size.height-16)))
+                            .padding(.horizontal, 12).padding(.top, 8)
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
         }
         .safeAreaInset(edge: .top, spacing: 0) { header }
         .safeAreaInset(edge: .bottom, spacing: 0) { controls }
@@ -66,7 +79,8 @@ struct ContentView: View {
         .onReceive(clock) { _ in tracker.expireLocalResult() }
         .onDisappear { tracker.pause() }
         .sheet(isPresented: $showSettings) {
-            CameraSettings(tracker: tracker, recognition: recognition, showTrackingStats: $showTrackingStats)
+            CameraSettings(tracker: tracker, recognition: recognition, showTrackingStats: $showTrackingStats,
+                           showAllSignScores: $showAllSignScores)
                 .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showProbe) {
@@ -150,11 +164,16 @@ private struct CameraSettings: View {
     @ObservedObject var tracker: SkeletonCameraTracker
     @ObservedObject var recognition: BasicLiveRecognition
     @Binding var showTrackingStats: Bool
+    @Binding var showAllSignScores: Bool
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         NavigationStack {
             Form {
                 Section("Camera overlays") {
+                    Toggle("Show all sign scores", isOn: $showAllSignScores)
+                        .accessibilityIdentifier("show-all-sign-scores")
+                    Text("Shows similarity for every candidate, including rejected matches. Not calibrated probabilities; scores do not add to 100%. Higher means closer, not necessarily correct.")
+                        .font(.footnote)
                     Toggle("Show hand joints", isOn: $tracker.showJoints)
                     Toggle("Show upper-body pose", isOn: $tracker.showPose)
                     Toggle("Show facial features", isOn: $tracker.showFace)

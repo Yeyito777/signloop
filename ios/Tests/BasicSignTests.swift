@@ -37,6 +37,25 @@ import Foundation
         check(candidate.label == labels[0], "Exact synthetic temporal replay must match")
         check(candidate.distance < 0.0001, "Identity distance")
         check(matcher.accepted(candidate) == labels[0], "Known identity should pass")
+        check(candidate.scores.count == 16 && candidate.scores.map(\.label) == labels, "All scores in stable vocabulary order")
+        check(candidate.scores[0].similarity! > 0.999, "Exact geometry yields high similarity")
+        check(candidate.scores.allSatisfy { $0.similarity.map { (0...1).contains($0) } ?? false },
+              "Measured similarities finite and bounded")
+        let sampleScores = BasicSignScore.rows(labels: ["A", "B", "C", "D"],
+            distances: ["A": 0, "B": 0.08, "C": 0.16, "D": .infinity])
+        check(sampleScores[0].similarity == 1, "Identity similarity")
+        check(abs(sampleScores[1].similarity! - exp(-1)) < 0.00001, "Documented distance transform")
+        check(sampleScores[1].similarity! > sampleScores[2].similarity!, "Similarity monotonically decreases")
+        check(sampleScores[3].similarity == nil, "Nonfinite distance not an invented probability")
+        check(BasicSignScore(label: "invalid", distance: -1).similarity == nil, "Invalid negative distance rejected")
+        check(matcher.candidate([]).scores.count == 16, "Missing input retains all 16 rows")
+        check(matcher.candidate([]).scores.allSatisfy { $0.similarity == nil }, "No hand evidence displays dashes, not percentages")
+        var rejected = bank
+        rejected.maxDistance = 0
+        let rejectMatcher = try BasicSignMatcher(bank: rejected)
+        let rejectedCandidate = rejectMatcher.candidate(frames)
+        check(rejectMatcher.accepted(rejectedCandidate) == nil && rejectedCandidate.scores[0].similarity! > 0.999,
+              "Scores visible even when classification is rejected")
         check(matcher.candidate([]).label == nil, "Empty unknown")
         check(matcher.candidate(Array(frames.prefix(3))).label == nil, "Insufficient evidence")
         let blank = frames.map { f in
@@ -86,11 +105,13 @@ import Foundation
             RunLoop.current.run(until: Date().addingTimeInterval(0.01))
         }
         check(live.ready && live.labels == labels, "Real adapter loads compact bank")
+        check(live.scores.count == 16 && live.scores.allSatisfy { $0.similarity == nil }, "Bank loads without invented observations")
         for frame in frames {
             live.receive(frame)
             RunLoop.current.run(until: Date().addingTimeInterval(0.02))
         }
         check(live.sign == labels[0], "Real adapter confirms synthetic identity")
+        check(live.scores.count == 16 && live.scores[0].similarity! > 0.999, "Real adapter publishes every label's score")
         var next = frames.last!
         // Codable timestamp is immutable, so form a new late frame explicitly.
         next = SkeletonFrame(timestampMS: 1000, width: next.width, height: next.height,
@@ -100,8 +121,10 @@ import Foundation
         live.reset() // main-thread completion cannot run before this invalidation
         RunLoop.current.run(until: Date().addingTimeInterval(0.1))
         check(live.sign == nil, "Late worker cannot resurrect a paused sign")
+        check(live.scores.allSatisfy { $0.similarity == nil }, "Late worker cannot resurrect stale scores")
         live.receive(blank.last!)
         check(live.sign == nil, "Hand loss clears caption")
+        check(live.scores.count == 16 && live.scores.allSatisfy { $0.similarity == nil }, "Hand loss clears all scores")
         print("PASS: \(assertions) basic temporal matcher invariants (synthetic, not ASL accuracy)")
     }
 }

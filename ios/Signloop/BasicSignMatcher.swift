@@ -37,6 +37,28 @@ struct BasicCandidate: Codable {
     var label: String?
     var distance: Float = 999
     var margin: Float = 0
+    var scores: [BasicSignScore] = []
+}
+
+/// Independent similarity scores, NOT posterior probabilities or confidence.
+/// The fixed display scale is unrelated to acceptance thresholds. In particular
+/// a high score can still be rejected because competing signs look similar.
+struct BasicSignScore: Codable, Identifiable {
+    static let vocabulary = ["HELLO", "YES", "NO", "PLEASE", "THANKYOU", "HELP", "WATER", "MORE",
+                             "FINISH", "GOOD", "BAD", "NAME", "MY", "SORRY", "STOP", "YOU"]
+    let label: String
+    let distance: Float?
+    var id: String { label }
+    var similarity: Float? {
+        guard let distance, distance.isFinite, distance >= 0 else { return nil }
+        return exp(-distance / 0.08)
+    }
+    static func rows(labels: [String], distances: [String: Float] = [:]) -> [BasicSignScore] {
+        labels.map { label in
+            let d = distances[label]
+            return BasicSignScore(label: label, distance: d.flatMap { $0.isFinite && $0 >= 0 ? $0 : nil })
+        }
+    }
 }
 
 struct BasicFeature: Codable {
@@ -199,7 +221,8 @@ final class BasicSignMatcher {
     }
 
     func candidate(_ frames: [SkeletonFrame]) -> BasicCandidate {
-        guard let end = frames.last, !end.hands.isEmpty else { return BasicCandidate() }
+        let unavailable = BasicCandidate(scores: BasicSignScore.rows(labels: bank.labels))
+        guard let end = frames.last, !end.hands.isEmpty else { return unavailable }
         var byLabel: [String: Float] = [:]
         // Multiple causal windows accommodate short/long signs; never include
         // future frames or use a full-clip label to select a live window.
@@ -212,9 +235,11 @@ final class BasicSignMatcher {
             }
         }
         let sorted = byLabel.sorted { $0.value == $1.value ? $0.key < $1.key : $0.value < $1.value }
-        guard sorted.count >= 2 else { return BasicCandidate() }
+        let scores = BasicSignScore.rows(labels: bank.labels, distances: byLabel)
+        guard sorted.count >= 2 else { return BasicCandidate(scores: scores) }
         return BasicCandidate(label: sorted[0].key, distance: sorted[0].value,
-                              margin: max(0, (sorted[1].value-sorted[0].value)/max(sorted[1].value, 0.00001)))
+                              margin: max(0, (sorted[1].value-sorted[0].value)/max(sorted[1].value, 0.00001)),
+                              scores: scores)
     }
 
     func accepted(_ candidate: BasicCandidate) -> String? {
