@@ -2,14 +2,17 @@ import { useCallback, useRef } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { demoKit } from '../integrations/demo';
+import { GooseAvatar } from '../integrations/goose';
 import { Button, Copy, Wordmark, useReducedMotion } from '../ui/primitives';
 import { StageSlot, useSharedStage, type StageSlotHandle } from '../ui/SharedStage';
 import { tokens } from '../ui/theme';
 
 export default function Home() {
   const reducedMotion = useReducedMotion();
-  const { height } = useWindowDimensions();
+  const { width, fontScale } = useWindowDimensions();
+  // This display headline is already large: preserve whole words as Dynamic Type grows.
+  // Body text, captions, and controls continue to use the full system scale.
+  const headlineSize = Math.min(80, (width - 48) / (4.75 * Math.max(1, fontScale)));
   const stage = useRef<StageSlotHandle>(null);
   const scroll = useRef<ScrollView>(null);
   const { prepareConversation, homeViewport } = useSharedStage();
@@ -24,12 +27,11 @@ export default function Home() {
   return <SafeAreaView style={styles.screen}>
     <View style={styles.header}><Wordmark /></View>
     <ScrollView ref={scroll} onLayout={() => scroll.current?.getNativeScrollRef()?.measureInWindow((_, y, __, h) => { homeViewport.value = { top: y, bottom: y + h }; })} onScroll={() => stage.current?.measure()} scrollEventThrottle={16} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      <Copy role="hero" accessibilityRole="header" style={styles.title}>Ready when{ '\n' }you are.</Copy>
-      <StageSlot ref={stage} owner="home" Renderer={demoKit.Avatar} mode="idle" emotion="neutral" reducedMotion={reducedMotion} style={[styles.stage, { minHeight: height < 750 ? 200 : 270 }]} />
-      <Copy role="sectionTitle" style={styles.description}>Sign in ASL.{ '\n' }Your goose says it in English.</Copy>
+      <Copy role="poster" accessibilityRole="header" style={[styles.title, { fontSize: headlineSize, lineHeight: headlineSize * tokens.type.poster.lineHeight / tokens.type.poster.size }]}>You were{ '\n' }saying?</Copy>
+      <StageSlot ref={stage} owner="home" Renderer={GooseAvatar} mode="idle" emotion="neutral" reducedMotion={reducedMotion} style={[styles.stage, { minHeight: width * 0.95 }]} />
     </ScrollView>
     <View style={styles.actions}>
-      <Button icon="arrow" onPress={start}>Start conversation</Button>
+      <Button icon="arrow" variant="ink" style={styles.start} onPress={start}>Start conversation</Button>
     </View>
   </SafeAreaView>;
 }
@@ -37,9 +39,9 @@ export default function Home() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: tokens.color.butter },
   header: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  content: { paddingHorizontal: 24, paddingTop: 28, paddingBottom: 20, flexGrow: 1 },
-  title: { fontSize: 48, lineHeight: 51 },
-  stage: { flex: 1, alignItems: 'center', justifyContent: 'center', marginVertical: 12 },
-  description: { textAlign: 'center', fontSize: 23, lineHeight: 30 },
+  content: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 8, flexGrow: 1 },
+  title: { paddingBottom: 12 },
+  stage: { flex: 1, marginHorizontal: -16 },
+  start: { minHeight: 64, justifyContent: 'space-between', paddingHorizontal: 24 },
   actions: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 14 },
 });

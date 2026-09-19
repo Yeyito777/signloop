@@ -4,7 +4,7 @@ import type { StyleProp, ViewStyle } from 'react-native';
 /** Emit only diagnoses supported by the scanner. Hand tracking is not ASL recognition. */
 export type Framing = 'finding' | 'ready' | 'hands-missing' | 'too-close' | 'too-far' | 'low-light' | 'away'
   | 'camera-denied' | 'camera-unavailable' | 'camera-error';
-export type Emotion = 'neutral' | 'happy' | 'thoughtful';
+export type Emotion = 'neutral' | 'happy' | 'thoughtful' | 'sadness' | 'anger' | 'fear';
 export type AvatarMode = 'idle' | 'listening' | 'thinking' | 'speaking';
 export type AvatarProps = {
   mode: AvatarMode;

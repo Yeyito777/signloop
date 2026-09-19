@@ -17,6 +17,18 @@
       "package": "com.signloop.mobile",
       "predictiveBackGestureEnabled": true
     },
-    "plugins": ["expo-router", "expo-font", ["expo-splash-screen", {"backgroundColor": "#FFF2BA"}], "./plugins/with-quoted-bundle-path.cjs", "./plugins/with-native-camera.cjs"]
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FFF2BA"
+        }
+      ],
+      "./plugins/with-quoted-bundle-path.cjs",
+      "./plugins/with-native-camera.cjs",
+      "expo-asset"
+    ]
   }
 }

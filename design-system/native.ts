@@ -3,22 +3,34 @@
 export { tokens } from "./tokens";
 
 export const textStyles = {
+  "poster": {
+    "fontFamily": "SignloopDisplayMedium",
+    "fontSize": 96,
+    "lineHeight": 80,
+    "letterSpacing": -3.5
+  },
+  "featuredCaption": {
+    "fontFamily": "SignloopDisplayRegular",
+    "fontSize": 32,
+    "lineHeight": 34,
+    "letterSpacing": -0.5
+  },
   "hero": {
     "fontFamily": "SignloopDisplayMedium",
     "fontSize": 48,
-    "lineHeight": 52,
+    "lineHeight": 48,
     "letterSpacing": -1
   },
   "title": {
     "fontFamily": "SignloopDisplayMedium",
     "fontSize": 40,
-    "lineHeight": 44,
+    "lineHeight": 42,
     "letterSpacing": -0.8
   },
   "sheetTitle": {
     "fontFamily": "SignloopDisplayMedium",
     "fontSize": 28,
-    "lineHeight": 32,
+    "lineHeight": 30,
     "letterSpacing": -0.5
   },
   "sectionTitle": {
@@ -36,19 +48,19 @@ export const textStyles = {
   "caption": {
     "fontFamily": "SignloopDisplayRegular",
     "fontSize": 24,
-    "lineHeight": 28,
+    "lineHeight": 26,
     "letterSpacing": -0.2
   },
   "captionLarge": {
     "fontFamily": "SignloopDisplayRegular",
     "fontSize": 30,
-    "lineHeight": 36,
+    "lineHeight": 32,
     "letterSpacing": -0.2
   },
   "body": {
     "fontFamily": "SignloopBodyRegular",
     "fontSize": 16,
-    "lineHeight": 24,
+    "lineHeight": 22,
     "letterSpacing": 0
   },
   "button": {

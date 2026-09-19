@@ -6,11 +6,13 @@ Keep design, screens, animation, and subsequent integration work together on `su
 
 The initial Expo app is in `mobile/`. It uses the approved [Playroom design system](../design-system/README.md). Screen layouts are ready for native review, not final approval. The older HTML board includes explorations outside the current MVP.
 
+The selected visual direction is **Go big**, with **“You were saying?”** as the Home headline. Large artwork, open captions, dark sheets, and a continuous decorative loop refine the same routes and integration contracts. Sanvi’s 3D goose and its activity/emotion modes are integrated. Live recognition, ElevenLabs playback, and native lip-sync remain separate integration work.
+
 ## Two routes
 
 | Route | Contents |
 |---|---|
-| `/` | Home, temporary goose, one Start conversation action. No camera capture. |
+| `/` | Home, shared 3D goose, one Start conversation action. No camera capture. |
 | `/conversation` | Stable vertical split: camera above, goose and captions below. |
 
 Transcript, correction, the conversation menu, and end confirmation are local sheets within Conversation. Framing feedback belongs in the camera view. There is no preferences route, tutorial sequence, account, saved-history dashboard, or goodbye screen.
@@ -30,7 +32,7 @@ The menu contains transcript, correction, voice on/off, and end conversation. Sy
 
 ## Integration boundary
 
-See [contracts.ts](../mobile/src/integrations/contracts.ts). `cameraKit` supplies the native camera, temporary avatar, and unconnected translation/voice adapters. `demoKit` supplies four simulated pieces for explicit sample review. Screens know their contracts, not their implementation.
+See [contracts.ts](../mobile/src/integrations/contracts.ts). `cameraKit` supplies the native camera, shared 3D avatar, and unconnected translation/voice adapters. `demoKit` uses the same 3D avatar with simulated camera, translation, and silent voice for explicit sample review. Screens know their contracts, not their implementation.
 
 ### Native camera / scanner
 
@@ -52,17 +54,17 @@ On cancel, release sockets/subscriptions and discard unfinished work. The coordi
 
 ### Shared stage and presentation
 
-`src/ui/SharedStage.tsx` renders a single `Avatar` above the route contents and below the sheet portal. Home and Conversation reserve space using `StageSlot`; measured bounds animate the outer container. The render surface stays 240 × 240 logical points while its container moves/scales, so the transition does not remount the future 3D renderer or resize its drawing surface every frame. Both kits should use the same avatar component to preserve that continuity. The Home viewport clips scrolling artwork away from controls. Direct entry works without a source frame; Reduce Motion skips movement.
+`src/ui/SharedStage.tsx` renders a single `Avatar` above the route contents and below the sheet portal. Home and Conversation reserve space using `StageSlot`; measured bounds animate the outer container. The render surface stays 320 × 440 logical points while its container moves/scales, so the transition does not remount the 3D renderer or resize its drawing surface every frame. Both kits should use the same avatar component to preserve that continuity. The Home viewport clips scrolling artwork away from controls. Direct entry works without a source frame; Reduce Motion skips movement.
 
 `CameraGuidance` filters only displayed tracking status (300 ms stable ready, 450 ms changed guidance). Device/permission failures are immediate. Raw scanner events still control recognition cancellation without delay. The guidance only uses diagnoses emitted by the adapter; unsupported states remain explicit demo examples.
 
-`CaptionPanel` keeps the most recently accepted phrase readable during the next draft, framing loss, pause, or errors. A first draft is labeled unspoken. Delivery labels distinguish queued, playing, completed, interrupted, muted and failed playback; the demo always labels simulated playback. Caption height expands into the stage, while the camera keeps its size. Correction updates in place with a brief acknowledgment.
+`CaptionPanel` keeps the most recently accepted phrase readable during the next draft, framing loss, pause, or errors. A first draft is labeled unspoken. Delivery labels distinguish queued, playing, completed, interrupted, muted and failed playback; the demo always labels simulated playback. The conversation reserves roughly 45% of available height for camera, 30% for the goose, and 25% for captions. Caption length never changes those regions. Larger OS text increases the caption allocation at the expense of camera space; the goose retains its height. Caption content/recovery actions scroll, while edit/replay remain in the caption header. Correction updates in place with a brief acknowledgment.
 
 ### Goose
 
-`AvatarProps`: `mode` (idle, listening, thinking, speaking), `emotion` (placeholder vocabulary), `reducedMotion`, and layout style. Replace the illustration with a 3D renderer through this interface.
+`AvatarProps`: `mode` (idle, listening, thinking, speaking), `emotion` (neutral, happy, thoughtful, sadness, anger, fear), `reducedMotion`, and layout style. `GooseAvatar` adapts these to Sanvi’s `MrGoose` component; Home and both kits use that same component identity.
 
-Model format, renderer, expression vocabulary, clip names, and mouth synchronization remain open. Extend the contract together when assets arrive. The character is decorative for accessibility; text communicates meaning. Stop motion while paused/backgrounded. The placeholder does not implement facial emotions.
+The procedural React Three Fiber character is imported from `sanvi-signloop` at `575074e`, using Expo 55-compatible GL dependencies. Listening maps to watching, happy maps to joy, and neutral/thoughtful have no emotional override. Thinking stays an app activity. The transparent stage preserves the app background. The character is decorative for accessibility; text communicates meaning. Motion stops for pause, sheets, backgrounding, and Reduce Motion. See [character handoff](../mobile/src/avatar/README.md) for source ownership and native lip-sync follow-up.
 
 ### Voice
 
@@ -70,8 +72,8 @@ Model format, renderer, expression vocabulary, clip names, and mouth synchroniza
 
 ## Review
 
-See [run instructions](../mobile/README.md). “Demo · try states” opens framing, uncertainty, disconnection, and long-caption scenarios. This control belongs to the demo kit and disappears in live mode.
+See [run instructions](../mobile/README.md). “Demo · try states” opens framing, goose thinking/emotions, uncertainty, disconnection, and long-caption scenarios. This control belongs to the demo kit and disappears in live mode.
 
 Review Home → Start, automatic captions, pause/resume, correction with the keyboard, transcript, mute, end/cancel, background/foreground, long captions, larger text, and Reduce Motion. Reducer tests cover cancellation, late events, deduplication, queue ordering, correction, mute, and recovery.
 
-Camera/permission behavior and skeleton alignment need physical iPhone validation. Simulator and unsigned iPhone compilation are checked. Recognition, final 3D rendering, actual audio, and Android capture remain integration work. Hand tracking does not recognize ASL.
+Camera/permission behavior and skeleton alignment need physical iPhone validation. Simulator and unsigned iPhone compilation are checked. Recognition, actual audio/native lip-sync, and Android capture remain integration work. Combined camera/3D performance needs physical-device validation. Hand tracking does not recognize ASL.

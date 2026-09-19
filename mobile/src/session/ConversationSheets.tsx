@@ -40,7 +40,7 @@ export function ConversationSheets({ state, dispatch, onEnd, demo }: { state: Se
       <Copy role="supporting" style={styles.muted}>Your phrases stay here until you end this conversation.</Copy>
       {state.phrases.length === 0 ? <View style={styles.empty}><Icon name="transcript" size={32} /><Copy role="sectionTitle">No phrases yet.</Copy><Copy style={styles.center}>Your translated words will appear here.</Copy></View> : state.phrases.map((phrase, i) => <View key={phrase.id} style={styles.phrase}>
         <Copy role="label" style={styles.muted}>{String(i + 1).padStart(2, '0')} · {phrase.original ? 'Corrected' : demo ? 'Sample caption' : phrase.status === 'played' ? 'Spoken' : 'Caption'}</Copy>
-        <Copy role="caption" selectable>{phrase.text}</Copy>
+        <Copy role="captionLarge" selectable>{phrase.text}</Copy>
         {phrase.original && <View style={styles.original}><Copy role="supporting" style={styles.muted}>Original caption</Copy><Copy>{phrase.original}</Copy></View>}
       </View>)}
       <Button variant="secondary" onPress={close}>Back to conversation</Button>
@@ -65,6 +65,11 @@ export function ConversationSheets({ state, dispatch, onEnd, demo }: { state: Se
         ['low-light', 'sun', 'Low light'], ['away', 'frame', 'No one in frame'],
       ] as [Framing, IconName, string][]).map(([framing, icon, label]) => <MenuRow key={framing} icon={icon} label={label} onPress={() => commit({ type: 'demo-framing', framing })} />)}
       {([
+        ['Goose thinking', 'info', { type: 'thinking' }],
+        ['Goose joy', 'play', { type: 'accepted', id: `joy-${state.captureId}`, text: 'I’m so glad you’re here!', emotion: 'happy' }],
+        ['Goose sadness', 'play', { type: 'accepted', id: `sadness-${state.captureId}`, text: 'I wish we had more time together.', emotion: 'sadness' }],
+        ['Goose anger', 'play', { type: 'accepted', id: `anger-${state.captureId}`, text: 'That was really frustrating.', emotion: 'anger' }],
+        ['Goose fear', 'play', { type: 'accepted', id: `fear-${state.captureId}`, text: 'That gave me a fright!', emotion: 'fear' }],
         ['Uncertain translation', 'info', { type: 'uncertain' }],
         ['Connection lost', 'offline', { type: 'offline' }],
         ['Long caption', 'transcript', { type: 'accepted', id: `long-${state.captureId}`, text: 'Could we find somewhere a little quieter? I would love to hear more about your project, and it would be easier to have a conversation by the window.', emotion: 'neutral' }],
@@ -86,16 +91,16 @@ function Correction({ state, dispatch }: { state: Session; dispatch: Dispatch<Ac
 }
 
 function MenuRow({ label, icon, onPress, disabled }: { label: string; icon: IconName; onPress: () => void; disabled?: boolean }) {
-  return <Touch accessibilityRole="button" accessibilityState={{ disabled: !!disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.menuRow, pressed && { backgroundColor: tokens.color.butter }, disabled && { opacity: 0.4 }]}>
+  return <Touch accessibilityRole="button" accessibilityState={{ disabled: !!disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.menuRow, pressed && { backgroundColor: `${tokens.color.paper}12` }, disabled && { opacity: 0.4 }]}>
     <Icon name={icon} /><Copy style={{ flex: 1 }}>{label}</Copy><Icon name="arrow" size={18} />
   </Touch>;
 }
 const styles = StyleSheet.create({
-  muted: { color: tokens.color.muted },
+  muted: { color: tokens.color.onInkMuted },
   center: { textAlign: 'center' },
   empty: { paddingVertical: 28, alignItems: 'center', gap: 16 },
-  phrase: { gap: 8, borderWidth: 1.5, borderColor: tokens.color.ink, padding: 16, borderRadius: 20, borderBottomLeftRadius: 4 },
-  original: { marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderColor: tokens.color.line, gap: 4 },
-  input: { ...textStyles.caption, color: tokens.color.ink, minHeight: 130, maxHeight: 210, borderWidth: 1.5, borderColor: tokens.color.ink, borderRadius: 16, backgroundColor: tokens.color.butter, padding: 16 },
-  menuRow: { flexDirection: 'row', alignItems: 'center', minHeight: 52, gap: 12, borderBottomWidth: 1, borderColor: tokens.color.line, paddingVertical: 8 },
+  phrase: { gap: 12, paddingVertical: 20, borderBottomWidth: 1, borderColor: `${tokens.color.onInkMuted}55` },
+  original: { marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderColor: `${tokens.color.onInkMuted}55`, gap: 4 },
+  input: { ...textStyles.caption, color: tokens.color.paper, minHeight: 130, maxHeight: 210, borderWidth: 1.5, borderColor: tokens.color.onInkMuted, borderRadius: 18, backgroundColor: tokens.color.inkStrong, padding: 16 },
+  menuRow: { flexDirection: 'row', alignItems: 'center', minHeight: 56, gap: 12, borderBottomWidth: 1, borderColor: `${tokens.color.onInkMuted}55`, paddingVertical: 10 },
 });
