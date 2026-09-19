@@ -2,6 +2,7 @@ import { useEffect, useRef, type RefObject } from 'react';
 import { Group, Mesh, MeshBasicMaterial, OrthographicCamera } from 'three';
 import { useFrame, useThree } from './GooseCanvas';
 import { colors, motion } from './settings';
+import { useSoftwarePreview } from './renderQuality';
 import { advanceTime, composePose, stillPose, stepPose, type GooseActivity, type GooseEmotion, type GoosePose } from './motion';
 import { levelAt, type LipSync } from '../../voice/envelope.ts';
 import { gestureAt } from '../../voice/gestures.ts';
@@ -17,10 +18,11 @@ type PebbleProps = {
 
 // Every part is a smooth, scaled sphere. No model downloads or texture assets.
 function Pebble({ color, position, scale, rotation, glossy = false }: PebbleProps) {
+  const software = useSoftwarePreview();
   return (
     <mesh position={position} scale={scale} rotation={rotation}>
       <sphereGeometry args={[1, 32, 24]} />
-      <meshStandardMaterial color={color} roughness={glossy ? 0.18 : 0.83} metalness={0} />
+      {software ? <meshLambertMaterial color={color} /> : <meshStandardMaterial color={color} roughness={glossy ? 0.18 : 0.83} metalness={0} />}
     </mesh>
   );
 }

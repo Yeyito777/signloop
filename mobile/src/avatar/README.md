@@ -9,8 +9,8 @@ Integration adjustments:
 
 - Expo 55-compatible `expo-gl` and `expo-asset`; React Three Fiber 9 with React 19. No SDK upgrade.
 - Metro resolves `three` to its ESM build for all consumers. Three 0.186's CommonJS shim calls Node's `process.emitWarning`, which is unavailable in React Native. Restart Metro after changing this resolver.
-- The native canvas drains Expo GL’s startup queue across its first three frames; on-demand rendering also completes those startup frames. This avoids a blank surface during asynchronous native initialization without blocking steady animation. Keep this compatibility workaround in `GooseCanvas.tsx`, outside the character scene.
-- Transparent canvas/scene with straight alpha (`premultipliedAlpha: false`) so the character composites correctly over the app's butter background and blue Home shape. This uses straight alpha in addition to the native startup synchronization.
+- The native canvas detects software GL renderers. That preview uses one-third drawing dimensions, Lambert lighting, and at most 12 rendered frames per second while the animation clock continues normally. Hardware rendering retains the full surface and original Standard materials. Pause/Reduce Motion still updates the final pose on demand. No synchronous GL flushes run in the animation loop.
+- Transparent canvas/scene with straight alpha (`premultipliedAlpha: false`) so the character composites correctly over the app's butter background and blue Home shape. Native multisampling is disabled; the hardware path already draws at device pixel density.
 - The app's Reduce Motion, pause, and sheet states are forwarded into the character. Backgrounding stops rendering; still poses close the beak.
 - A rendering error boundary retains the illustrated fallback so captions and controls remain usable. Native GL crashes cannot be caught by a React boundary; validate on a physical iPhone.
 - One 320 × 440 logical-point canvas remains mounted above routes and below sheets. Navigation transforms its container without resizing the drawing surface.
@@ -22,4 +22,8 @@ Run `npm run ios` once after adding these native dependencies. Subsequent charac
 
 ## Validation
 
-Typecheck, all 38 tests, iOS production JavaScript export, and the native iOS Simulator build pass. Simulator review covers clean launch, Home → Conversation, shared-stage rendering, sample captions and joy, larger system text, long-caption bounds. Startup with Reduce Motion configured was also exercised. The simulator development client reloaded to Home during a background/foreground check; session preservation across backgrounding still needs physical-device validation. Physical-device camera plus 3D performance and native voice/lip-sync remain unverified.
+Typecheck, all 38 tests, iOS production JavaScript export, and the native iOS Simulator build pass. Simulator review covers clean launch, Home → Conversation, shared-stage rendering, sample captions and joy, larger system text, long-caption bounds. Idle movement was verified with successive Simulator captures; the settled paused pose remains identical. Reduce Motion startup was also exercised, and the Simulator preference was restored. Background/foreground returned to the same conversation in its expected paused state. The original frozen Simulator preview was traced to Apple Software Renderer taking roughly 1.5–2 seconds per PBR frame, which built up an asynchronous GL backlog. The adaptive preview removes that backlog; hardware performance still requires a phone check. Physical-device camera plus 3D performance and native voice/lip-sync remain unverified.
+
+## Upstream check
+
+Fetched `origin/sanvi-signloop` through `341afb4` (streaming voice). That change adds PCM playback, chunked alignment, and a phrase-readiness gate; it does not alter the scene or idle motion. `origin/main` already carries it under `goose/`. The standalone native PCM player collects chunks before playing a WAV, whereas its web player schedules chunks as they arrive. The voice experiment is not imported into this isolated UI branch.

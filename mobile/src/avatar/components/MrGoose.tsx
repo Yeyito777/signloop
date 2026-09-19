@@ -1,5 +1,5 @@
 import { Component, type ReactNode, type RefObject } from 'react';
-import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { gooseSvg } from '../../integrations/demo-art';
 import { useMotionPreferences } from '../hooks/useMotionPreferences';
@@ -39,7 +39,7 @@ export function MrGoose({ animationEnabled = true, reducedMotion: appReducedMoti
         <Canvas orthographic camera={{ position: [0, 3.15, 8], zoom: 110, near: 0.1, far: 30 }}
           frameloop={animate ? 'always' : 'demand'}
           // Straight alpha keeps the character visible over native transparent layers.
-          gl={{ antialias: true, alpha: true, premultipliedAlpha: false }}>
+          gl={{ antialias: Platform.OS === 'web', alpha: true, premultipliedAlpha: false }}>
           <GooseScene animate={animate} reducedMotion={reducedMotion} activity={activity} emotion={emotion} lipSync={lipSync} />
         </Canvas>
       </RenderBoundary>
