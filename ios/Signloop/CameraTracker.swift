@@ -36,7 +36,7 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     private let queue = DispatchQueue(label: "com.signloop.camera", qos: .userInitiated)
     private var recognizer: GestureRecognizer?
     private var localFilter = LocalGestureFilter()
-    private var lastLocalFrameAt: CFTimeInterval = 0
+    private var displayLifetime = CaptureDisplayLifetime() // main queue only
     private var configured = false
     private var front = true
     private var freshness = CaptureFreshness()
@@ -78,6 +78,7 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
         hands = []
         localSign = nil
         frameAgeMS = nil
+        displayLifetime.reset()
         onReset?()
     }
 
@@ -185,10 +186,15 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
 
     /// Main-thread watchdog; a stalled camera cannot leave an old sign visible.
     func expireLocalResult() {
-        if CaptureClock.now - lastLocalFrameAt > 0.4 {
-            localSign = nil
-            frameAgeMS = nil
-        }
+        guard displayLifetime.expire(now: CaptureClock.now) else { return }
+        hands = []
+        localSign = nil
+        frameAgeMS = nil
+        bufferedFrames = 0
+        fps = 0
+        latencyMS = 0
+        onReset?()
+        if isRunning && wantsRunning { status = "Waiting for fresh camera frames" }
     }
 
     func recentFrames() async -> [LandmarkFrame] {
@@ -308,6 +314,7 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
                 self.hands = []
                 self.localSign = nil
                 self.frameAgeMS = nil
+                self.displayLifetime.reset()
                 self.bufferedFrames = 0
                 self.onReset?()
                 self.status = "Waiting for fresh camera frames"
@@ -351,12 +358,14 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
             }
             DispatchQueue.main.async {
                 guard self.uiGeneration == generation, self.wantsRunning else { return }
-                let age = CaptureClock.now - captured
-                let fresh = age >= 0 && age <= 0.4
+                let deliveredAt = CaptureClock.now
+                let age = deliveredAt - captured
+                let fresh = CaptureFreshness.isFresh(captured: captured, now: deliveredAt)
                 self.hands = fresh ? detected : []
                 self.localSign = fresh ? local : nil
                 self.frameAgeMS = fresh ? Int(age*1000) : nil
-                self.lastLocalFrameAt = captured
+                if fresh { self.displayLifetime.received(at: captured) }
+                else { self.displayLifetime.reset() }
                 if fresh { self.onFrame?(frame) } else { self.onReset?() }
                 self.latencyMS = elapsed
                 self.bufferedFrames = count

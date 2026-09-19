@@ -55,3 +55,16 @@ There is no camera data logging, recording, upload, backend, or API key change.
   were not changed by this task.
 - Phone lock check at 06:41 still required the passcode. No launch or
   camera-performance result is claimed from the successful installation.
+
+### Stalled-overlay follow-up
+
+Build 10 expires the **whole presentation**, not just its sign: skeleton, frame
+age, FPS and buffered-frame display clear together, and the recognition window
+is invalidated once. The existing 250ms watchdog clears stale presentation
+within <=650ms of its last capture when the main thread can run normally.
+Timer-phase tests cover this bound, one-shot reset behavior, pause reset and
+fresh-frame recovery. A blocked main thread can delay UI updates; this is not
+a hard real-time guarantee.
+
+The remaining real-camera/recognition checks are in the
+[no-recording live phone checklist](live-phone-checklist.md).

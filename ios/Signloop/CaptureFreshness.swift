@@ -22,6 +22,11 @@ struct CaptureFreshness {
     private var previous: Double?
     private var previousMS: Int?
 
+    static func isFresh(captured: Double, now: Double) -> Bool {
+        captured.isFinite && now.isFinite && captured >= 0 &&
+            captured <= now && now-captured <= 0.4
+    }
+
     mutating func reset(at time: Double) {
         epoch = time.isFinite && time >= 0 ? time : .infinity
         previous = nil
@@ -29,8 +34,7 @@ struct CaptureFreshness {
     }
 
     mutating func timestamp(captured: Double, now: Double) -> Int? {
-        guard captured.isFinite, now.isFinite, captured >= epoch,
-              captured >= 0, captured <= now, now-captured <= 0.4,
+        guard Self.isFresh(captured: captured, now: now), captured >= epoch,
               captured < Double(Int.max / 1000),
               previous == nil || captured > previous! else { return nil }
         let milliseconds = Int(captured*1000)
@@ -38,5 +42,21 @@ struct CaptureFreshness {
         previous = captured
         previousMS = milliseconds
         return milliseconds
+    }
+}
+
+/// Main-thread watchdog state. Expiry is a one-shot invalidation, not a reset
+/// on every timer tick that could repeatedly cancel a recovering worker.
+struct CaptureDisplayLifetime {
+    private var captured: Double?
+
+    mutating func received(at time: Double) { captured = time }
+    mutating func reset() { captured = nil }
+
+    mutating func expire(now: Double) -> Bool {
+        guard let captured else { return false }
+        guard !CaptureFreshness.isFresh(captured: captured, now: now) else { return false }
+        self.captured = nil
+        return true
     }
 }

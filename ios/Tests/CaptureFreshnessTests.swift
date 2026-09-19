@@ -29,6 +29,34 @@ struct CaptureFreshnessTests {
         check(gate.timestamp(captured: 21, now: 21) == nil, "Invalid epoch enabled capture")
         print("PASS: capture age, epochs, duplicate/invalid/future rejection, recovery")
 
+        var display = CaptureDisplayLifetime()
+        check(!display.expire(now: 0), "Empty display invalidated")
+        display.received(at: 0)
+        check(!display.expire(now: 0.4), "Fresh boundary expired")
+        check(display.expire(now: 0.401), "Stalled display remained visible")
+        check(!display.expire(now: 0.8), "Expiry repeatedly cancelled recovering worker")
+        display.received(at: 1)
+        check(!display.expire(now: 1.1), "New frame did not recover display")
+        display.reset()
+        check(!display.expire(now: 2), "Pause reset retained observation")
+        for invalid in [Double.nan, .infinity, -.infinity, -1] {
+            display.received(at: 1)
+            check(display.expire(now: invalid), "Invalid/future presentation clock retained display")
+        }
+        // The app's 250ms timer must expire within 650ms of capture even when
+        // the camera delivers no further callback at all.
+        for phase in stride(from: 0.0, to: 0.25, by: 0.01) {
+            display.received(at: 10)
+            var expiredAt: Double?
+            for i in 0..<4 {
+                let now = 10+phase+Double(i)*0.25
+                if display.expire(now: now) { expiredAt = now }
+            }
+            check(expiredAt != nil && expiredAt! <= 10.65,
+                  "Timer phase left stale geometry visible")
+        }
+        print("PASS: one-shot overlay expiry, recovery, pause reset and timer-phase bounds")
+
         let host = CMClockGetHostTimeClock()
         let pts = CMClockGetTime(host)
         let converted = CaptureClock.hostSeconds(presentation: pts, sourceClock: host)

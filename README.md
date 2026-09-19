@@ -71,6 +71,10 @@ pre-switch camera frames instead of treating processing time as capture time.
 Camera frame age is available in settings; actual phone latency still needs
 measurement.
 
+Use the [live phone checklist](docs/live-phone-checklist.md) for offline,
+camera/lifecycle, ASL-fluent and held-out-signer validation. No recordings are
+required; these uncompleted checks cannot be replaced by simulator results.
+
 ## Parallel development
 
 Use a separate branch/checkout per task while keeping `yeyito` available:
