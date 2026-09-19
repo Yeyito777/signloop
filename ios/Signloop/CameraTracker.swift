@@ -31,8 +31,11 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     private var rateFrames = 0
     private var buffer = TemporalBuffer()
     private var observers: [NSObjectProtocol] = []
+    private let lifecycle = CaptureLifecycle()
+    private let modelPath: String?
 
-    override init() {
+    init(modelPath: String? = Bundle.main.path(forResource: "hand_landmarker", ofType: "task")) {
+        self.modelPath = modelPath
         super.init()
         observers.append(NotificationCenter.default.addObserver(
             forName: .AVCaptureSessionWasInterrupted, object: session, queue: .main
@@ -43,27 +46,38 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
         })
         observers.append(NotificationCenter.default.addObserver(
             forName: .AVCaptureSessionInterruptionEnded, object: session, queue: .main
-        ) { [weak self] _ in self?.start() })
+        ) { [weak self] _ in
+            guard let self, let token = self.lifecycle.token else { return }
+            self.requestStart(token: token)
+        })
         observers.append(NotificationCenter.default.addObserver(
             forName: .AVCaptureSessionRuntimeError, object: session, queue: .main
         ) { [weak self] notification in
+            guard let self, self.lifecycle.token != nil else { return }
             let error = notification.userInfo?[AVCaptureSessionErrorKey] as? NSError
-            self?.isRunning = false
-            self?.hands = []
-            self?.errorMessage = error?.localizedDescription ?? "Camera error. Tap Resume to retry."
+            self.isRunning = false
+            self.hands = []
+            self.errorMessage = error?.localizedDescription ?? "Camera error. Tap Resume to retry."
         })
     }
 
     deinit { observers.forEach(NotificationCenter.default.removeObserver) }
 
     func start() {
+        hands = []
+        requestStart(token: lifecycle.begin())
+    }
+
+    private func requestStart(token: Int) {
+        guard lifecycle.accepts(token) else { return }
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             permissionDenied = false
-            queue.async { self.startOnQueue() }
+            errorMessage = nil
+            queue.async { self.startOnQueue(token: token) }
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { [weak self] _ in
-                DispatchQueue.main.async { self?.start() }
+                DispatchQueue.main.async { self?.requestStart(token: token) }
             }
         default:
             permissionDenied = true
@@ -72,10 +86,14 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     }
 
     func pause() {
+        lifecycle.end()
+        hands = []
+        isRunning = false
         queue.async {
             self.session.stopRunning()
             self.buffer.reset()
             DispatchQueue.main.async {
+                guard self.lifecycle.token == nil else { return }
                 self.isRunning = false
                 self.hands = []
                 self.bufferedFrames = 0
@@ -141,10 +159,11 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
         }
     }
 
-    private func startOnQueue() {
+    private func startOnQueue(token: Int) {
+        guard lifecycle.accepts(token) else { return }
         do {
             if landmarker == nil {
-                guard let model = Bundle.main.path(forResource: "hand_landmarker", ofType: "task") else {
+                guard let model = modelPath else {
                     throw TrackerError.message("Missing hand model. Run ios/scripts/bootstrap.sh and rebuild.")
                 }
                 let options = HandLandmarkerOptions()
@@ -175,14 +194,17 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
             buffer.reset()
             rateStart = CACurrentMediaTime()
             rateFrames = 0
+            guard lifecycle.accepts(token) else { return }
             session.startRunning()
+            guard lifecycle.accepts(token) else { session.stopRunning(); return }
             let running = session.isRunning
             DispatchQueue.main.async {
+                guard self.lifecycle.accepts(token) else { return }
                 self.errorMessage = nil
                 self.isRunning = running
                 self.status = running ? "Looking for hands" : "Camera unavailable"
             }
-        } catch { report(error) }
+        } catch { report(error, token: token) }
     }
 
     private func replaceInput(front useFront: Bool) throws {
@@ -223,7 +245,7 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
 
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer,
                        from connection: AVCaptureConnection) {
-        guard session.isRunning, let landmarker else { return }
+        guard session.isRunning, let landmarker, let token = lifecycle.token else { return }
         let now = CACurrentMediaTime()
         guard now - lastInference >= 1.0 / 24.0 else { return }
         lastInference = now
@@ -253,6 +275,7 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
                 rateFrames = 0
             }
             DispatchQueue.main.async {
+                guard self.lifecycle.accepts(token) else { return }
                 self.hands = detected
                 self.latencyMS = elapsed
                 self.bufferedFrames = count
@@ -260,11 +283,12 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
                 if let measuredFPS { self.fps = measuredFPS }
                 self.status = detected.isEmpty ? "Looking for hands" : "Tracking \(detected.count) \(detected.count == 1 ? "hand" : "hands")"
             }
-        } catch { report(error) }
+        } catch { report(error, token: token) }
     }
 
-    private func report(_ error: Error) {
+    private func report(_ error: Error, token: Int? = nil) {
         DispatchQueue.main.async {
+            if let token, !self.lifecycle.accepts(token) { return }
             self.hands = []
             self.errorMessage = error.localizedDescription
             self.status = "Tracking unavailable"

@@ -2,6 +2,28 @@
 
 Hack the North · limited-vocabulary ASL-to-English prototype.
 
+## Consumer app design system
+
+The [Playroom design system](design-system/README.md) contains the agreed visual foundation,
+portable tokens, React Native text styles, CSS variables, and reusable UI icons.
+Screen layouts are still drafts. A teammate is developing the future 3D goose;
+the design system keeps character rendering and animation assets replaceable.
+
+## Consumer mobile app: initial screens
+
+The Expo app lives in [`mobile/`](mobile/README.md): Home, Conversation, and local
+transcript/correction sheets in the Playroom style. The native Expo camera module reuses the
+Swift tracker below. Translation, goose, and voice are replaceable adapters; an explicit
+sample-conversation mode uses labeled sample data and silent playback.
+See the [frontend integration handoff](docs/frontend-flow-and-handoff.md).
+
+```sh
+cd mobile
+npm ci
+npm run ios
+```
+
+This generates `mobile/ios/` separately from the native scanner prototype below.
 ## One-screen live sign estimates
 
 Open the app, put your hands in view, and see the **current possible sign** update
