@@ -40,6 +40,11 @@ The [native Swift temporal engine](docs/native-temporal-matcher.md) now implemen
 the same V2 matcher without a server. It is parity-tested but **not enabled in the
 camera UI**: distributable references and live rejection validation are still needed.
 
+A [pretrained 250-word candidate](docs/pretrained-sign-research.md) now recognizes
+all five target words in local rolling-window research. It is **not enabled in
+the app**: stationary-pose false positives, phone validation and model provenance
+remain unresolved.
+
 ## Parallel development
 
 Use a separate branch/checkout per task while keeping `yeyito` available:

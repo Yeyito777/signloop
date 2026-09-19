@@ -17,7 +17,7 @@ case "${2:-core}" in
     (cd "$TARGET" && bash ios/scripts/test-core.sh)
     ;;
   backend)
-    (cd "$TARGET" && python3 -m unittest backend.test_service backend.test_matcher backend.test_hand_tracking backend.test_static backend.test_stream_replay backend.test_stream_calibrate -v)
+    (cd "$TARGET" && python3 -m unittest backend.test_service backend.test_matcher backend.test_hand_tracking backend.test_static backend.test_stream_replay backend.test_stream_calibrate backend.test_pretrained -v)
     ;;
   native)
     # Actual Swift HTTP adapter + local temporal engine; synthetic data only.
