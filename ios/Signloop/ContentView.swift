@@ -114,10 +114,10 @@ struct ContentView: View {
     private var controls: some View {
         VStack(spacing: 12) {
             VStack(spacing: 8) {
-                Text(paused ? "Paused" : recognition.ready ? "Possible sign" : "Live skeleton").font(.title3.weight(.semibold))
+                Text(paused ? "Paused" : recognition.ready ? "Best guess" : "Live skeleton").font(.title3.weight(.semibold))
                     .accessibilityIdentifier("tracking-title")
                 if !paused {
-                    Text(recognition.sign.map(BasicLiveRecognition.display) ?? (recognition.ready ? "Unknown" : "Tracking"))
+                    Text(recognition.sign.map(BasicLiveRecognition.display) ?? (recognition.ready ? "Watching…" : "Tracking"))
                         .font(.title.weight(.bold)).accessibilityIdentifier("current-sign")
                     Text(recognition.detail).font(.caption).multilineTextAlignment(.center)
                         .accessibilityIdentifier("recognition-status")
@@ -126,7 +126,7 @@ struct ContentView: View {
                     trackingBadge("Hands \(tracker.skeleton?.hands.count ?? 0)/2",
                                   active: !(tracker.skeleton?.hands.isEmpty ?? true))
                     trackingBadge("Body", active: tracker.skeleton?.hasPose ?? false)
-                    trackingBadge("Face", active: tracker.skeleton?.hasFace ?? false)
+                    trackingBadge(tracker.trackFace ? "Face" : "Face off", active: tracker.skeleton?.hasFace ?? false)
                 }.font(.caption.weight(.semibold))
                 Text(paused ? "Camera and tracking paused" : tracker.status)
                     .font(.caption).multilineTextAlignment(.center).accessibilityIdentifier("tracking-status")
@@ -174,6 +174,9 @@ private struct CameraSettings: View {
                         .accessibilityIdentifier("show-all-sign-scores")
                     Text("Shows similarity for every candidate, including rejected matches. Not calibrated probabilities; scores do not add to 100%. Higher means closer, not necessarily correct.")
                         .font(.footnote)
+                    Toggle("Track face (slower)", isOn: $tracker.trackFace)
+                    Text("Hands and shoulders/chest stay tracked. Face is optional and off by default for this 16-sign matcher.")
+                        .font(.footnote)
                     Toggle("Show hand joints", isOn: $tracker.showJoints)
                     Toggle("Show upper-body pose", isOn: $tracker.showPose)
                     Toggle("Show facial features", isOn: $tracker.showFace)
@@ -193,7 +196,7 @@ private struct CameraSettings: View {
                 }
                 Section("What this build does") {
                     Text("Tracks up to two hands, one upper body and one face. Stand alone with your head, hands and hips in view. Hidden or uncertain points are not drawn.")
-                    Text("Experimental temporal matching against 16 reference labels. Unknown means no reliable match, not that you signed incorrectly. No transcription or sentences yet. Facial blendshapes describe movement, not emotions.")
+                    Text("The top candidate is always shown when usable movement is available—even if it is uncertain or the input is not a supported sign. Watching means more tracking evidence is needed. No transcription or sentences yet.")
                     Text("Offline only: nothing is recorded or sent to a server. Up to 2.4 seconds of landmarks stay in memory and clear on pause, camera switch or stale capture.")
                         .accessibilityIdentifier("offline-privacy")
                 }.font(.footnote)

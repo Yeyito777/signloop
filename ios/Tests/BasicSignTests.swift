@@ -26,12 +26,12 @@ import Foundation
         var refs = [BasicReference(id: "synthetic-0", label: labels[0], split: "train",
                                    signer: "synthetic-train", frames: frames)]
         for i in 1..<16 {
-            let feature = BasicFeature(hands: [[Float](repeating: Float(i), count: 42), nil],
+            let feature = BasicFeature(hands: [[Float](repeating: Float(i), count: 63), nil],
                 body: [[Float](repeating: Float(i), count: 4), nil], face: nil, time: 0)
             refs.append(BasicReference(id: "synthetic-\(i)", label: labels[i], split: "train",
                 signer: "synthetic-train", frames: [], features: Array(repeating: feature, count: 16)))
         }
-        let bank = BasicReferenceBank(version: 1, labels: labels, maxDistance: 0.08, minMargin: 0.15, references: refs)
+        let bank = BasicReferenceBank(version: 2, labels: labels, maxDistance: 0.08, minMargin: 0.15, references: refs)
         let matcher = try BasicSignMatcher(bank: bank)
         let candidate = matcher.candidate(frames)
         check(candidate.label == labels[0], "Exact synthetic temporal replay must match")
@@ -82,6 +82,42 @@ import Foundation
                 pose: f.pose.map(transform), face: [], expressions: [:], timingsMS: [:])
         }
         check(matcher.candidate(transformed).distance < 0.0001, "Aspect/body scale/translation invariance")
+        var pointing = [Float](repeating: 0, count: 63)
+        // Pure geometry: a straight finger aligned with optical Z.
+        for f in 0..<4 {
+            let start = 5+f*4
+            for j in 0..<4 {
+                pointing[(start+j)*3+2] = f == 0 ? Float(j)*0.3 : (j == 1 ? 0.3 : 0)
+                pointing[(start+j)*3+1] = f == 0 ? 0 : (j >= 2 ? 0.15 : 0)
+            }
+        }
+        check(BasicSignMatcher.straightness(pointing, finger: 0) > 0.99, "Optical-axis pointing is extended, not curled")
+        check(BasicSignMatcher.straightness(pointing, finger: 1) < 0.65, "Curled geometry remains curled")
+        var rotated = pointing
+        for i in 0..<21 {
+            rotated[i*3] = pointing[i*3+2]
+            rotated[i*3+2] = -pointing[i*3]
+        }
+        let intrinsic = BasicSignMatcher.intrinsicShape(pointing)
+        let rotatedIntrinsic = BasicSignMatcher.intrinsicShape(rotated)
+        check(zip(intrinsic, rotatedIntrinsic).allSatisfy { abs($0-$1) < 0.00001 },
+              "Hand shape stays stable when pointing rotates toward the lens")
+        let pointingFeature = BasicFeature(hands: [pointing, nil], body: [[0, 0, 0, 0], nil], face: nil, time: 0)
+        check(BasicSignMatcher.anatomicalPenalty(label: "YOU", sequence: [pointingFeature]) <
+              BasicSignMatcher.anatomicalPenalty(label: "MY", sequence: [pointingFeature]), "YOU shape rule differs from flat palm")
+        let circle = (0..<16).map { i -> BasicFeature in
+            let angle = Float(i)/15 * 2 * Float.pi
+            return BasicFeature(hands: [pointing, nil],
+                body: [[cos(angle)*0.35, sin(angle)*0.35, 0, 0], nil], face: nil, time: i*67)
+        }
+        let hold = (0..<16).map { i in
+            BasicFeature(hands: [pointing, nil], body: [[0.35, 0, 0, 0], nil], face: nil, time: i*67)
+        }
+        check(BasicSignMatcher.trajectoryCost(circle, circle) == 0, "Temporal identity")
+        check(BasicSignMatcher.trajectoryCost(circle, hold) > 0.01, "A circle cannot collapse into a static hold")
+        let legacy = BasicReferenceBank(version: 1, labels: labels, maxDistance: 0.08, minMargin: 0.15,
+                                        references: packed.references)
+        do { try legacy.validate(); fatalError("Legacy packed feature schema accepted") } catch { assertions += 1 }
         var stability = BasicSignStability()
         check(stability.update(labels[0]) == nil, "No single-frame display")
         check(stability.update(labels[0]) == labels[0], "Consecutive display")
@@ -112,6 +148,22 @@ import Foundation
         }
         check(live.sign == labels[0], "Real adapter confirms synthetic identity")
         check(live.scores.count == 16 && live.scores[0].similarity! > 0.999, "Real adapter publishes every label's score")
+        let uncertainURL = folder.appendingPathComponent("uncertain.json")
+        var uncertainBank = packed
+        uncertainBank.maxDistance = 0
+        try JSONEncoder().encode(uncertainBank).write(to: uncertainURL)
+        let uncertain = BasicLiveRecognition(referenceURL: uncertainURL)
+        uncertain.load()
+        let uncertainDeadline = Date().addingTimeInterval(5)
+        while !uncertain.ready && Date() < uncertainDeadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+        }
+        for frame in frames {
+            uncertain.receive(frame)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.02))
+        }
+        check(uncertain.sign == labels[0] && uncertain.detail.contains("uncertain"),
+              "Top candidate remains visible below confidence gate, explicitly uncertain")
         var next = frames.last!
         // Codable timestamp is immutable, so form a new late frame explicitly.
         next = SkeletonFrame(timestampMS: 1000, width: next.width, height: next.height,

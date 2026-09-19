@@ -51,10 +51,20 @@ prototype are not secret; use the consumer app's backend path for shared builds.
 ## Standalone native scanner: offline skeleton + experimental matching
 
 The standalone native build uses `SkeletonCameraTracker`:
-camera → MediaPipe hand, upper-body and face landmarkers → one synchronized,
+camera → MediaPipe hand and upper-body landmarkers (face optional) → one synchronized,
 inspectable skeleton → optional **private 16-label temporal matching**.
 No backend, API key, transcription, recording or uploads.
 
+Build 14 shows the **best current guess**, explicitly uncertain, rather than
+hiding it behind Unknown. It adds hand-local 3D geometry, soft finger-shape
+rules and a shared temporal window with wrist/palm motion features. Face tracking
+is off by default; shoulders/chest remain. Existing test replays improved from
+21/48 to 26/48 correct most-frequent guesses, but all 10 unsupported clips also
+got guesses. This is still experimental, not reliable ASL recognition.
+It needs a separately provisioned schema-2 reference bank; see
+[current behavior and evidence](docs/basic-live-matching.md).
+
+Historical baseline:
 Build 12 displays tentative **Possible sign / Unknown** results when its private
 research references are provisioned separately. The bank is not in Git or the app
 bundle. The initial reserved replay displayed the correct label in **11/48**

@@ -32,8 +32,15 @@ import Foundation
             var frames: [SkeletonFrame] = []
             var events: [Event] = []
             var last = -1000
+            var observed: Int?
             let start = Date()
             for frame in clip.frames {
+                if let time = observed, frame.timestampMS-time > 300 {
+                    frames.removeAll()
+                    last = -1000
+                    observed = nil
+                }
+                if !frame.hands.isEmpty && frame.hasPose { observed = frame.timestampMS }
                 frames.append(frame)
                 frames.removeAll { $0.timestampMS < frame.timestampMS-2400 }
                 // The live adapter clears confirmation immediately on every

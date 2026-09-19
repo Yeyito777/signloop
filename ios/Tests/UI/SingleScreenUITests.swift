@@ -105,6 +105,7 @@ final class SingleScreenUITests: XCTestCase {
 
     func testAllThreeOverlayControlsAvailable() {
         app.buttons["camera-settings"].tap()
+        XCTAssertTrue(actualSwitch("Track face (slower)").exists)
         XCTAssertTrue(actualSwitch("Show hand joints").exists)
         XCTAssertTrue(actualSwitch("Show upper-body pose").exists)
         XCTAssertTrue(actualSwitch("Show facial features").exists)

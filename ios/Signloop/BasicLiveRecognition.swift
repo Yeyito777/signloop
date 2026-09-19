@@ -17,6 +17,7 @@ final class BasicLiveRecognition: ObservableObject {
     private var generation = 0
     private var frames: [SkeletonFrame] = []
     private var lastRequest = -1000
+    private var lastObservedHand: Int?
     private var stability = BasicSignStability()
     private let referenceURL: URL
 
@@ -61,6 +62,7 @@ final class BasicLiveRecognition: ObservableObject {
         generation += 1
         frames.removeAll(keepingCapacity: true)
         lastRequest = -1000
+        lastObservedHand = nil
         stability.reset()
         sign = nil
         matchMS = 0
@@ -79,6 +81,10 @@ final class BasicLiveRecognition: ObservableObject {
            frame.timestampMS <= previous.timestampMS || frame.timestampMS-previous.timestampMS > 400 {
             reset()
         }
+        if let observed = lastObservedHand, frame.timestampMS-observed > 300 {
+            reset() // Do not mix a preceding sign into a new hands-in-view episode.
+        }
+        if !frame.hands.isEmpty && frame.hasPose { lastObservedHand = frame.timestampMS }
         frames.append(frame)
         frames.removeAll { $0.timestampMS < frame.timestampMS-2400 }
         if frames.count > 60 { frames.removeFirst(frames.count-60) }
@@ -112,9 +118,13 @@ final class BasicLiveRecognition: ObservableObject {
                 }
                 self.matchMS = Int(elapsed*1000)
                 self.scores = candidate.scores
-                self.sign = self.stability.update(accepted)
-                self.detail = self.sign != nil ? "Experimental match · not a translation"
-                    : accepted != nil ? "Checking movement…" : "Unknown · try one supported sign"
+                // Ranking is visible even below the rejection threshold. The
+                // quality gate now annotates the guess, never hides it.
+                let supported = self.stability.update(accepted)
+                self.sign = candidate.label
+                self.detail = candidate.label == nil ? "Collecting movement · keep hands visible"
+                    : supported != nil ? "Best guess · clearer match, still experimental"
+                    : "Best guess · uncertain, not a confirmed sign"
             }
         }
     }

@@ -40,7 +40,7 @@ class BasicLiveTests(unittest.TestCase):
             plan.write_text(json.dumps(dict(samples=[row])))
             (folder/"report.json").write_text(json.dumps(dict(complete=True,
                 plan_sha256=hashlib.sha256(plan.read_bytes()).hexdigest())))
-            asset = dict(version=1, labels=list(LABELS), maxDistance=.08, minMargin=.15,
+            asset = dict(version=2, labels=list(LABELS), maxDistance=.08, minMargin=.15,
                          references=[dict(row, frames=[], features=[{}]*16)])
             bank = folder/"bank.json"
             bank.write_text(json.dumps(asset))

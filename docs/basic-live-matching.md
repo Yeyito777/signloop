@@ -1,4 +1,85 @@
-# Build 12: private offline 16-label matching experiment
+# Private offline 16-label matching experiment
+
+## Build 14: best guesses, geometric rules and shared temporal evidence
+
+The standalone scanner now shows **Best guess** whenever usable temporal evidence
+exists, even when the rejection policy would reject it. **Watching…** means no
+usable candidate yet, not a forced label. Guesses are explicitly uncertain:
+unsupported movements also get a closest supported label. Similarity bars remain
+independent scores, **not probabilities**. This changes the display policy, not
+the certainty of the model.
+
+The previous matcher already used temporal DTW, but let each class select its own
+best window. The new matcher compares every class on the same causal 1.2-second
+window, adds wrist direction/path and palm-rotation features, and resets the
+episode after a 300 ms hand/body evidence gap. Four usable observations spanning
+180 ms allow an earlier first guess; that is a minimum evidence span, **not a
+measured phone latency**. Training references still require six observations.
+
+Hand shape now uses palm-normalized **hand-local XYZ**, plus rotation-invariant
+pairwise joint distances. This avoids the old XY palm-scale collapse for
+camera-facing pointing. Depth is never compared between separate pose/hand
+models. Soft anatomical hints distinguish pointing, open hands, fists, selected
+finger extensions and clustered fingertips. These are incomplete per-sign
+heuristics, not hand-invented labeled examples or complete ASL definitions.
+MY/PLEASE also benefit from trajectory information rather than hand shape alone.
+
+**Track face (slower)** is off by default. Face inference and its initialization
+are skipped entirely; hand and Pose Lite tracking remain for shoulders/chest,
+elbows and wrists. Face overlays can be re-enabled for inspection, but facial
+features do not affect this matcher. Reference trajectories and intrinsic hand
+features are cached; preview never waits for the serial matching worker.
+
+### Development evidence and limitations
+
+Nine window/rule-weight configurations were compared on the existing validation
+split (selected 1200 ms / 0.1 rule weight). These cohorts have been inspected
+before: they are **not a fresh blind test**, even though their signers are
+disjoint from the training references.
+
+| Most frequent raw guess per supported clip | Build 12/13 matcher | Build 14 |
+| --- | ---: | ---: |
+| Validation | 21 / 32 | 22 / 32 |
+| Existing official test | 21 / 48 | 26 / 48 |
+| Test clips with any usable guess | 34 / 48 | 37 / 48 |
+
+This is a plurality-of-guesses metric, not frame accuracy or the old
+“correct confirmed caption at least once” metric below. No-evidence clips stay
+in the denominator. YOU improved from 0/3 to 1/3, MY from 1/3 to 2/3,
+PLEASE stayed 2/3, YES improved 2/3 to 3/3, and SORRY regressed 3/3 to 2/3.
+**All 10 unsupported test clips received some guess.** The old constrained
+acceptance calibration found no useful policy for the new distances; its
+maxDistance=0/minMargin=1 keeps all guesses marked uncertain. This is not solved
+recognition or reliable continuous ASL translation.
+
+On three public static fixtures, native simulator detection took about
+26–42 ms median with face off, versus 32–48 ms with it on (roughly 6 ms saved).
+Both modes cleared stale detections on a blank image. This does **not** establish
+live iPhone FPS, camera-to-caption delay, or signing accuracy.
+
+Three alternating optimized Mac replays of the same 42 validation clips took
+2.33 seconds total for the old matcher and 2.59 seconds for the new matcher
+(median run totals). The more detailed matcher is **not faster in that test**;
+face skipping and earlier evidence eligibility are the latency improvements,
+not a claimed across-the-board inference speedup.
+
+Verification: 44 matcher/async-adapter invariants plus the legacy 161-check
+core suite passed; 103 Python tests passed. Ten optimized Debug simulator UI
+tests passed. Caching preserved all candidate labels, distances and margins
+exactly across 3,284 scheduled events in 100 validation/test clips. The final
+signed Release build 14 passed signing and secret/bundle checks. Yeyito was
+unavailable at the final check, so build 14 is **ready, not installed**.
+
+Build 14 requires the separately provisioned **schema-2** packed research bank.
+Old packed schema-1 banks are rejected rather than silently interpreted as XYZ.
+No references, footage or provider secrets are bundled. Raw schema-1 training
+frames can be re-exported through the new matcher; old packed features cannot.
+Private evaluation/reproducibility files remain in the task's ignored
+`.runtime/final/`. Install the app, provision that directory's new bank with
+`backend.basic_live provision`, then launch. Public redistribution of these
+research data remains prohibited by the source terms.
+
+## Historical build 12/13 behavior and evaluation
 
 The skeleton camera now feeds an on-device temporal reference matcher. The screen
 shows **Possible sign** / **Unknown**. No backend, keys, transcription, recordings,

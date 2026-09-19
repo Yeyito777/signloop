@@ -36,7 +36,7 @@ def export(folder, out):
     out.mkdir(parents=True, exist_ok=True)
     records = [dict(id=r["id"], label=r["label"], split=r["split"], signer=r["signer"],
                     frames=frames(a)) for r, a in samples(folder)]
-    bank = dict(version=1, labels=list(LABELS), maxDistance=0.0, minMargin=1.0,
+    bank = dict(version=2, labels=list(LABELS), maxDistance=0.0, minMargin=1.0,
                 references=[r for r in records if r["split"] == "train"])
     (out/"basic-references.json").write_text(json.dumps(bank, separators=(",", ":"), allow_nan=False))
     for split in ("val", "test"):
@@ -110,7 +110,7 @@ def validate_deployment(bank_path, corpus):
     if not report["complete"] or report["plan_sha256"] != hashlib.sha256(plan_path.read_bytes()).hexdigest():
         raise ValueError("Incomplete/unbound source corpus")
     training = {r["id"]: r for r in plan["samples"] if r["split"] == "train"}
-    if b["version"] != 1 or set(b["labels"]) != set(LABELS) or not 1 <= len(b["references"]) <= 128:
+    if b["version"] != 2 or set(b["labels"]) != set(LABELS) or not 1 <= len(b["references"]) <= 128:
         raise ValueError("Unexpected reference schema/vocabulary")
     if len({r["id"] for r in b["references"]}) != len(b["references"]):
         raise ValueError("Duplicate references")
@@ -120,7 +120,7 @@ def validate_deployment(bank_path, corpus):
             raise ValueError("Only original training references may reach the phone")
         if row["frames"] or len(row["features"]) != 16:
             raise ValueError("Use the compact --pack asset, not raw frames")
-    if not math.isfinite(b["maxDistance"]) or not 0 < b["maxDistance"] <= 1:
+    if not math.isfinite(b["maxDistance"]) or not 0 <= b["maxDistance"] <= 1:
         raise ValueError("No useful calibrated rejection policy")
     if not math.isfinite(b["minMargin"]) or not 0 <= b["minMargin"] <= 1:
         raise ValueError("Invalid rejection margin")
