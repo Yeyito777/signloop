@@ -48,7 +48,13 @@ They are explicitly **not ASL recordings or accuracy evidence**.
 The default remains `reference-dtw-v1` for reproducibility. Opt into geometric
 hand association with `backend.research_data --matcher reference-dtw-v2` and
 `backend.replay --model reference-dtw-v2`. Keep versioned corpus/report filenames.
-Both models remain server-side local research baselines, not bundled iPhone models.
+Their reference corpora remain local research assets, not bundled iPhone data.
+
+The [native Swift V2 engine](native-temporal-matcher.md) is now parity-tested,
+but has no bundled references and is not enabled in the camera UI.
+[Rolling calibration and mirror augmentation](recognition-stream-calibration.md)
+are separate research experiments; their results do not establish demo-ready
+multi-sign accuracy.
 
 ## Bring a real corpus
 

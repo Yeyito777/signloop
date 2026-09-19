@@ -112,6 +112,9 @@ def reference_service(corpus_path: Path, report_path: Path, host: str):
     if corpus.get("redistribution") == "PROHIBITED" and host not in ("localhost", "127.0.0.1", "::1"):
         raise ValueError("Restricted research corpus may only be evaluated on loopback.")
     report = json.loads(report_path.read_text())
+    if report.get("protocol") == "rolling-calibration-v1":
+        raise ValueError("Rolling calibration requires its tested client cadence/filter; "
+                         "these experimental reports cannot configure the legacy live server.")
     digest = hashlib.sha256(corpus_path.read_bytes()).hexdigest()
     if report.get("corpus_sha256") != digest or report.get("model") not in MATCHERS:
         raise ValueError("Calibration report does not match this corpus/model.")

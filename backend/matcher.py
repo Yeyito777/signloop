@@ -6,6 +6,7 @@ Distances and exp(-distance) similarities are NOT calibrated probabilities.
 from __future__ import annotations
 
 import hashlib
+import copy
 import json
 import math
 from pathlib import Path
@@ -225,7 +226,41 @@ class TrackedReferenceMatcher(ReferenceMatcher):
         return result
 
 
-MATCHERS = {cls.model_name: cls for cls in (ReferenceMatcher, TrackedReferenceMatcher)}
+def reflect_hands(frames):
+    """Global handedness reflection, NOT arbitrary finger/palm rotation."""
+    result = copy.deepcopy(frames)
+    for frame in result:
+        for hand in frame["hands"]:
+            hand["handedness"] = {"Left": "Right", "Right": "Left"}.get(
+                hand["handedness"], hand["handedness"])
+            for joint in hand["joints"]:
+                joint["x"] = 1-joint["x"]
+    return result
+
+
+class MirroredReferenceMatcher(TrackedReferenceMatcher):
+    """Dominant-hand augmentation for a narrow non-directional vocabulary.
+
+    Not suitable for arbitrary labels: reflection can alter spatial meaning.
+    This is an experimental augmentation, not another independent recording.
+    """
+    model_name = "reference-dtw-v3-mirror"
+    reflection_labels = frozenset({"HELLO", "YES", "NO", "PLEASE", "THANK_YOU"})
+
+    def __init__(self, samples, max_distance, min_margin):
+        training = [s for s in samples if s["split"] == "train" and s["label"] != "UNKNOWN"]
+        if not {s["label"] for s in training} <= self.reflection_labels:
+            raise ValueError("Mirror augmentation is restricted to the five non-directional labels.")
+        super().__init__(samples, max_distance, min_margin)
+        # Original references retain priority on exact distance ties.
+        for sample in training:
+            vector = self.feature_function(reflect_hands(sample["frames"]))
+            if vector:
+                self.references.append((sample["label"], sample["id"] + ":reflected", vector))
+
+
+MATCHERS = {cls.model_name: cls for cls in
+            (ReferenceMatcher, TrackedReferenceMatcher, MirroredReferenceMatcher)}
 
 
 class ReferenceService:
