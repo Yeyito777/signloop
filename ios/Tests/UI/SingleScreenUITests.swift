@@ -104,6 +104,61 @@ final class SingleScreenUITests: XCTestCase {
         app.buttons["Done"].tap()
     }
 
+    func testExpressionLabAbstainsWithoutFaceAndCannotCalibrate() {
+        XCTAssertTrue(app.buttons["expression-lab"].waitForExistence(timeout: 10))
+        app.buttons["expression-lab"].tap()
+        let result = app.staticTexts["expression-result"]
+        XCTAssertTrue(result.waitForExistence(timeout: 5))
+        XCTAssertEqual(result.label, "No face")
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Expression lab — no face"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        let baseline = app.buttons["expression-baseline"]
+        for _ in 0..<4 {
+            if baseline.isHittable { break }
+            app.scrollViews.firstMatch.swipeUp()
+        }
+        XCTAssertTrue(baseline.exists)
+        XCTAssertFalse(baseline.isEnabled)
+        XCTAssertFalse(app.staticTexts["Joy preset"].exists)
+        app.buttons["Done"].tap()
+    }
+
+    func testExpressionThresholdsAreAdjustableAndPersistAcrossSheetReopen() {
+        XCTAssertTrue(app.buttons["expression-lab"].waitForExistence(timeout: 10))
+        app.buttons["expression-lab"].tap()
+        let slider = app.sliders["expression-threshold-joy"]
+        for _ in 0..<6 {
+            // SwiftUI can report a partially clipped slider as hittable. Its
+            // whole track must be visible for XCTest's drag to reach the thumb.
+            if slider.isHittable && slider.frame.maxY < app.frame.maxY - 80 { break }
+            app.scrollViews.firstMatch.swipeUp()
+        }
+        XCTAssertTrue(slider.isHittable)
+        let before = slider.value as? String
+        slider.adjust(toNormalizedSliderPosition: 0.8)
+        let changed = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in slider.value as? String != before }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 5), .completed,
+                       "Dragging the visible slider must change its threshold")
+        let value = slider.value as? String
+        XCTAssertNotNil(value)
+        XCTAssertNotEqual(value, before)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Expression lab — cue thresholds"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        app.buttons["Done"].tap()
+        app.buttons["expression-lab"].tap()
+        for _ in 0..<6 {
+            if slider.isHittable && slider.frame.maxY < app.frame.maxY - 80 { break }
+            app.scrollViews.firstMatch.swipeUp()
+        }
+        XCTAssertEqual(slider.value as? String, value)
+        app.buttons["Done"].tap()
+    }
+
     func testLargeTextKeepsCoreControlsReachable() {
         app.terminate()
         app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL"]

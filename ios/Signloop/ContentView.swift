@@ -13,6 +13,8 @@ struct ContentView: View {
     @State private var paused = false
     @State private var showSettings = false
     @State private var showProbe = false
+    @State private var showExpressions = false
+    @State private var expressionEngine = ExpressionCueEngine()
     @State private var probe = SkeletonProbe()
     @AppStorage("showTrackingStats") private var showTrackingStats = false
     private let clock = Timer.publish(every: 0.25, on: .main, in: .common).autoconnect()
@@ -67,6 +69,10 @@ struct ContentView: View {
             SkeletonInspector(tracker: tracker, probe: $probe)
                 .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $showExpressions) {
+            ExpressionTesterView(tracker: tracker, engine: $expressionEngine, paused: $paused)
+                .presentationDetents([.large]).presentationDragIndicator(.visible)
+        }
     }
 
     private var header: some View {
@@ -74,6 +80,10 @@ struct ContentView: View {
             HStack {
                 Text("signloop").font(.title2.weight(.semibold))
                 Spacer()
+                Button { showExpressions = true } label: {
+                    Image(systemName: "face.smiling").frame(width: 48, height: 48)
+                        .background(.ultraThinMaterial, in: Circle())
+                }.accessibilityLabel("Expression lab").accessibilityIdentifier("expression-lab")
                 Button { showProbe = true } label: {
                     Image(systemName: "scope").frame(width: 48, height: 48)
                         .background(.ultraThinMaterial, in: Circle())
@@ -161,7 +171,7 @@ private struct CameraSettings: View {
                 }
                 Section("What this build does") {
                     Text("Tracks up to two hands, one upper body and one face. Stand alone with your head, hands and hips in view. Hidden or uncertain points are not drawn.")
-                    Text("Facial blendshapes describe movement, not sentiment, emotion or ASL meaning. There is no sign recognition or transcription in this build.")
+                    Text("Facial blendshapes describe movement. Expression lab maps five cues to experimental presets; it does not infer emotion or ASL meaning. There is no sign recognition or transcription in this build.")
                     Text("Offline only: nothing is recorded or sent to a server. A rolling two-second landmark buffer lives only in memory and clears on pause, camera switch or stale capture.")
                         .accessibilityIdentifier("offline-privacy")
                 }.font(.footnote)
@@ -216,7 +226,7 @@ private struct SkeletonInspector: View {
                     ForEach(["hands", "pose", "face"], id: \.self) { name in
                         LabeledContent("\(name.capitalized) inference", value: tracker.skeleton?.timingsMS[name].map { String(format: "%.1f ms", $0) } ?? "—")
                     }
-                    Text("Three detectors, same camera frame. No recording, upload, classification or transcription.").font(.footnote)
+                    Text("Three detectors, same camera frame. No recording, upload or ASL transcription.").font(.footnote)
                 }
             }.navigationTitle("Skeleton inspector").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.frame(minHeight: 44) } }
