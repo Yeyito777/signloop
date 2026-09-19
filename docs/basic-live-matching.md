@@ -1,0 +1,139 @@
+# Build 12: private offline 16-label matching experiment
+
+The skeleton camera now feeds an on-device temporal reference matcher. The screen
+shows **Possible sign** / **Unknown**. No backend, keys, transcription, recordings,
+or camera uploads. This is a research baseline, **not reliable 16-sign recognition**.
+
+## Pipeline
+
+Same-frame MediaPipe hands + shoulders/elbows/wrists + facial movement coefficients
+→ aspect-corrected, shoulder-relative locations and palm-normalized hand shape
+→ 0.7 / 1.4 / 2.4-second causal windows → dynamic time warping against training
+references → distance and competing-label rejection → two consecutive matches.
+
+Hands use physical pose association where available, otherwise the nearest
+unambiguous visible pose wrist. Left/right mirrored matching accommodates
+dominance, but may erase meaningful asymmetries; this remains experimental.
+Image XY is used, **not mixed cross-model depth**. Facial blendshapes have low
+weight and are not emotion or ASL grammar labels. The full face mesh remains
+visible/probeable but is not all used in this classifier.
+
+Six usable hand/body observations spanning at least 300 ms are required.
+Sequences are trimmed to first/last usable hands, resampled to 16 temporal steps,
+and compared with banded DTW. Missing observations inside a sequence remain masked.
+These windows are not a continuous sentence segmenter. Static poses and natural
+nonsigning need further testing; unknown rejection is not a guarantee.
+
+Matching runs on a separate serial worker, at most one job in flight and at most
+one request per 100 ms. Capture/preview never wait for a matcher. Camera pause,
+switch, interruption, stale frames and hand loss invalidate older results.
+There are no calibrated confidence percentages. The displayed word is tentative.
+
+## Frozen development evaluation — September 19, 2026
+
+Source: [the 196-clip compact corpus](basic-signs-corpus.md).
+Only its 96 official training clips are considered references; 75 pass the
+hand/body temporal quality gate. All 16 labels remain represented, with two to
+six usable references per label. Evaluation retains missing/poor-tracking clips
+in its denominators. Training, validation and test signers are disjoint.
+
+Validation selected max DTW distance **0.08**, minimum relative competing-label
+margin **0.15**. The initial 200 ms request interval displayed 10/32 correct;
+100 ms displayed 11/32. A four-observation/180 ms variant failed the validation
+error constraint and was rejected; the six-observation policy was retained.
+No policy tuning was performed on the test results.
+
+| Streaming replay | Validation | Reserved official test |
+| --- | ---: | ---: |
+| Supported clips | 32 | 48 |
+| Correct label displayed at least once | 11 (34%) | 11 (23%) |
+| Wrong supported label displayed at least once | 1 | 5 |
+| Unsupported clips with any display | 0 / 10 | 0 / 10 |
+
+Correct/wrong counts can overlap within a clip; they are not classifier accuracy
+percentages over frames. HELLO displayed correctly in 3/3 test clips; PLEASE in
+2/3. That is a useful starting point for phone testing, not a claim of general
+reliability. Several labels never displayed correctly in this tiny test.
+Some source videos appeared in earlier experiments, so these results are not a
+fresh project-wide blind evaluation.
+
+Replay uses the actual Swift feature, DTW and rejection code, causally, with
+no future frames and no full-clip oracle at inference. Packing/unpacking private
+training features reproduces the raw-bank validation candidate events exactly.
+The final replay explicitly clears confirmation on every hand/pose-loss frame,
+including frames between requests, matching the live adapter. Correcting this
+replay detail left validation thresholds/correct displays unchanged and removed
+one spurious test wrong-display count (six → five); it was not a model change.
+Wall-clock worker/camera contention and live iPhone acquisition are not simulated.
+Unsupported isolated signs are not representative natural nonsigning.
+
+## Private provisioning, not redistribution
+
+The app bundle and Git contain **no ASL Citizen reference data**. The development
+tool produces a roughly 844 KiB private feature bank. It must only be copied to
+the same user's research phone's Documents container, not teammates, providers,
+a public demo download or a distributed app. On load it is excluded from device
+cloud backups. Delete the file and other personal data when the research ends.
+The [source license](https://www.microsoft.com/en-us/research/project/asl-citizen/dataset-license/)
+requires separate permission/data for distributable or commercial use.
+
+No private bank: the camera still tracks, with “Private references unavailable”.
+The user does not enter a URL, key, or collect reference samples in the UI.
+Provision before launch; quit/reopen if the bank was installed after launch.
+
+From the task checkout (paths are examples; use the canonical existing corpus):
+
+```sh
+python -m backend.basic_live export --corpus ../../.runtime/basic-signs-v1 \
+  --out .runtime/basic-live
+swiftc -O -parse-as-library ios/Signloop/Skeleton.swift \
+  ios/Signloop/BasicSignMatcher.swift ios/Tests/BasicSignReplay.swift \
+  -o .runtime/basic-replay
+.runtime/basic-replay .runtime/basic-live/basic-references.json \
+  .runtime/basic-live/val.json .runtime/basic-live/val-raw.json
+python -m backend.basic_live calibrate --out .runtime/basic-live \
+  --raw .runtime/basic-live/val-raw.json
+.runtime/basic-replay .runtime/basic-live/basic-references.json \
+  --pack .runtime/basic-live/basic-references-packed.json
+# Freeze the policy BEFORE this test; don't tune to its failures.
+.runtime/basic-replay .runtime/basic-live/basic-references-packed.json \
+  .runtime/basic-live/test.json .runtime/basic-live/test-raw.json
+python -m backend.basic_live report --out .runtime/basic-live \
+  --raw .runtime/basic-live/test-raw.json
+# Install the signed app separately, then provision only training features:
+python -m backend.basic_live provision --out .runtime/basic-live \
+  --corpus ../../.runtime/basic-signs-v1 --device DEVICE_ID \
+  --accept-research-license
+```
+
+Synthetic core tests cover identity distance, scale/aspect/translation invariance,
+packing parity, insufficient/empty-input rejection, margins, stability resets and
+held-out-reference refusal. These are software invariants, not human ASL tests.
+Use a Release build on the phone for optimized DTW.
+
+## Build verification
+
+- 101 Python tests passed in the research environment.
+- Swift core suite passed, including 21 new matcher/async-adapter checks and the
+  existing 161 sign-engine checks. The optional Core ML model parity section
+  was not configured and remains skipped.
+- Eight Release simulator UI tests passed: missing-bank fallback, camera
+  permission recovery/contrast, settings/three overlays, inspector, pause,
+  privacy and large text. An old tracking-only assertion was updated for the
+  new caption area; it still verifies that no sign is invented.
+- A separately provisioned simulator loaded the compact bank, showed Unknown
+  with no camera observations, and marked the private file excluded from backup.
+- Signed Release iPhone build 12 passed code-sign verification. Source and app
+  scans found no provider credentials; private reference data is not bundled.
+- Phone installation was attempted but CoreDevice could no longer reach Yeyito;
+  a subsequent device listing reported it unavailable. The phone therefore
+  still needs reconnection, installation and private-bank provisioning.
+
+## Phone check
+
+Stand alone with face, shoulders and hands visible. Begin with HELLO, then PLEASE.
+Try one sign at a time and briefly relax between signs. Compare the tentative
+label with what was actually signed. Also try natural nonsigning, no hands,
+camera switch, pause/resume and poor lighting. Record aggregate observations
+manually, not camera footage. New fluent-signer/live failures are needed before
+claiming useful accuracy or expanding the vocabulary.

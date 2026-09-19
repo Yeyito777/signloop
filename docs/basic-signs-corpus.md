@@ -152,8 +152,10 @@ then test on reserved clips and fresh phone signers. Do not force a nearest word
 when the input is unsupported, idle or uncertain. Continuous sign segmentation
 and transitions need their own evidence.
 
-No backend/transcription or phone recognizer is wired by this task. The working
-build 11 skeleton remains unchanged.
+The dataset preparation task did not change build 11. The subsequent
+[build 12 matching experiment](basic-live-matching.md) consumes private training
+features on-device, without a backend or transcription. Its weak initial replay
+results do not establish reliable recognition of these 16 labels.
 
 ## Research restrictions
 

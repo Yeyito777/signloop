@@ -33,6 +33,7 @@ final class SkeletonCameraTracker: NSObject, ObservableObject, AVCaptureVideoDat
     }
     /// Optional in-process consumers only. No automatic storage or transport.
     var onSkeletonFrame: ((SkeletonFrame) -> Void)?
+    var onSkeletonReset: (() -> Void)?
     private(set) var probeBuffer = SkeletonBuffer() // main thread only
 
     private let queue = DispatchQueue(label: "com.signloop.camera", qos: .userInitiated)
@@ -78,6 +79,7 @@ final class SkeletonCameraTracker: NSObject, ObservableObject, AVCaptureVideoDat
     deinit { observers.forEach(NotificationCenter.default.removeObserver) }
 
     private func clearFrame() {
+        onSkeletonReset?()
         skeleton = nil
         frameAgeMS = nil
         fps = 0

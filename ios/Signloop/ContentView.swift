@@ -6,9 +6,10 @@ private enum CameraTheme {
     static let surface = Color(red: 0.09, green: 0.11, blue: 0.09)
 }
 
-/// Tracking only. No sign classifier, transcription, backend or file export.
+/// Offline experimental sign matching plus the existing skeleton inspector.
 struct ContentView: View {
     @StateObject private var tracker = SkeletonCameraTracker()
+    @StateObject private var recognition = BasicLiveRecognition()
     @Environment(\.scenePhase) private var scenePhase
     @State private var paused = false
     @State private var showSettings = false
@@ -53,14 +54,19 @@ struct ContentView: View {
         .safeAreaInset(edge: .top, spacing: 0) { header }
         .safeAreaInset(edge: .bottom, spacing: 0) { controls }
         .background(.black).foregroundStyle(.white).tint(CameraTheme.primary)
-        .onAppear { tracker.start() }
+        .onAppear {
+            tracker.onSkeletonFrame = { recognition.receive($0) }
+            tracker.onSkeletonReset = { recognition.reset() }
+            recognition.load()
+            tracker.start()
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active && !paused { tracker.start() } else { tracker.pause() }
         }
         .onReceive(clock) { _ in tracker.expireLocalResult() }
         .onDisappear { tracker.pause() }
         .sheet(isPresented: $showSettings) {
-            CameraSettings(tracker: tracker, showTrackingStats: $showTrackingStats)
+            CameraSettings(tracker: tracker, recognition: recognition, showTrackingStats: $showTrackingStats)
                 .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showProbe) {
@@ -84,7 +90,7 @@ struct ContentView: View {
                 }.accessibilityLabel("Settings").accessibilityIdentifier("camera-settings")
             }
             if showTrackingStats {
-                Text("\(tracker.fps) FPS · \(tracker.latencyMS) ms inference · age \(tracker.frameAgeMS.map(String.init) ?? "—") ms")
+                Text("\(tracker.fps) FPS · \(tracker.latencyMS) ms tracking · \(recognition.matchMS) ms match")
                     .font(.system(.caption, design: .monospaced))
                     .padding(10).background(.ultraThinMaterial, in: Capsule())
             }
@@ -94,8 +100,14 @@ struct ContentView: View {
     private var controls: some View {
         VStack(spacing: 12) {
             VStack(spacing: 8) {
-                Text(paused ? "Paused" : "Live skeleton").font(.title3.weight(.semibold))
+                Text(paused ? "Paused" : recognition.ready ? "Possible sign" : "Live skeleton").font(.title3.weight(.semibold))
                     .accessibilityIdentifier("tracking-title")
+                if !paused {
+                    Text(recognition.sign.map(BasicLiveRecognition.display) ?? (recognition.ready ? "Unknown" : "Tracking"))
+                        .font(.title.weight(.bold)).accessibilityIdentifier("current-sign")
+                    Text(recognition.detail).font(.caption).multilineTextAlignment(.center)
+                        .accessibilityIdentifier("recognition-status")
+                }
                 HStack(spacing: 14) {
                     trackingBadge("Hands \(tracker.skeleton?.hands.count ?? 0)/2",
                                   active: !(tracker.skeleton?.hands.isEmpty ?? true))
@@ -104,7 +116,7 @@ struct ContentView: View {
                 }.font(.caption.weight(.semibold))
                 Text(paused ? "Camera and tracking paused" : tracker.status)
                     .font(.caption).multilineTextAlignment(.center).accessibilityIdentifier("tracking-status")
-                Text("Offline tracking only · tap a point to inspect")
+                Text("Offline · 16-sign research preview · tap a point to inspect")
                     .font(.caption2).foregroundStyle(.white.opacity(0.75))
                     .accessibilityIdentifier("analysis-mode")
             }.frame(maxWidth: .infinity).padding(14)
@@ -136,6 +148,7 @@ struct ContentView: View {
 
 private struct CameraSettings: View {
     @ObservedObject var tracker: SkeletonCameraTracker
+    @ObservedObject var recognition: BasicLiveRecognition
     @Binding var showTrackingStats: Bool
     @Environment(\.dismiss) private var dismiss
     var body: some View {
@@ -161,9 +174,13 @@ private struct CameraSettings: View {
                 }
                 Section("What this build does") {
                     Text("Tracks up to two hands, one upper body and one face. Stand alone with your head, hands and hips in view. Hidden or uncertain points are not drawn.")
-                    Text("Facial blendshapes describe movement, not sentiment, emotion or ASL meaning. There is no sign recognition or transcription in this build.")
-                    Text("Offline only: nothing is recorded or sent to a server. A rolling two-second landmark buffer lives only in memory and clears on pause, camera switch or stale capture.")
+                    Text("Experimental temporal matching against 16 reference labels. Unknown means no reliable match, not that you signed incorrectly. No transcription or sentences yet. Facial blendshapes describe movement, not emotions.")
+                    Text("Offline only: nothing is recorded or sent to a server. Up to 2.4 seconds of landmarks stay in memory and clear on pause, camera switch or stale capture.")
                         .accessibilityIdentifier("offline-privacy")
+                }.font(.footnote)
+                Section("Try one sign at a time") {
+                    Text(recognition.labels.map(BasicLiveRecognition.display).joined(separator: " · "))
+                    Text("Frame your face, shoulders and both hands. Sign naturally, then briefly relax. This small research matcher will miss signs and may confuse similar ones; it is not a validated communication aid.")
                 }.font(.footnote)
             }.navigationTitle("Settings").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.frame(minHeight: 44) } }
@@ -216,7 +233,7 @@ private struct SkeletonInspector: View {
                     ForEach(["hands", "pose", "face"], id: \.self) { name in
                         LabeledContent("\(name.capitalized) inference", value: tracker.skeleton?.timingsMS[name].map { String(format: "%.1f ms", $0) } ?? "—")
                     }
-                    Text("Three detectors, same camera frame. No recording, upload, classification or transcription.").font(.footnote)
+                    Text("Three detectors, same camera frame. Offline temporal matching; no recording, upload or transcription.").font(.footnote)
                 }
             }.navigationTitle("Skeleton inspector").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.frame(minHeight: 44) } }

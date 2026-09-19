@@ -37,6 +37,8 @@ final class SingleScreenUITests: XCTestCase {
         XCTAssertTrue(app.buttons["camera-settings"].exists)
         XCTAssertTrue(app.staticTexts["analysis-mode"].label.contains("Offline"))
         XCTAssertFalse(app.staticTexts["Connecting…"].exists)
+        XCTAssertTrue(app.staticTexts["recognition-status"].label.contains("references"))
+        XCTAssertEqual(app.staticTexts["current-sign"].label, "Tracking")
     }
 
     func testCameraRecoveryScreenContrast() throws {
@@ -92,7 +94,9 @@ final class SingleScreenUITests: XCTestCase {
         XCTAssertTrue(app.buttons["skeleton-inspector"].waitForExistence(timeout: 10))
         app.buttons["skeleton-inspector"].tap()
         XCTAssertTrue(app.staticTexts["probe-missing"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.staticTexts["current-sign"].exists)
+        // The underlying camera now has a caption area; without private
+        // references it must remain Tracking, never a fabricated sign.
+        XCTAssertEqual(app.staticTexts["current-sign"].label, "Tracking")
         app.buttons["Done"].tap()
     }
 

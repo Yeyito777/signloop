@@ -48,11 +48,20 @@ intentional for the camera app's Xcode compatibility. See
 No credentials were imported. Client-side `EXPO_PUBLIC_*` keys in the standalone
 prototype are not secret; use the consumer app's backend path for shared builds.
 
-## Standalone native scanner: offline skeleton
+## Standalone native scanner: offline skeleton + experimental matching
 
-The standalone native build uses `SkeletonCameraTracker` and is **tracking only**:
-camera → MediaPipe hand, upper-body and face landmarkers → one synchronized, inspectable skeleton. No sign guesses,
-backend, API key, transcription, recording or uploads.
+The standalone native build uses `SkeletonCameraTracker`:
+camera → MediaPipe hand, upper-body and face landmarkers → one synchronized,
+inspectable skeleton → optional **private 16-label temporal matching**.
+No backend, API key, transcription, recording or uploads.
+
+Build 12 displays tentative **Possible sign / Unknown** results when its private
+research references are provisioned separately. The bank is not in Git or the app
+bundle. The initial reserved replay displayed the correct label in **11/48**
+supported clips, and a wrong label in **5/48**; this is not reliable 16-sign
+recognition. See [matching, tests and private provisioning](docs/basic-live-matching.md).
+Without references, the skeleton still works. This change does not wire the
+separate Expo consumer app's gesture flow.
 
 - Up to two hands, 21 points each.
 - Upper-body pose through the hips (25 original MediaPipe landmark IDs).
