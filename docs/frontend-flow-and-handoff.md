@@ -19,7 +19,7 @@ The menu contains transcript, correction, voice on/off, and end conversation. Sy
 
 ## Behavior implemented for review
 
-- Start enters Conversation with native hand tracking. “Preview sample conversation” explicitly selects the demo: framing → ready → draft → thinking → accepted caption → silent speech preview.
+- Home has one Start conversation action, entering Conversation with native hand tracking. For UI testing, `/conversation?demo=1` explicitly selects the demo: framing → ready → draft → thinking → accepted caption → silent speech preview.
 - Pause stops capture, recognition callbacks, current speech, and queued speech. Resume starts a fresh framing check. Backgrounding the app pauses it; returning requires Resume.
 - Opening a sheet temporarily stops capture and playback. Closing it resumes through framing if the user had been active; an explicit prior pause is preserved. This resumption behavior is a UX choice for review.
 - Only accepted phrases enter the transcript and automatic speech. Drafts and uncertain phrases are never spoken. Stable phrase IDs suppress duplicate acceptance events.
@@ -49,6 +49,14 @@ Merged `origin/main` at `66d403b`, including `BackendClient.swift`, `RemoteRecog
 `TranslationAdapter.start(captureId, emit)` returns a cancellation function. Events are draft, thinking, accepted phrase (stable ID, text, emotion), uncertain, or offline. Framing readiness is independent of language confidence. Connect the scanner/backend stream inside this layer, not inside screens.
 
 On cancel, release sockets/subscriptions and discard unfinished work. The coordinator also ignores stale events. Backend secrets stay off the phone. Before live integration, agree on phrase boundaries, stable IDs, confidence rejection, and supported vocabulary.
+
+### Shared stage and presentation
+
+`src/ui/SharedStage.tsx` renders a single `Avatar` above the route contents and below the sheet portal. Home and Conversation reserve space using `StageSlot`; measured bounds animate the outer container. The render surface stays 240 × 240 logical points while its container moves/scales, so the transition does not remount the future 3D renderer or resize its drawing surface every frame. Both kits should use the same avatar component to preserve that continuity. The Home viewport clips scrolling artwork away from controls. Direct entry works without a source frame; Reduce Motion skips movement.
+
+`CameraGuidance` filters only displayed tracking status (300 ms stable ready, 450 ms changed guidance). Device/permission failures are immediate. Raw scanner events still control recognition cancellation without delay. The guidance only uses diagnoses emitted by the adapter; unsupported states remain explicit demo examples.
+
+`CaptionPanel` keeps the most recently accepted phrase readable during the next draft, framing loss, pause, or errors. A first draft is labeled unspoken. Delivery labels distinguish queued, playing, completed, interrupted, muted and failed playback; the demo always labels simulated playback. Caption height expands into the stage, while the camera keeps its size. Correction updates in place with a brief acknowledgment.
 
 ### Goose
 

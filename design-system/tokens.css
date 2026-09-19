@@ -119,12 +119,14 @@
   --sl-layout-component-gap: 12px;
   --sl-layout-section-gap: 24px;
   --sl-duration-instant: 0ms;
-  --sl-duration-press: 100ms;
+  --sl-duration-press: 85ms;
   --sl-duration-feedback: 160ms;
   --sl-duration-transition: 240ms;
+  --sl-duration-navigation: 280ms;
+  --sl-duration-scene: 440ms;
   --sl-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --sl-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
-  --sl-pressed-offset-y: 1px;
+  --sl-pressed-offset-y: 2px;
   --sl-duration-reduced: 0ms;
   --sl-shadow-action: 0px 3px 0px 0px #49312D;
   --sl-shadow-caption: 3px 3px 0px 0px #DCC480;
@@ -136,5 +138,7 @@
     --sl-duration-press: 0ms;
     --sl-duration-feedback: 0ms;
     --sl-duration-transition: 0ms;
+    --sl-duration-navigation: 0ms;
+    --sl-duration-scene: 0ms;
   }
 }

@@ -105,7 +105,11 @@ Give icon-only controls an action label such as “Pause camera and speech.” T
 
 ## Motion and the future 3D goose
 
-UI timing tokens cover presses (100 ms), small feedback (160 ms), and transitions (240 ms). Pressed movement is at most one point. Reduced motion resolves these durations to zero; use static cues for status rather than requiring continuous animation.
+UI timing tokens cover presses (85 ms), small feedback (160 ms), content transitions (240 ms), navigation (280 ms), and stage travel (440 ms). Controls compress to 97.5% and move down two points, then release with the shared touch spring. Sheets use the more damped sheet spring with no overshoot. Use the same tokens across new controls instead of adding local timings.
+
+Reduce Motion removes movement and animated layout changes; status always has a static text/icon cue. In the mobile app, the shared MotionProvider observes changes to the OS preference. Haptics signal completed taps, never inferred emotions or recognition confidence.
+
+Keep the camera renderer and avatar mounted across state changes. Fade supporting text and overlays; do not animate every word of a streaming draft. Opening a sheet suspends capture and voice immediately, keeps the visible conversation stable beneath the backdrop, and resumes only after dismissal completes. Correction playback starts after the keyboard and sheet close. Content changes within the same sheet resize the existing surface.
 
 The 3D character's modeling, rigging, materials, animation clips, emotion set, and rendering technology belong to the teammate producing it. Those decisions are intentionally not embedded in this design system.
 

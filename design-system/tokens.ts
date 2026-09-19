@@ -185,9 +185,11 @@ export const tokens = {
   "motion": {
     "duration": {
       "instant": 0,
-      "press": 100,
+      "press": 85,
       "feedback": 160,
-      "transition": 240
+      "transition": 240,
+      "navigation": 280,
+      "scene": 440
     },
     "easing": {
       "standard": [
@@ -203,7 +205,20 @@ export const tokens = {
         1
       ]
     },
-    "pressedOffsetY": 1,
+    "pressedOffsetY": 2,
+    "pressedScale": 0.975,
+    "spring": {
+      "touch": {
+        "damping": 18,
+        "stiffness": 360,
+        "mass": 0.55
+      },
+      "sheet": {
+        "damping": 42,
+        "stiffness": 380,
+        "mass": 0.9
+      }
+    },
     "reducedDuration": 0
   },
   "shadow": {
