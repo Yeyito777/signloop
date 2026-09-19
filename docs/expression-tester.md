@@ -14,7 +14,8 @@ The Expo consumer camera remains unchanged.
 3. On each cue card, follow the instruction and tap **Calibrate … · 2 s**.
    Hold a comfortable expression until capture finishes, then relax.
 4. Repeat the movement. **Level** is the smoothed score within the measured
-   range; the white mark and slider set its activation threshold.
+   range; the white mark and slider set its activation threshold. Move the
+   slider left for more sensitivity, or right to reduce unwanted activations.
 5. A single cue must remain above threshold for 300 ms to select its preset.
    Multiple qualifying cues show **Ambiguous**. No qualifying cue shows
    **No clear cue**, and missing tracking shows **No face** or **Signal unavailable**.
@@ -47,17 +48,36 @@ must not be treated as the meaning or tone of a signed phrase.
 ExpressionCues.swift contains a pure Swift state machine independent of
 camera hardware. The view feeds it the existing, freshness-checked
 SkeletonFrame.expressions and capture timestamp. The default raw range is
-0–1 and activation threshold is 0.55. These are tunable starting values.
+0–1. Default activation thresholds are tuned separately after initial phone
+feedback: joy/sadness already responded well; anger/fear/disgust needed more
+sensitivity. These are starting values for further testing, not validated cutoffs.
 
-- Baseline: median of two seconds of relaxed-face observations.
+| Preset | Default activation | Minimum calibration range |
+| --- | --- | --- |
+| Joy | 0.50 | 0.10 |
+| Anger | 0.30 | 0.04 |
+| Fear | 0.25 | 0.04 |
+| Sadness | 0.50 | 0.10 |
+| Disgust | 0.30 | 0.04 |
+
+All five previously used 0.55 activation and a 0.10 minimum range. Existing
+slider overrides still take precedence. Reset calibration/thresholds to return
+to these defaults. The same activation values can be tried immediately with
+the sliders in the previous build; the updated calibration needs a new build.
+
+- Baseline: median of two seconds of relaxed-face observations, plus the
+  90th–10th percentile spread to measure variation at rest.
 - Cue endpoint: 90th percentile of two seconds of that cue. It must exceed the
-  baseline by at least 0.10; otherwise the previous range is preserved and the
-  UI explains that the signal barely changed.
+  baseline by the larger of the cue's minimum range above or five times its
+  relaxed-face spread. This accepts smaller, stable brow/eye/upper-lip movements
+  while rejecting flat or noisy signals. A rejected capture preserves the
+  previous range and explains that the signal barely changed.
 - Normalization: clamp (raw − baseline) / (endpoint − baseline) to 0–1.
-  Uncalibrated endpoints are 1; denominator is bounded below by 0.10.
+  Uncalibrated endpoints are 1; the denominator uses the same minimum-range bound.
 - Smoothing: time-based exponential smoothing with a 120 ms time constant.
 - Activation: one qualifying cue held across fresh observations for 300 ms.
-- Release: threshold minus 0.12, preventing oscillation around activation.
+- Release: threshold minus the smaller of 0.12 or 25% of that threshold.
+  This reduces flicker while letting weaker cues clear when the face relaxes.
 - Conflict: any second qualifying cue clears the selected preset.
 - Missing/non-finite/out-of-range coefficients invalidate the decision.
   Missing bilateral channels are never substituted with zeros.
