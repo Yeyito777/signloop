@@ -244,11 +244,13 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
                                    handednessScore: category?.score ?? 0,
                                    joints: landmarks.map { Joint(x: $0.x, y: $0.y, z: $0.z) })
             }
-            buffer.append(LandmarkFrame(timestampMS: timestamp, hands: detected))
-            let count = buffer.frames.count
             let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
             let width = pixelBuffer.map { CVPixelBufferGetWidth($0) } ?? 720
             let height = pixelBuffer.map { CVPixelBufferGetHeight($0) } ?? 1280
+            buffer.append(LandmarkFrame(timestampMS: timestamp, hands: detected,
+                                        imageAspectRatio: Float(width) / Float(height),
+                                        mirrored: connection.isVideoMirrored))
+            let count = buffer.frames.count
             rateFrames += 1
             var measuredFPS: Int?
             if now - rateStart >= 1 {

@@ -1,5 +1,10 @@
 # Live sign estimates — zero setup in the app
 
+This page describes the existing **zero-shot Jev** path. An opt-in, provider-free
+[reference matcher and local replay tool](recognition-evaluation.md) now exists;
+its [first real-recording benchmark](recognition-baseline-results.md) is not
+accurate enough to replace the deployed path. Research data is not bundled.
+
 The app is a **single full-screen camera**. Open it and the current possible sign
 updates automatically. Pause/resume, camera switching, and a skeleton toggle are
 the primary controls. A top-right settings button controls hand joints, joint
@@ -137,7 +142,7 @@ not logged. No automatic recording/export is performed.
 ## Tests
 
 ```sh
-python3 -m unittest backend.test_service -v
+python3 -m unittest backend.test_service backend.test_matcher -v
 python3 -m backend.test_native        # Swift ↔ HTTP contract, mocked models
 bash ios/scripts/test-core.sh        # normalization, buffer, live stabilization
 python3 -m backend.probe              # opt-in paid live API connectivity checks

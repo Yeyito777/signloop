@@ -15,6 +15,18 @@ request/second with no backlog, stabilization and stale-result rejection.
 **This is experimental zero-shot inference, not validated ASL recognition.**
 See [backend setup, verified models and limitations](docs/backend.md).
 
+## Local reference-matching experiment
+
+The zero-shot path has not demonstrated reliable recognition. A separate
+**nearest-reference + dynamic time warping** backend now supports developer-side
+labeled recordings, signer-disjoint calibration/testing, and inspectable distance
+and rejection diagnostics, without any model API calls. It is opt-in, not an
+automatic replacement for the deployed classifier.
+
+See [local recognition evaluation](docs/recognition-evaluation.md) for replay,
+dataset restrictions, results and the remaining phone-validation requirements.
+No research recordings or derived landmark references are distributed in this repo.
+
 ## Parallel development
 
 Use a separate branch/checkout per task while keeping `yeyito` available:

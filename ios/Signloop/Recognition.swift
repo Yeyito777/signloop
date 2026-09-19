@@ -27,6 +27,8 @@ struct TrackedHand: Codable {
 struct LandmarkFrame: Codable {
     let timestampMS: Int
     let hands: [TrackedHand]
+    var imageAspectRatio: Float? = nil
+    var mirrored: Bool? = nil
 }
 
 struct TemporalBuffer {
