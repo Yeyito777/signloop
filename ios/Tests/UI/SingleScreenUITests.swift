@@ -130,12 +130,18 @@ final class SingleScreenUITests: XCTestCase {
         app.buttons["expression-lab"].tap()
         let slider = app.sliders["expression-threshold-joy"]
         for _ in 0..<6 {
-            if slider.isHittable { break }
+            // SwiftUI can report a partially clipped slider as hittable. Its
+            // whole track must be visible for XCTest's drag to reach the thumb.
+            if slider.isHittable && slider.frame.maxY < app.frame.maxY - 80 { break }
             app.scrollViews.firstMatch.swipeUp()
         }
         XCTAssertTrue(slider.isHittable)
         let before = slider.value as? String
         slider.adjust(toNormalizedSliderPosition: 0.8)
+        let changed = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in slider.value as? String != before }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 5), .completed,
+                       "Dragging the visible slider must change its threshold")
         let value = slider.value as? String
         XCTAssertNotNil(value)
         XCTAssertNotEqual(value, before)
@@ -146,7 +152,7 @@ final class SingleScreenUITests: XCTestCase {
         app.buttons["Done"].tap()
         app.buttons["expression-lab"].tap()
         for _ in 0..<6 {
-            if slider.isHittable { break }
+            if slider.isHittable && slider.frame.maxY < app.frame.maxY - 80 { break }
             app.scrollViews.firstMatch.swipeUp()
         }
         XCTAssertEqual(slider.value as? String, value)
