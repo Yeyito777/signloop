@@ -44,3 +44,14 @@ physical camera switches, sustained FPS, or live recognition accuracy.
 Those require an unlocked phone and a real camera session.
 
 There is no camera data logging, recording, upload, backend, or API key change.
+
+## Build 9 checkpoint — September 19, 2026
+
+- Source `467a701`; signed build installed on Yeyito iPhone at 06:47 local.
+- Core tests, 72 Python tests, native HTTP/DTW/tensor/articulation parity and
+  all six simulator UI tests passed. Task simulator deleted after testing.
+- Source/app scan found neither provider credentials nor private pretrained
+  weights in the binary. Existing separately provisioned Documents weights
+  were not changed by this task.
+- Phone lock check at 06:41 still required the passcode. No launch or
+  camera-performance result is claimed from the successful installation.
