@@ -15,6 +15,7 @@ struct ContentView: View {
     @State private var paused = false
     @State private var showSettings = false
     @AppStorage("showTrackingStats") private var showTrackingStats = false
+    @AppStorage("cloudRecognitionEnabled") private var cloudRecognitionEnabled = false
     private let clock = Timer.publish(every: 0.25, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -57,27 +58,52 @@ struct ContentView: View {
         .tint(CameraTheme.primary)
         .onAppear { tracker.start() }
         .onChange(of: tracker.isRunning) { _, running in
-            if running && !paused && scenePhase == .active { recognition.start(tracker: tracker) }
+            if running && !paused && scenePhase == .active && cloudRecognitionEnabled { recognition.start(tracker: tracker) }
             else { recognition.stop() }
+        }
+        .onChange(of: cloudRecognitionEnabled) { _, enabled in
+            if enabled && tracker.isRunning && !paused && scenePhase == .active {
+                recognition.start(tracker: tracker)
+            } else { recognition.stop() }
         }
         .onChange(of: tracker.hands.count) { _, count in recognition.trackingChanged(hasHands: count > 0) }
         .onChange(of: tracker.isFront) { _, _ in recognition.invalidate() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active && !paused {
                 tracker.start()
-                if tracker.isRunning { recognition.start(tracker: tracker) }
+                if tracker.isRunning && cloudRecognitionEnabled { recognition.start(tracker: tracker) }
             } else {
                 recognition.stop()
                 tracker.pause()
             }
         }
-        .onReceive(clock) { _ in recognition.expireResult() }
+        .onReceive(clock) { _ in recognition.expireResult(); tracker.expireLocalResult() }
         .onDisappear { recognition.stop(); tracker.pause() }
         .sheet(isPresented: $showSettings) {
-            CameraSettings(tracker: tracker, recognition: recognition, showTrackingStats: $showTrackingStats)
+            CameraSettings(tracker: tracker, recognition: recognition, showTrackingStats: $showTrackingStats,
+                           cloudRecognitionEnabled: $cloudRecognitionEnabled)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
+    }
+
+    private var displayedSign: String {
+        if paused { return "Paused" }
+        if tracker.permissionDenied { return "Camera access needed" }
+        if tracker.errorMessage != nil { return "Camera unavailable" }
+        if !tracker.isRunning { return "Starting…" }
+        if tracker.localSign == "I_LOVE_YOU" { return "I love you" }
+        if tracker.hands.isEmpty { return "No hands" }
+        return cloudRecognitionEnabled ? recognition.currentSign : "Unknown"
+    }
+
+    private var displayedStatus: String {
+        if paused { return "Camera and recognition paused" }
+        if tracker.permissionDenied { return "Enable Camera in Settings to continue" }
+        if tracker.errorMessage != nil { return "Tap the camera message to retry" }
+        if tracker.localSign != nil { return "Possible ILY handshape · on-device" }
+        if cloudRecognitionEnabled { return recognition.status }
+        return "Try ILY: thumb, index and pinky extended"
     }
 
     private var header: some View {
@@ -90,6 +116,7 @@ struct ContentView: View {
                         .frame(width: 48, height: 48)
                         .background(.ultraThinMaterial, in: Circle())
                 }.accessibilityLabel("Settings")
+                    .accessibilityIdentifier("camera-settings")
             }
             if showTrackingStats {
                 HStack(spacing: 14) {
@@ -109,15 +136,18 @@ struct ContentView: View {
             VStack(spacing: 8) {
                 Text("CURRENT SIGN").font(.caption.weight(.semibold)).tracking(2)
                     .foregroundStyle(CameraTheme.primary)
-                Text(paused ? "Paused" : recognition.currentSign)
+                Text(displayedSign)
                     .font(.system(size: 44, weight: .semibold, design: .rounded))
                     .minimumScaleFactor(0.5).lineLimit(2).multilineTextAlignment(.center)
                     .contentTransition(.numericText())
-                    .accessibilityLabel("Current possible sign: \(recognition.currentSign)")
-                Text(recognition.status).font(.subheadline)
+                    .accessibilityLabel("Current possible sign: \(displayedSign)")
+                    .accessibilityIdentifier("current-sign")
+                Text(displayedStatus).font(.subheadline)
                     .foregroundStyle(.white.opacity(0.7)).multilineTextAlignment(.center)
-                Text("Experimental · landmarks analyzed in the cloud")
+                    .accessibilityIdentifier("recognition-status")
+                Text(cloudRecognitionEnabled ? "Experimental · local + cloud analysis" : "Offline preview · ILY handshape only")
                     .font(.caption2).foregroundStyle(.white.opacity(0.55))
+                    .accessibilityIdentifier("analysis-mode")
             }.frame(maxWidth: .infinity).padding(.vertical, 22).padding(.horizontal, 16)
                 .background(CameraTheme.surface.opacity(0.92), in: RoundedRectangle(cornerRadius: 28))
             HStack(spacing: 12) {
@@ -131,6 +161,7 @@ struct ContentView: View {
                         .foregroundStyle(CameraTheme.onPrimary)
                         .background(CameraTheme.primary, in: Capsule())
                 }
+                .accessibilityIdentifier("pause-resume")
                 Button { recognition.invalidate(); tracker.flipCamera() } label: {
                     Image(systemName: "arrow.triangle.2.circlepath.camera")
                         .font(.system(size: 22)).frame(width: 56, height: 56)
@@ -147,6 +178,7 @@ private struct CameraSettings: View {
     @ObservedObject var tracker: CameraTracker
     @ObservedObject var recognition: RemoteRecognition
     @Binding var showTrackingStats: Bool
+    @Binding var cloudRecognitionEnabled: Bool
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -170,9 +202,13 @@ private struct CameraSettings: View {
                     LabeledContent("Last sign request", value: recognition.latencyMS > 0 ? "\(recognition.latencyMS) ms" : "—")
                 }
                 Section("Live sign estimates") {
-                    Text("Sign estimates update automatically. Unsupported or uncertain gestures show Unknown.")
-                    Text("Hand coordinates are analyzed in the cloud while the camera is active. No camera images or video are sent. Pause stops new requests.")
-                    Text("Experimental, not validated ASL translation. Faces and body context are not tracked.")
+                    Toggle("Experimental cloud signs", isOn: $cloudRecognitionEnabled)
+                    Text("The ILY handshape is recognized on your iPhone. Hold one hand in view: thumb, index and pinky extended; middle and ring folded. No Mac, network, recording or setup is needed.")
+                    Text("Other signs are not supported locally yet. Thumbs-up is not treated as ASL YES, and an open palm is not treated as HELLO.")
+                    Text(cloudRecognitionEnabled
+                         ? "Hand coordinates are sent to the configured backend and model provider. This needs a working backend/network. No camera images or video are sent; Pause stops new requests."
+                         : "Cloud analysis is off. Camera images and hand coordinates stay on your iPhone.")
+                    Text("Limited gesture preview, not validated ASL translation. Faces and body context are not tracked.")
                 }.font(.footnote).foregroundStyle(.secondary)
             }
             .navigationTitle("Settings")

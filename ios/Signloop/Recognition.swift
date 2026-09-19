@@ -78,6 +78,42 @@ struct LiveSignFilter {
     mutating func reset() { pending = nil; count = 0 }
 }
 
+/// Canned gesture labels are NOT an ASL vocabulary. Only the supported
+/// one-handed ILY handshape maps to a label; never map Thumb_Up to YES, etc.
+struct LocalHandGesture: Codable {
+    let label: String
+    let score: Float
+    let runner: Float
+}
+
+struct LocalGestureFilter {
+    private var since: Int?
+    private var last: Int?
+    private var count = 0
+
+    mutating func update(_ hands: [LocalHandGesture], timestampMS: Int) -> String? {
+        guard timestampMS >= 0 else { reset(); return nil }
+        if let last, timestampMS <= last || timestampMS - last > 150 {
+            since = nil
+            count = 0
+        }
+        last = timestampMS
+        guard hands.count == 1, let hand = hands.first,
+              hand.label == "ILoveYou", hand.score.isFinite, hand.runner.isFinite,
+              (0...1).contains(hand.score), (0...1).contains(hand.runner),
+              hand.score >= 0.85, hand.score - hand.runner >= 0.2 else {
+            since = nil
+            count = 0
+            return nil
+        }
+        if since == nil { since = timestampMS }
+        count += 1
+        return count >= 3 && timestampMS - (since ?? timestampMS) >= 150 ? "I_LOVE_YOU" : nil
+    }
+
+    mutating func reset() { since = nil; last = nil; count = 0 }
+}
+
 /// Aspect-fill mapping shared by portrait video and the joint overlay.
 func overlayPoint(_ joint: Joint, sourceWidth: Double, sourceHeight: Double,
                   viewWidth: Double, viewHeight: Double) -> (Double, Double) {

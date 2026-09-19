@@ -2,18 +2,27 @@
 
 Hack the North · limited-vocabulary ASL-to-English prototype.
 
-## One-screen live sign estimates
+## One-screen offline handshape preview
 
-Open the app, put your hands in view, and see the **current possible sign** update
+Open the app, put one hand in view, and see the **current possible sign** update
 automatically over the full-screen camera. No settings workflow, reference
 capture, saving, or Analyze button. Pause/flip stay on the camera; the top-right
 settings button controls hand joints, joint numbers and tracking stats.
 
-MediaPipe runs locally; a server-only Backboard adapter asks Jev to evaluate a
-recent landmark window using built-in sign descriptions. It targets roughly one
-request/second with no backlog, stabilization and stale-result rejection.
-**This is experimental zero-shot inference, not validated ASL recognition.**
-See [backend setup, verified models and limitations](docs/backend.md).
+**The default offline preview currently recognizes only the ILY (“I love you”)
+handshape.** Extend thumb, index and pinky; fold middle and ring. Other signs are
+not supported locally yet. It requires no Mac, network or API key and does not
+upload images or landmarks. Thumbs-up is never relabeled as ASL YES.
+
+MediaPipe's pretrained Gesture Recognizer supplies both real landmarks and
+handshape estimates. This is not a general ASL model. See
+[the local evaluation and limitations](docs/local-gesture-preview.md).
+
+An optional **Experimental cloud signs** toggle retains the previous backend/Jev
+path. It is off by default; enabling it uploads recent landmark windows to the
+configured backend/provider. Its broader vocabulary remains unvalidated.
+See [backend setup](docs/backend.md). Completing a reliable multi-sign recognizer
+and validating live iPhone signing remain open project goals.
 
 ## Local reference-matching experiment
 
@@ -44,16 +53,19 @@ isolation, safety checks, and the create/clean smoke test.
 
 ## Developer MVP: real on-device hand tracking
 
-Native iPhone app with **Google MediaPipe Hand Landmarker**, not simulated joints.
-Hand tracking works locally. Live sign estimates require the provisioned Mac
-backend and network; provider API keys are never embedded in the phone.
+Native iPhone app with **Google MediaPipe Gesture Recognizer**, including its
+real hand-landmark model, not simulated joints. Tracking and the ILY preview work
+locally. Only optional cloud inference needs the backend; provider API keys are
+never embedded in the phone.
 
 - Live front/rear camera, portrait orientation and mirrored selfie preview.
 - Up to two hands, 21 joints per hand and an optional colored skeleton.
 - Camera-first Material-inspired design with a single current-sign overlay.
 - Persistent overlay preferences in the top-right settings sheet.
 - Pause/resume, permission handling, background suspension.
-- Two-second memory buffer; latest 1.2 seconds used for automatic inference.
+- Two-second memory buffer; optional cloud inference uses the latest 1.2 seconds.
+- On-device ILY handshape scoring, minimum 150 ms evidence, immediate rejection
+  clearing and a stalled-camera watchdog. Model scores are not sign probabilities.
 - Replaceable classifier protocol. The default unconfigured classifier returns
   `unknown`. Jev uses built-in criteria, not saved user examples. Uncertain or
   unsupported inputs show Unknown; this is **not validated ASL translation**.
@@ -73,9 +85,11 @@ Choose your Apple development team in Signing & Capabilities, select your connec
 and Run. Trust the Mac, enable Developer Mode, and allow camera access when asked.
 The bundle identifier is `com.yeyito.signloop`; change it if your team requires a unique ID.
 
-The bootstrap script downloads Google's pinned **MediaPipe 0.10.21** static XCFrameworks
-and the **Hand Landmarker float16 v1** model. These large artifacts and the generated Xcode
-project are ignored by Git. Google Apache license files ship in the downloaded Vendor folders.
+The bootstrap script downloads Google's pinned **MediaPipe 0.10.21** static XCFrameworks,
+the **Gesture Recognizer float16 v1** bundle (SHA-256 checked), and the Hand Landmarker
+model used by research tools (excluded from the app to avoid duplicate model assets).
+Large artifacts and the generated Xcode project are ignored by Git. SDK license
+notices are copied from Vendor into the app's resources.
 The app links the device/simulator graph archive explicitly, matching Google's CocoaPods spec.
 
 ```sh
@@ -96,7 +110,8 @@ xcodebuild -project Signloop.xcodeproj -scheme Signloop \
 3. Add a second hand, then remove both; the skeleton/current sign should clear.
 4. Try each camera; check overlay alignment, mirroring and left/right labels.
 5. Pause/resume and background/foreground the app; no stale signs should persist.
-6. Test live supported signs and unsupported gestures; no manual capture is needed.
+6. Test the one-handed ILY handshape, all other canned gestures, hand removal,
+   camera switching and low light. Other words are not supported locally yet.
 7. Test with another person. **Do not interpret hand tracking as sign-recognition validation.**
 
 ### Implementation

@@ -1,6 +1,8 @@
 # Live sign estimates — zero setup in the app
 
-This page describes the existing **zero-shot Jev** path. An opt-in, provider-free
+The app now defaults to an [offline ILY handshape preview](local-gesture-preview.md).
+This page describes the optional **Experimental cloud signs / zero-shot Jev** path.
+An opt-in, provider-free
 [reference matcher and local replay tool](recognition-evaluation.md) now exists;
 its [first real-recording benchmark](recognition-baseline-results.md) is not
 accurate enough to replace the deployed path. Research data is not bundled.
@@ -127,7 +129,8 @@ Other endpoints require `Authorization: Bearer <SIGNLOOP_BACKEND_TOKEN>`:
 Reference-save endpoints have been removed. Live frames/sign histories are not
 written to disk. Only a short landmark window is held in memory.
 
-No images or video are sent. While the app is active and unpaused, **landmark
+No images or video are sent. **Only when Experimental cloud signs is enabled**,
+while the app is active and unpaused, **landmark
 coordinates are automatically sent to the Mac and Backboard/TypeSafe**. The
 single-screen UI discloses cloud analysis. Pausing/backgrounding stops new
 requests; an already submitted upstream call may finish.
@@ -142,7 +145,7 @@ not logged. No automatic recording/export is performed.
 ## Tests
 
 ```sh
-python3 -m unittest backend.test_service backend.test_matcher backend.test_hand_tracking -v
+python3 -m unittest backend.test_service backend.test_matcher backend.test_hand_tracking backend.test_static -v
 python3 -m backend.test_native        # Swift ↔ HTTP contract, mocked models
 bash ios/scripts/test-core.sh        # normalization, buffer, live stabilization
 python3 -m backend.probe              # opt-in paid live API connectivity checks

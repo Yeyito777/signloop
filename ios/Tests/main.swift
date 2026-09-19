@@ -5,6 +5,32 @@ func expect(_ condition: Bool, _ message: String) {
     print("PASS: \(message)")
 }
 
+let ily = LocalHandGesture(label: "ILoveYou", score: 0.95, runner: 0.03)
+var local = LocalGestureFilter()
+expect(local.update([ily], timestampMS: 0) == nil, "Local gesture waits for temporal evidence")
+expect(local.update([ily], timestampMS: 75) == nil, "Local gesture requires minimum hold duration")
+expect(local.update([ily], timestampMS: 150) == "I_LOVE_YOU", "Stable ILY handshape is accepted locally")
+expect(local.update([], timestampMS: 180) == nil, "No hands immediately clears local gesture")
+for label in ["Thumb_Up", "Closed_Fist", "Open_Palm", "Victory", "Pointing_Up", "None"] {
+    local.reset()
+    _ = local.update([LocalHandGesture(label: label, score: 1, runner: 0)], timestampMS: 0)
+    _ = local.update([LocalHandGesture(label: label, score: 1, runner: 0)], timestampMS: 75)
+    expect(local.update([LocalHandGesture(label: label, score: 1, runner: 0)], timestampMS: 150) == nil,
+           "Canned \(label) is never relabeled as an ASL sign")
+}
+local.reset()
+_ = local.update([ily], timestampMS: 0)
+_ = local.update([ily], timestampMS: 75)
+expect(local.update([ily], timestampMS: 400) == nil, "Stalled frame gap resets local evidence")
+expect(local.update([ily], timestampMS: 399) == nil, "Nonmonotonic local timestamps reset evidence")
+expect(local.update([ily, ily], timestampMS: 450) == nil, "Single-hand model does not infer compound signs")
+expect(local.update([LocalHandGesture(label: "ILoveYou", score: .nan, runner: 0)], timestampMS: 500) == nil,
+       "Nonfinite local scores are rejected")
+expect(local.update([LocalHandGesture(label: "ILoveYou", score: 0.8, runner: 0.1)], timestampMS: 550) == nil,
+       "Weak ILY estimates are rejected")
+expect(local.update([LocalHandGesture(label: "ILoveYou", score: 0.9, runner: 0.75)], timestampMS: 600) == nil,
+       "Ambiguous ILY estimates are rejected")
+
 var points = Array(repeating: Joint(x: 0.5, y: 0.5, z: 0), count: 21)
 points[9] = Joint(x: 0.5, y: 0.75, z: 0)
 points[8] = Joint(x: 0.75, y: 0.25, z: -0.1)

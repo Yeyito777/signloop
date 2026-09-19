@@ -10,7 +10,7 @@ settings:
     CODE_SIGN_STYLE: Automatic
     PRODUCT_BUNDLE_IDENTIFIER: com.yeyito.signloop
     MARKETING_VERSION: "0.1.0"
-    CURRENT_PROJECT_VERSION: "4"
+    CURRENT_PROJECT_VERSION: "5"
     ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     OTHER_LDFLAGS:
       - $(inherited)
@@ -26,7 +26,9 @@ targets:
       base:
         TARGETED_DEVICE_FAMILY: "1"
     sources:
-      - Signloop
+      - path: Signloop
+        excludes:
+          - Resources/hand_landmarker.task
     info:
       path: Signloop/Info.plist
       properties:
@@ -60,8 +62,26 @@ targets:
       - sdk: MetalKit.framework
       - sdk: QuartzCore.framework
       - sdk: Security.framework
+  SignloopUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - Tests/UI
+    dependencies:
+      - target: Signloop
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Signloop
+        PRODUCT_BUNDLE_IDENTIFIER: com.yeyito.signloop.uitests
+        OTHER_LDFLAGS: ""
+        "OTHER_LDFLAGS[sdk=iphoneos*]": ""
+        "OTHER_LDFLAGS[sdk=iphonesimulator*]": ""
 schemes:
   Signloop:
     build:
       targets:
         Signloop: all
+    test:
+      targets:
+        - SignloopUITests
