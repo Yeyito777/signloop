@@ -1,0 +1,101 @@
+import { File as CacheFile, Paths } from 'expo-file-system';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Platform } from 'react-native';
+import { voiceConfig } from '../voice/config.ts';
+import { prepareSpeechText, speakEnglish, VoiceError } from '../voice/elevenlabs.ts';
+import { playClip, unlockPlayback } from '../voice/playClip.ts';
+
+export type VoiceStatus = 'idle' | 'loading' | 'speaking' | 'error';
+
+type CachedClip = { uri: string; release: () => void };
+
+function cacheSpeechAudio(buffer: ArrayBuffer): CachedClip {
+  if (Platform.OS === 'web') {
+    const uri = URL.createObjectURL(new Blob([buffer], { type: 'audio/mpeg' }));
+    return { uri, release: () => URL.revokeObjectURL(uri) };
+  }
+  const file = new CacheFile(Paths.cache, `goose-voice-${Date.now()}.mp3`);
+  file.create({ overwrite: true });
+  file.write(new Uint8Array(buffer));
+  return { uri: file.uri, release: () => { if (file.exists) file.delete(); } };
+}
+
+export function useGooseVoice() {
+  const [status, setStatus] = useState<VoiceStatus>('idle');
+  const [error, setError] = useState<string | null>(null);
+  const [lastSpoken, setLastSpoken] = useState<string | null>(null);
+  const requestId = useRef(0);
+  const stopPlayback = useRef<(() => void) | null>(null);
+  const clipRef = useRef<CachedClip | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const releaseClip = useCallback(() => {
+    stopPlayback.current?.();
+    stopPlayback.current = null;
+    clipRef.current?.release();
+    clipRef.current = null;
+  }, []);
+
+  const stop = useCallback(() => {
+    requestId.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    releaseClip();
+    setStatus('idle');
+  }, [releaseClip]);
+
+  const speak = useCallback(async (text: string) => {
+    if (!voiceConfig.voiceConfigured) {
+      setError(voiceConfig.setupMessage);
+      setStatus('error');
+      return;
+    }
+
+    unlockPlayback();
+    const id = ++requestId.current;
+    abortRef.current?.abort();
+    const abort = new AbortController();
+    abortRef.current = abort;
+    releaseClip();
+    setError(null);
+    setStatus('loading');
+
+    try {
+      const spoken = prepareSpeechText(text);
+      const buffer = await speakEnglish(spoken, abort.signal);
+      if (id !== requestId.current) return;
+      const clip = cacheSpeechAudio(buffer);
+      clipRef.current = clip;
+      const playback = await playClip(clip.uri, () => {
+        if (id === requestId.current) setStatus('idle');
+      });
+      if (id !== requestId.current) {
+        playback.stop();
+        return;
+      }
+      stopPlayback.current = playback.stop;
+      setLastSpoken(spoken);
+      setStatus('speaking');
+    } catch (caught) {
+      if (id !== requestId.current || abort.signal.aborted) return;
+      setError(caught instanceof VoiceError ? caught.message : 'Mr. Goose could not speak that line.');
+      setStatus('error');
+    }
+  }, [releaseClip]);
+
+  useEffect(() => () => {
+    requestId.current += 1;
+    abortRef.current?.abort();
+    releaseClip();
+  }, [releaseClip]);
+
+  return {
+    status,
+    error,
+    lastSpoken,
+    configured: voiceConfig.voiceConfigured,
+    setupMessage: voiceConfig.setupMessage,
+    speak,
+    stop,
+  };
+}

@@ -1,6 +1,8 @@
 # Mr. Goose
 
-A small Expo + React Native + TypeScript character preview. The repository was empty, so this starts from the dependency versions in Expo's blank TypeScript template (SDK 57). No audio, permissions, accounts, navigation, or backend.
+A small Expo + React Native + TypeScript character preview. The repository was empty, so this starts from the dependency versions in Expo's blank TypeScript template (SDK 57). No accounts, navigation, or backend.
+
+There is a local ElevenLabs voice prototype on the preview screen. A text field stands in for English that ASR will later produce. `speakEnglish` in `src/voice/elevenlabs.ts` is the seam future ASR should call.
 
 ## Preview on an iPhone
 
@@ -26,7 +28,26 @@ import { MrGoose } from './src/components/MrGoose';
 - `src/components/goose/GooseScene.tsx`: rounded shape sizes/positions, front and fill lights, framing, and the soft ground shadow. The head, body, wings, eye groups, and upper/lower beak are separate. Each eye's two highlights are children of its blink group.
 - `src/components/goose/motion.ts`: small pure functions for the idle pose and animation clock.
 - `src/components/MrGoose.tsx`: reusable component, Canvas lifecycle, animation-enabled prop, and rendering fallback.
-- `src/screens/GoosePreview.tsx`: safe-area screen and independent Pause/Resume control.
+- `src/screens/GoosePreview.tsx`: safe-area screen, Pause/Resume, and the ASR-stand-in Speak control.
+- `src/voice/elevenlabs.ts`: request builder and `speakEnglish` TTS call.
+- `src/hooks/useGooseVoice.ts`: cache the MP3, play it with `expo-audio`, and stop or replace the clip.
+
+## Goose voice (local prototype)
+
+This is not real speech recognition. Type the English line ASR would have emitted, then tap **Speak**.
+
+1. Copy `.env.example` to `.env`.
+2. In the ElevenLabs website, open your custom goose voice and copy its **Voice ID**.
+3. Paste your API key and that voice id:
+
+```
+EXPO_PUBLIC_ELEVENLABS_API_KEY=...
+EXPO_PUBLIC_ELEVENLABS_VOICE_ID=...
+```
+
+4. Restart Expo so Metro picks up the env vars (`npm start`, or `npm run web`).
+
+The key stays on this machine. Do not commit `.env` or ship this client-side key in a shared build. When real ASR exists, it should pass its English string into `speakEnglish` instead of the text field.
 
 Animation uses frame deltas and a local clock, not timers. Pausing preserves the pose and switches Canvas to on-demand rendering; resuming continues from that pose. Backgrounding also stops continuous rendering. iOS Reduce Motion (Settings → Accessibility → Motion) takes priority over the button and resets to a still, open-eyed pose. Preference and lifecycle listeners are removed on unmount. React Three Fiber unregisters frame callbacks and disposes declarative geometries/materials when Canvas unmounts.
 
