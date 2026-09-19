@@ -6,8 +6,9 @@ Hack the North · limited-vocabulary ASL-to-English prototype.
 
 The [Playroom design system](design-system/README.md) contains the agreed visual foundation,
 portable tokens, React Native text styles, CSS variables, and reusable UI icons.
-Screen layouts are still drafts. A teammate is developing the future 3D goose;
-the design system keeps character rendering and animation assets replaceable.
+Screen layouts are still drafts. The imported [3D goose prototype](goose/README.md)
+includes animation and experimental voice; the design system keeps character
+rendering and animation assets replaceable.
 
 ## Consumer mobile app: initial screens
 
@@ -24,6 +25,20 @@ npm run ios
 ```
 
 This generates `mobile/ios/` separately from the native scanner prototype below.
+
+## Goose and voice prototype
+
+Sanvi's character, emotion animation, lip sync, and ElevenLabs voice experiment
+are preserved in [`goose/`](goose/README.md), with their own lockfile and tests.
+Run `npm ci`, `npm run typecheck`, and `npm test` from that directory.
+
+This is a **separate Expo 57 preview**, not yet wired into the Expo 55 consumer
+app. Do not copy its dependency manifest over `mobile/package.json`: SDK 55 is
+intentional for the camera app's Xcode compatibility. See
+[combined branch status](docs/branch-integration.md) for integration boundaries.
+No credentials were imported. Client-side `EXPO_PUBLIC_*` keys are not secret;
+move provider authentication to a backend before distributing voice-enabled builds.
+
 ## One-screen offline handshape preview
 
 Open the app, put one hand in view, and see the **current possible sign** update
