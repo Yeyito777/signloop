@@ -39,6 +39,11 @@ final class SingleScreenUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Connecting…"].exists)
     }
 
+    func testCameraRecoveryScreenContrast() throws {
+        XCTAssertTrue(app.buttons["Allow camera in Settings"].waitForExistence(timeout: 10))
+        try app.performAccessibilityAudit(for: .contrast)
+    }
+
     func testOverlayPreferencePersistsAfterRelaunch() {
         let settings = app.buttons["camera-settings"]
         XCTAssertTrue(settings.waitForExistence(timeout: 10))

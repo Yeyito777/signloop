@@ -45,6 +45,7 @@ struct ContentView: View {
                     Button("Allow camera in Settings") {
                         UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!)
                     }.buttonStyle(.borderedProminent)
+                        .foregroundStyle(CameraTheme.onPrimary)
                 }.padding(24).background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24))
             } else if tracker.errorMessage != nil {
                 Button("Camera unavailable · tap to retry") { tracker.start() }

@@ -103,10 +103,12 @@ this single static handshape.
 
 ## UI regression coverage
 
-Five XCUITest cases passed on a disposable iOS 26.3 simulator: declining the real
+Six XCUITest cases passed on a disposable iOS 26.3 simulator: declining the real
 Camera permission prompt and finding recovery controls; overlay preference
 persistence; pause/resume without a backend; explicit cloud opt-in/off; and
-reachable main controls at accessibility-extra-large text size. These tests skip
+reachable main controls at accessibility-extra-large text size; and a native
+accessibility contrast audit. Visual QA caught and fixed white text on the mint
+camera-permission button; its text now uses the dark on-primary color. These tests skip
 physical phones so XCTest attachments cannot record a real camera feed.
 
 ```sh
