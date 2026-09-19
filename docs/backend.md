@@ -2,8 +2,9 @@
 
 The app is a **single full-screen camera**. Open it and the current possible sign
 updates automatically. Pause/resume, camera switching, and a skeleton toggle are
-the only controls. No backend settings screen, reference recording, saving, or
-Analyze button.
+the primary controls. A top-right settings button controls hand joints, joint
+numbers and tracking stats. No backend configuration screen, reference recording,
+saving, or Analyze button.
 
 ## What actually runs
 
@@ -60,6 +61,28 @@ is for a trusted network only. Production deployment requires HTTPS and proper
 service hosting. No production daemon is installed by these scripts.
 
 For worktrees use `--env-file /private/path/.env` and a distinct port.
+
+### Removing the Mac / same-Wi-Fi requirement
+
+The LAN dependency is only the current backend's location, not MediaPipe.
+Deploy the included `Dockerfile` to an HTTPS container host and inject
+`BACKBOARD_API_KEY`, `SIGNLOOP_BACKEND_TOKEN`, and optionally `CEREBRAS_MODEL`
+as server-side secrets/environment variables. The container listens on 8080.
+Keep deployment concurrency low and configure request/billing limits. The
+development HTTP handler is appropriate only behind the host's HTTPS ingress
+and demo-level access protection, not as a hardened public API.
+
+Then provision the phone without putting any provider key in its binary:
+
+```sh
+python3 -m backend.pair_phone --device Yeyito --url https://YOUR-HOSTED-ENDPOINT
+```
+
+The phone subsequently talks directly to that HTTPS service over Wi-Fi or
+cellular; the Mac can be off. Only the backend access token goes to Keychain.
+`.dockerignore` excludes credentials, iOS build assets and all other repository
+files. Deploying requires an authenticated hosting account and billing approval;
+**the presence of the Dockerfile does not mean the backend is deployed**.
 
 ## Verified gateway
 

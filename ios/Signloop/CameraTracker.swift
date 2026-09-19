@@ -17,8 +17,12 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     @Published private(set) var fps = 0
     @Published private(set) var bufferedFrames = 0
     @Published private(set) var frameSize = CGSize(width: 720, height: 1280)
-    @Published var showJoints = false
-    @Published var showNumbers = false
+    @Published var showJoints = UserDefaults.standard.bool(forKey: "showHandJoints") {
+        didSet { UserDefaults.standard.set(showJoints, forKey: "showHandJoints") }
+    }
+    @Published var showNumbers = UserDefaults.standard.bool(forKey: "showJointNumbers") {
+        didSet { UserDefaults.standard.set(showNumbers, forKey: "showJointNumbers") }
+    }
     @Published private(set) var snapshotURL: URL?
 
     private let queue = DispatchQueue(label: "com.signloop.camera", qos: .userInitiated)

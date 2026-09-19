@@ -6,7 +6,8 @@ Hack the North · limited-vocabulary ASL-to-English prototype.
 
 Open the app, put your hands in view, and see the **current possible sign** update
 automatically over the full-screen camera. No settings workflow, reference
-capture, saving, or Analyze button. Pause, flip camera, and toggle the skeleton.
+capture, saving, or Analyze button. Pause/flip stay on the camera; the top-right
+settings button controls hand joints, joint numbers and tracking stats.
 
 MediaPipe runs locally; a server-only Backboard adapter asks Jev to evaluate a
 recent landmark window using built-in sign descriptions. It targets roughly one
@@ -38,6 +39,7 @@ backend and network; provider API keys are never embedded in the phone.
 - Live front/rear camera, portrait orientation and mirrored selfie preview.
 - Up to two hands, 21 joints per hand and an optional colored skeleton.
 - Camera-first Material-inspired design with a single current-sign overlay.
+- Persistent overlay preferences in the top-right settings sheet.
 - Pause/resume, permission handling, background suspension.
 - Two-second memory buffer; latest 1.2 seconds used for automatic inference.
 - Replaceable classifier protocol. The default unconfigured classifier returns

@@ -13,6 +13,8 @@ struct ContentView: View {
     @StateObject private var recognition = RemoteRecognition()
     @Environment(\.scenePhase) private var scenePhase
     @State private var paused = false
+    @State private var showSettings = false
+    @AppStorage("showTrackingStats") private var showTrackingStats = false
     private let clock = Timer.publish(every: 0.25, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -22,7 +24,7 @@ struct ContentView: View {
                     Color.black
                     CameraPreview(session: tracker.session, mirrored: tracker.isFront)
                     if tracker.showJoints && tracker.isRunning && !paused {
-                        JointOverlay(hands: tracker.hands, sourceSize: tracker.frameSize, showNumbers: false)
+                        JointOverlay(hands: tracker.hands, sourceSize: tracker.frameSize, showNumbers: tracker.showNumbers)
                     }
                     LinearGradient(stops: [
                         .init(color: .black.opacity(0.6), location: 0),
@@ -71,17 +73,34 @@ struct ContentView: View {
         }
         .onReceive(clock) { _ in recognition.expireResult() }
         .onDisappear { recognition.stop(); tracker.pause() }
+        .sheet(isPresented: $showSettings) {
+            CameraSettings(tracker: tracker, recognition: recognition, showTrackingStats: $showTrackingStats)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
     }
 
     private var header: some View {
-        HStack(spacing: 12) {
-            Text("signloop").font(.title2.weight(.semibold)).tracking(-0.6)
-            Spacer()
-            HStack(spacing: 6) {
-                Circle().fill(recognition.live ? CameraTheme.primary : .gray).frame(width: 6, height: 6)
-                Text(paused ? "PAUSED" : "LIVE").font(.caption.weight(.bold)).tracking(1)
-            }.padding(.horizontal, 14).padding(.vertical, 10)
-                .background(.ultraThinMaterial, in: Capsule())
+        VStack(spacing: 8) {
+            HStack(spacing: 12) {
+                Text("signloop").font(.title2.weight(.semibold)).tracking(-0.6)
+                Spacer()
+                Button { showSettings = true } label: {
+                    Image(systemName: "gearshape.fill").font(.system(size: 21))
+                        .frame(width: 48, height: 48)
+                        .background(.ultraThinMaterial, in: Circle())
+                }.accessibilityLabel("Settings")
+            }
+            if showTrackingStats {
+                HStack(spacing: 14) {
+                    Label("\(tracker.hands.count) hands", systemImage: "hand.raised")
+                    Text("\(tracker.fps) FPS")
+                    Text("\(tracker.latencyMS) ms tracking")
+                    Spacer(minLength: 0)
+                }.font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .padding(10).background(.ultraThinMaterial, in: Capsule())
+                    .accessibilityElement(children: .combine)
+            }
         }.padding(.horizontal, 24).padding(.top, 12).padding(.bottom, 8)
     }
 
@@ -112,11 +131,6 @@ struct ContentView: View {
                         .foregroundStyle(CameraTheme.onPrimary)
                         .background(CameraTheme.primary, in: Capsule())
                 }
-                Button { tracker.showJoints.toggle() } label: {
-                    Image(systemName: tracker.showJoints ? "hand.draw.fill" : "hand.draw")
-                        .font(.system(size: 22)).frame(width: 56, height: 56)
-                        .background(CameraTheme.container, in: Circle())
-                }.accessibilityLabel("Toggle hand skeleton")
                 Button { recognition.invalidate(); tracker.flipCamera() } label: {
                     Image(systemName: "arrow.triangle.2.circlepath.camera")
                         .font(.system(size: 22)).frame(width: 56, height: 56)
@@ -126,5 +140,48 @@ struct ContentView: View {
         }
         .frame(maxWidth: 520)
         .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 12)
+    }
+}
+
+private struct CameraSettings: View {
+    @ObservedObject var tracker: CameraTracker
+    @ObservedObject var recognition: RemoteRecognition
+    @Binding var showTrackingStats: Bool
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Toggle("Show hand joints", isOn: $tracker.showJoints)
+                    Toggle("Show joint numbers", isOn: $tracker.showNumbers)
+                        .disabled(!tracker.showJoints)
+                    Toggle("Show tracking stats", isOn: $showTrackingStats)
+                } header: {
+                    Text("Camera overlays")
+                } footer: {
+                    Text("Mint is the left hand; orange is the right. White dots mark fingertips. These settings are remembered.")
+                }
+                Section("Tracking") {
+                    LabeledContent("Hands", value: "\(tracker.hands.count) / 2")
+                    LabeledContent("Joints", value: "\(tracker.hands.reduce(0) { $0 + $1.joints.count })")
+                    LabeledContent("Tracking rate", value: "\(tracker.fps) FPS")
+                    LabeledContent("On-device tracking", value: "\(tracker.latencyMS) ms")
+                    LabeledContent("Last sign request", value: recognition.latencyMS > 0 ? "\(recognition.latencyMS) ms" : "—")
+                }
+                Section("Live sign estimates") {
+                    Text("Sign estimates update automatically. Unsupported or uncertain gestures show Unknown.")
+                    Text("Hand coordinates are analyzed in the cloud while the camera is active. No camera images or video are sent. Pause stops new requests.")
+                    Text("Experimental, not validated ASL translation. Faces and body context are not tracked.")
+                }.font(.footnote).foregroundStyle(.secondary)
+            }
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }.frame(minHeight: 44)
+                }
+            }
+        }.tint(CameraTheme.primary)
     }
 }
