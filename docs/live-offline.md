@@ -34,6 +34,9 @@ local Mac simulator research replay.
 
 - MediaPipe stays on the camera queue; learned inference uses a separate serial
   worker. No model call blocks the main UI or hand-tracking queue.
+- Camera throttling uses a 24Hz deadline grid, not a minimum delay from the last
+  processed frame. That avoids accidentally halving a nominal 30Hz camera feed
+  to 15Hz. Long stalls reset pacing instead of building catch-up debt.
 - At most one job outstanding, target cadence 250ms. While it runs, input
   replaces the bounded latest window; no inference backlog is queued.
 - Nearest observed-frame sampling targets 15Hz independent of camera FPS.
@@ -110,3 +113,19 @@ the launch command failed with a CoreDevice/Mercury connection error.
 **Successful installation/provisioning does not establish successful launch,
 on-phone model performance or live recognition accuracy.** Unlock and open
 Signloop to validate; no Mac or Wi-Fi connection is needed for this mode.
+
+### Camera pacing regression
+
+The original `now - lastInference >= 1/24` condition processes only every other
+frame of an evenly spaced 30Hz stream: **900 of 1,800 frames over 60 seconds**.
+`CaptureCadence` instead preserves the intended deadline grid: **1,440/1,800**.
+These are deterministic virtual-clock results, **not measured iPhone FPS**.
+Actual throughput still depends on tracking cost, camera delivery and thermals.
+
+Additional checks cover 10, 15, 24, 30, 60 and 120Hz inputs, ±3ms arrival jitter,
+long stalls without catch-up bursts, duplicate/backward/nonfinite timestamps,
+and explicit pause/flip resets. A combined virtual camera/sign-policy stream
+produced 1,440 tracked frames and **215 model jobs in 60 seconds**, with <=19
+observations per inference window and no backlog. The sign worker retains its
+250ms minimum request interval; frame quantization means its effective cadence
+can be below the 4Hz ceiling. Recognition thresholds are unchanged.

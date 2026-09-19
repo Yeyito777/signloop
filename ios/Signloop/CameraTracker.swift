@@ -39,7 +39,7 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     private var configured = false
     private var front = true
     private var lastTimestamp = -1
-    private var lastInference = 0.0
+    private var cadence = CaptureCadence()
     private var rateStart = 0.0
     private var rateFrames = 0
     private var buffer = TemporalBuffer()
@@ -108,6 +108,7 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
             self.session.stopRunning()
             self.buffer.reset()
             self.localFilter.reset()
+            self.cadence.reset()
             self.recognizer = nil
             DispatchQueue.main.async {
                 guard self.uiGeneration == generation else { return }
@@ -134,6 +135,9 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
                 try self.replaceInput(front: !self.front)
                 self.buffer.reset()
                 self.localFilter.reset()
+                self.cadence.reset()
+                self.rateStart = CACurrentMediaTime()
+                self.rateFrames = 0
                 self.recognizer = nil
                 try self.configureRecognizer()
                 if wasRunning { self.session.startRunning() }
@@ -231,6 +235,7 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
             }
             buffer.reset()
             localFilter.reset()
+            cadence.reset()
             rateStart = CACurrentMediaTime()
             rateFrames = 0
             session.startRunning()
@@ -285,8 +290,7 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
         guard session.isRunning, let recognizer else { return }
         let now = CACurrentMediaTime()
         let generation = captureGeneration
-        guard now - lastInference >= 1.0 / 24.0 else { return }
-        lastInference = now
+        guard cadence.admit(at: now) else { return }
         let timestamp = max(lastTimestamp + 1, Int(now * 1000))
         lastTimestamp = timestamp
         do {
