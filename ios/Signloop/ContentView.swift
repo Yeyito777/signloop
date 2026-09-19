@@ -5,9 +5,11 @@ private let surface = Color(red: 0.075, green: 0.09, blue: 0.085)
 
 struct ContentView: View {
     @StateObject private var tracker = CameraTracker()
+    @StateObject private var remote = RemoteRecognition()
     @Environment(\.scenePhase) private var scenePhase
     @State private var userPaused = false
     @State private var showInfo = false
+    @State private var showBackend = false
 
     var body: some View {
         VStack(spacing: 16) {
@@ -24,9 +26,14 @@ struct ContentView: View {
         .onAppear { tracker.start() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active && !userPaused { tracker.start() }
-            else if phase != .active { tracker.pause() }
+            else if phase != .active { tracker.pause(); remote.consent = false }
         }
+        .onChange(of: tracker.hands.count) { _, count in
+            if count == 0 { remote.handsLeftFrame() }
+        }
+        .onOpenURL { url in remote.configure(from: url); showBackend = true }
         .sheet(isPresented: $showInfo) { info }
+        .sheet(isPresented: $showBackend) { BackendSettings(remote: remote, tracker: tracker) }
         .sheet(isPresented: Binding(get: { tracker.snapshotURL != nil },
                                     set: { if !$0 { tracker.clearExport() } })) {
             if let url = tracker.snapshotURL { ShareSheet(items: [url]) }
@@ -132,19 +139,34 @@ struct ContentView: View {
             HStack {
                 Text("LIVE TRANSCRIPT").font(.system(size: 10, weight: .bold, design: .monospaced)).tracking(1.5)
                 Spacer()
-                Text("NOT CONNECTED").font(.system(size: 8, weight: .bold, design: .monospaced))
+                Button(remote.consent ? "EXPERIMENTAL ⚙" : "CONNECT ⚙") { showBackend = true }
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
                     .foregroundStyle(.gray).padding(5).overlay(Capsule().stroke(.gray.opacity(0.3)))
             }.foregroundStyle(accent)
-            Text("First, we see your hands.")
+            Text(remote.text.isEmpty ? "First, we see your hands." : remote.text)
                 .font(.system(size: 20, weight: .medium))
-            Text("Hand tracking is live. Sign recognition and English captions are not enabled yet.")
+                .lineLimit(2)
+            Text(remote.configured ? remote.status : "On-device tracking. Connect a backend for experimental sign captions.")
                 .font(.system(size: 12)).foregroundStyle(.gray).fixedSize(horizontal: false, vertical: true)
             Rectangle().fill(.white.opacity(0.08)).frame(height: 1)
             HStack {
-                Text("RAW SIGNS  —")
+                Text("RAW  \(remote.rawSigns.isEmpty ? "—" : remote.rawSigns.joined(separator: " · "))")
+                    .lineLimit(2)
                 Spacer()
                 Text("\(tracker.bufferedFrames) FRAMES / 2s")
             }.font(.system(size: 9, weight: .medium, design: .monospaced)).foregroundStyle(.gray)
+            if remote.consent {
+                HStack {
+                    Button(remote.busy ? "Processing…" : "Analyze gesture") { remote.analyze(tracker: tracker) }
+                        .disabled(remote.busy || !tracker.isRunning)
+                    Spacer()
+                    Button("Clear") { remote.clear() }
+                }.font(.system(size: 12, weight: .semibold)).foregroundStyle(accent)
+                if !remote.lastScores.isEmpty {
+                    Text(remote.lastScores).font(.system(size: 8, design: .monospaced))
+                        .foregroundStyle(.gray).lineLimit(1)
+                }
+            }
         }.padding(16).background(surface, in: RoundedRectangle(cornerRadius: 18))
     }
 
@@ -153,6 +175,7 @@ struct ContentView: View {
             Button {
                 userPaused.toggle()
                 if userPaused { tracker.pause() } else { tracker.start() }
+                if userPaused { remote.consent = false }
             } label: {
                 Label(userPaused ? "Resume" : "Pause", systemImage: userPaused ? "play.fill" : "pause.fill")
                     .font(.system(size: 13, weight: .semibold))
@@ -185,12 +208,13 @@ struct ContentView: View {
                     Text("Mint = left hand. Orange = right hand. White dots = fingertips. Front-camera video and landmarks are mirrored together.")
                     Text("Use the # button for joint indices. The share button exports the last two seconds of landmark coordinates as JSON—not video.")
                 }
-                Section("Not translation yet") {
-                    Text("No signs or English sentences are recognized in this build. The classifier stub always returns unknown. No Jev, Backboard or Cerebras requests are made.")
+                Section("Experimental backend") {
+                    Text("Connect to your Mac backend to compare explicitly submitted landmark windows with your reference signs using Jev. Cerebras formats accepted labels as captions. This is not independently validated ASL recognition.")
+                    Text("Unknown inputs add no words. Raw labels remain visible. Camera-only mode makes no backend calls.")
                     Text("Hand landmarks alone cannot capture full ASL. Face, body, context and temporal validation are required.")
                 }
                 Section("Privacy") {
-                    Text("Camera frames are processed locally and discarded. A two-second landmark buffer stays in memory unless you explicitly export it. No camera footage is recorded.")
+                    Text("Camera frames are processed locally and discarded. Landmarks stay in memory unless you explicitly export them, save a reference, or enable backend sharing and tap Analyze Gesture. No camera footage is recorded or uploaded.")
                 }
                 Section("Try it") {
                     Text("Use good lighting. Keep your whole hand in frame, spread your fingers, then try both hands, turning your palm and moving slowly. Check the overlay with both cameras.")

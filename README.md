@@ -2,6 +2,17 @@
 
 Hack the North · limited-vocabulary ASL-to-English prototype.
 
+## Experimental cloud recognition
+
+An optional server-only Backboard adapter now connects **Jev → Cerebras** using
+one hackathon API key. The iPhone can explicitly submit a two-second gesture,
+capture labelled reference examples, and show raw labels alongside guarded captions.
+The camera-only demo still works entirely offline.
+
+**Not yet validated ASL recognition:** no reference signs ship with the app;
+you must capture real examples, test unknown inputs and evaluate a held-out signer.
+See [backend setup, verified models and limitations](docs/backend.md).
+
 ## Parallel development
 
 Use a separate branch/checkout per task while keeping `yeyito` available:
@@ -27,8 +38,9 @@ No API keys, backend, or network access are needed at runtime.
 - Left/right colors, hand/joint counts, tracking FPS and model latency.
 - Pause/resume, permission handling, background suspension.
 - Two-second temporal landmark buffer, wrist/palm normalization, JSON export via share sheet.
-- Honest transcript placeholder and replaceable classifier protocol. The unconfigured classifier
-  always returns `unknown`; this build **does not recognize ASL signs or translate**.
+- Replaceable classifier protocol. The default unconfigured classifier returns
+  `unknown`. Experimental backend mode is opt-in, manually segmented, and
+  requires user-labelled references; it is **not validated ASL translation**.
 
 ### Build
 
@@ -88,19 +100,22 @@ is not a persistent identity: a future recognizer must associate hands across fr
 validate handedness under mirroring/occlusion.
 
 The preview and skeleton share aspect-fill scaling; the app is deliberately portrait-only.
-No frames are recorded or uploaded. Only explicit export writes landmark JSON to a temporary
-file for sharing. Export may contain personal movement data; share it deliberately.
+No frames are recorded or uploaded. Explicit export writes landmark JSON to a temporary
+file for sharing. Optional backend mode sends coordinates/references only on explicit
+actions after consent. Backboard may retain submitted messages. Movement data may be
+personal; share it deliberately.
 
-## Next milestone
+## Next validation milestone
 
 Camera → MediaPipe → **backend** Jev/Backboard → segmentation → **backend** Cerebras → captions.
 
-- Add a backend client conforming to `SignClassifier`; keep all API secrets off the phone.
-- Confirm Backboard's native schema and adapt it to candidate labels/scores + `unknown`.
+- The backend client conforms to `SignClassifier`; all provider API secrets stay off the phone.
+- Backboard's typed Jev schema is adapted to candidate labels/scores + `unknown`.
 - Validate 5–10 signs with human examples and a held-out signer; reject unknown input.
 - Add temporal sign boundaries, uncertainty rejection and duplicate suppression.
 - Preserve meaning/uncertainty during English rendering; display raw signs beside captions.
-- Confirm Cerebras model/access before integration.
+- Revisit the small-model choice: the listed 8B route is unavailable; the current
+  verified Cerebras route uses GPT-OSS-120B.
 
 Hand landmarks omit facial expression and body context. This is a limited-vocabulary research
 prototype, not full ASL translation or an accessibility-critical communication tool.

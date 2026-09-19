@@ -132,6 +132,12 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
 
     func clearExport() { snapshotURL = nil }
 
+    func recentFrames() async -> [LandmarkFrame] {
+        await withCheckedContinuation { continuation in
+            queue.async { continuation.resume(returning: self.buffer.frames) }
+        }
+    }
+
     private func startOnQueue() {
         do {
             if landmarker == nil {

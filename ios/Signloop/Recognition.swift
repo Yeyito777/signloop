@@ -47,6 +47,8 @@ struct Classification: Codable {
     }
     let candidates: [Candidate]
     let unknown: Bool
+    var reason: String? = nil
+    var model: String? = nil
 }
 
 protocol SignClassifier {

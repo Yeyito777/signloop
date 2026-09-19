@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# signlooptest [name|path|.] [core|build|open]
+# signlooptest [name|path|.] [core|backend|build|open]
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 source "$SCRIPT_DIR/worktree-common.sh"
-[[ $# -le 2 ]] || worktree_die "Usage: signlooptest [name|path|.] [core|build|open]"
+[[ $# -le 2 ]] || worktree_die "Usage: signlooptest [name|path|.] [core|backend|build|open]"
 INPUT="${1:-.}"
 case "$INPUT" in
   .) TARGET="$SIGNLOOP_CHECKOUT" ;;
@@ -16,6 +16,9 @@ case "${2:-core}" in
     # No camera, provisioning, network, or API credentials needed.
     (cd "$TARGET" && bash ios/scripts/test-core.sh)
     ;;
+  backend)
+    (cd "$TARGET" && python3 -m unittest backend.test_service -v)
+    ;;
   build)
     bootstrap_worktree "$TARGET"
     (cd "$TARGET/ios" && xcodebuild -project Signloop.xcodeproj -scheme Signloop \
@@ -26,5 +29,5 @@ case "${2:-core}" in
     bootstrap_worktree "$TARGET"
     open "$TARGET/ios/Signloop.xcodeproj"
     ;;
-  *) worktree_die "Mode must be core, build, or open." ;;
+  *) worktree_die "Mode must be core, backend, build, or open." ;;
 esac

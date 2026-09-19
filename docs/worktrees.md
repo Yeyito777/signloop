@@ -19,6 +19,7 @@ git fetch origin
 scripts/dev/create-worktree classifier-client origin/main
 
 scripts/dev/signlooptest camera-polish          # core Swift tests
+scripts/dev/signlooptest camera-polish backend  # offline Python backend tests
 scripts/dev/signlooptest camera-polish build    # unsigned iPhone build
 scripts/dev/signlooptest camera-polish open     # open its own Xcode project
 
@@ -66,7 +67,7 @@ worktrees created by these scripts (identified by ignored local metadata).
 | DerivedData / products | Per-worktree `ios/build` for `signlooptest build` |
 | Signing / device deployment | Not automated by this flow; choose your team in Xcode |
 | Secrets / `.env` | Never copied or linked; no API credentials needed |
-| Runtime services / ports | None: this is an on-device iOS app, not a backend |
+| Runtime services / ports | Camera mode needs none. Optional backend is started explicitly; use a distinct port per worktree |
 
 Build mode explicitly disables signing and never installs, launches, replaces,
 or stops an app on your phone. Xcode Run is an intentional separate step. Task
@@ -96,6 +97,12 @@ scripts/dev/test-worktrees
 This creates disposable worktrees, runs core tests, checks independent artifacts,
 duplicate/path/dirty/unmerged guards, invokes scripts from inside a worktree,
 then removes both task checkouts and branches. It never touches remote branches.
+
+For optional cloud inference, see [backend setup](backend.md). `.env` files are
+never seeded automatically; pass an explicit `--env-file` path. Saved reference
+coordinates stay in each worktree's ignored `.runtime/backend` directory.
+Cleaning a worktree removes its ignored data too; export needed reference
+examples first and stop its backend before cleaning.
 
 Adapted from Exocortex's `create-worktree`, `clean-worktree`, `worktree-common.sh`,
 `post-checkout`, and `exotest`. On this Mac those references were found under
