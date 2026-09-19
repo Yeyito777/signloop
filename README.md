@@ -2,31 +2,29 @@
 
 Hack the North · limited-vocabulary ASL-to-English prototype.
 
-## One-screen offline handshape preview
+## One-screen offline skeleton
 
-Open the app, put one hand in view, and see the **current possible sign** update
-automatically over the full-screen camera. No settings workflow, reference
-capture, saving, or Analyze button. Pause/flip stay on the camera; the top-right
-settings button controls hand joints, joint numbers and tracking stats.
+The current build is **tracking only**: camera → MediaPipe hand, upper-body and
+face landmarkers → one synchronized, inspectable skeleton. No sign guesses,
+backend, API key, transcription, recording or uploads.
 
-**The default offline preview currently recognizes only the ILY (“I love you”)
-handshape without extra model assets.** Extend thumb, index and pinky; fold middle
-and ring. A private Debug build with verified pretrained assets automatically
-enables the [five-sign offline research mode](docs/live-offline.md):
-HELLO, YES, NO, PLEASE and THANK_YOU. It requires no Mac connection, network or API key and does not
-upload images or landmarks. Thumbs-up is never relabeled as ASL YES.
+- Up to two hands, 21 points each.
+- Upper-body pose through the hips (25 original MediaPipe landmark IDs).
+- 478 face/iris points and 52 facial movement blendshape coefficients.
+- Settings toggle hand/body/face overlays, point numbers and performance stats.
+- Tap a point or the scope button to inspect live coordinates and facial signals.
+- Pause and camera switch clear observations; the two-second probe buffer is RAM-only.
 
-MediaPipe's pretrained Gesture Recognizer supplies both real landmarks and
-handshape estimates. This is not a general ASL model. See
-[the local evaluation and limitations](docs/local-gesture-preview.md).
+Facial signals are **not sentiment/emotion labels or recognized ASL grammar**.
+Coordinates share the camera image plane, not a calibrated 3D coordinate system.
+See [architecture, probe schema and testing](docs/multimodal-skeleton.md).
 
-The camera screen is now **offline only**; the cloud toggle and automatic
-backend calls have been removed. Legacy [backend research tools](docs/backend.md)
-remain separate. The five-sign weights are not bundled or publicly distributed
-while their provenance/rights are clarified. Live iPhone and fresh-signer
-accuracy validation remain open project goals.
+This replaces the camera's earlier ILY/five-sign research display; old recognition
+experiments remain below for reference and are not called by the new camera UI.
+No private sign-model assets are needed. Installing build 11 replaces the previous
+app UI; installation is a separate explicit step.
 
-## Local reference-matching experiment
+## Previous recognition research (not active in the tracking UI)
 
 The zero-shot path has not demonstrated reliable recognition. A separate
 **nearest-reference + dynamic time warping** backend now supports developer-side
