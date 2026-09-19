@@ -129,3 +129,7 @@ produced 1,440 tracked frames and **215 model jobs in 60 seconds**, with <=19
 observations per inference window and no backlog. The sign worker retains its
 250ms minimum request interval; frame quantization means its effective cadence
 can be below the 4Hz ceiling. Recognition thresholds are unchanged.
+
+The pacing change passed the core suite and signed iPhone build. Build **7**,
+source `d3d8ef8`, was installed successfully on Yeyito at 05:41 local time,
+September 19. No new camera session was launched or claimed validated.
