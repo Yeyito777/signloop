@@ -29,6 +29,9 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     // Main-thread callbacks; frames stay in RAM on the phone.
     var onFrame: ((LandmarkFrame) -> Void)?
     var onReset: (() -> Void)?
+    /// Sign predictions from the on-device SignEngine (main queue). Nil unless a cleared model
+    /// package is bundled; see recognition/export_coreml.py. Never carries landmarks.
+    var onPrediction: ((SignPrediction) -> Void)?
     private var uiGeneration = 0
     private var captureGeneration = 0 // camera queue only
     private var wantsRunning = false
@@ -47,15 +50,19 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     private var observers: [NSObjectProtocol] = []
     private let lifecycle = CaptureLifecycle()
     private let modelPath: String?
+    private let signEngineDirectory: URL?
+    private var signEngine: SignEngine? // camera queue only
 
-    init(modelPath: String? = Bundle.main.path(forResource: "gesture_recognizer", ofType: "task")) {
+    init(modelPath: String? = Bundle.main.path(forResource: "gesture_recognizer", ofType: "task"),
+         signEngineDirectory: URL? = SignEngine.locate(in: .main)) {
         self.modelPath = modelPath
+        self.signEngineDirectory = signEngineDirectory
         super.init()
         observers.append(NotificationCenter.default.addObserver(
             forName: .AVCaptureSessionWasInterrupted, object: session, queue: .main
         ) { [weak self] _ in
             self?.invalidateDisplayedFrames()
-            if let self { self.queue.async { self.localFilter.reset() } }
+            if let self { self.queue.async { self.localFilter.reset(); self.signEngine?.reset() } }
             self?.isRunning = false
             self?.status = "Camera interrupted"
         })
@@ -121,6 +128,7 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
             self.session.stopRunning()
             self.buffer.reset()
             self.localFilter.reset()
+            self.signEngine?.reset()
             self.cadence.reset()
             self.recognizer = nil
             DispatchQueue.main.async {
@@ -148,6 +156,7 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
                 try self.replaceInput(front: !self.front)
                 self.buffer.reset()
                 self.localFilter.reset()
+                self.signEngine?.reset()
                 self.cadence.reset()
                 self.rateStart = CACurrentMediaTime()
                 self.rateFrames = 0
@@ -235,11 +244,26 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
         }
     }
 
+    /// Optional. A missing, uncleared or incompatible package simply leaves the engine off; the
+    /// ILY handshape path is unaffected.
+    private func loadSignEngineIfAvailable() {
+        guard signEngine == nil, let directory = signEngineDirectory,
+              let engine = try? SignEngine.load(directory: directory) else { return }
+        engine.onPrediction = { [weak self] prediction in
+            DispatchQueue.main.async {
+                guard let self, self.wantsRunning else { return }
+                self.onPrediction?(prediction)
+            }
+        }
+        signEngine = engine
+    }
+
     private func startOnQueue(token: Int, generation: Int) {
         guard lifecycle.accepts(token) else { return }
         captureGeneration = generation
         do {
             try configureRecognizer()
+            loadSignEngineIfAvailable()
             if !configured {
                 session.beginConfiguration()
                 session.sessionPreset = .hd1280x720
@@ -258,6 +282,7 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
             }
             buffer.reset()
             localFilter.reset()
+            signEngine?.reset()
             cadence.reset()
             rateStart = CACurrentMediaTime()
             rateFrames = 0
@@ -322,6 +347,7 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
               let timestamp = freshness.timestamp(captured: captured, now: CaptureClock.now) else {
             buffer.reset()
             localFilter.reset()
+            signEngine?.reset()
             DispatchQueue.main.async {
                 guard self.uiGeneration == generation, self.wantsRunning else { return }
                 self.hands = []
@@ -361,6 +387,7 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
                                       imageAspectRatio: Float(width) / Float(height),
                                       mirrored: connection.isVideoMirrored)
             buffer.append(frame)
+            signEngine?.receive(frame)
             let count = buffer.frames.count
             rateFrames += 1
             var measuredFPS: Int?
