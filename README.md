@@ -24,6 +24,14 @@ experiments remain below for reference and are not called by the new camera UI.
 No private sign-model assets are needed. Installing build 11 replaces the previous
 app UI; installation is a separate explicit step.
 
+## Small temporal reference dataset
+
+[Basic-sign corpus tooling](docs/basic-signs-corpus.md) produced **196 sequences
+for 16 everyday labels in 8.56 MB**, using the build 11 hand/body/facial trackers.
+It never downloads the full ASL Citizen archive. Research coordinates
+remain private, outside Git and the app; this is data preparation, not validated
+live recognition.
+
 ## Previous recognition research (not active in the tracking UI)
 
 The zero-shot path has not demonstrated reliable recognition. A separate
