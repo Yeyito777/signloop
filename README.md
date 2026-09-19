@@ -66,7 +66,8 @@ Coordinates share the camera image plane, not a calibrated 3D coordinate system.
 See [architecture, probe schema and testing](docs/multimodal-skeleton.md).
 
 Tap the smiling-face button for [Expression lab](docs/expression-tester.md):
-five live facial-cue bars, per-cue calibration and adjustable thresholds.
+five live facial-cue bars, a saved personal relaxed-face baseline, optional cue
+ranges and adjustable thresholds that default to the most sensitive setting.
 The experimental presets do not infer emotion or ASL meaning.
 
 This replaces the standalone camera's earlier ILY/five-sign research display;

@@ -18,9 +18,9 @@ struct ExpressionTesterView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("What this test measures").font(.headline)
                         Text("Facial movements select experimental presets. They do not tell us how you feel or what an ASL sign means. Lowered brows can also mark an ASL question.")
-                        Text("Scores are movement levels, not emotion probabilities. Camera images and calibration stay on this device; calibration lasts for this app session. Recalibrate for a different person or camera angle.")
-                        Text("Raw is the detector score. Level is the smoothed movement relative to your calibrated range. The white mark is the activation threshold.")
-                        Button("Reset calibration & thresholds") { engine.resetCalibration() }
+                        Text("Scores are movement levels, not emotion probabilities. Only numeric calibration and sensitivity settings are saved on this phone. Images and video are never saved or uploaded. Recapture your relaxed face for a different person, camera angle or lighting setup.")
+                        Text("Raw is the measured movement; brow and eye values are ratios of landmark distances. Level measures change beyond your resting variation. Disgust also requires slightly narrowed eyes and no smile. The white mark is the activation threshold.")
+                        Button("Forget my face & reset sensitivity") { engine.resetCalibration() }
                             .accessibilityIdentifier("expression-reset")
                     }.font(.footnote).foregroundStyle(.secondary)
                 }.padding(20)
@@ -38,7 +38,7 @@ struct ExpressionTesterView: View {
         .onReceive(tracker.$skeleton) { frame in
             guard let frame, !paused else { engine.resetTracking(); return }
             engine.observe(timestampMS: frame.timestampMS, hasFace: frame.hasFace,
-                           coefficients: frame.expressions)
+                           observation: ExpressionObservation.from(frame))
         }
         .onDisappear { engine.resetTracking() }
     }
@@ -85,6 +85,8 @@ struct ExpressionTesterView: View {
         switch engine.decision {
         case .noFace: return paused ? "Paused" : "No face"
         case .unavailable: return "Signal unavailable"
+        case .needsBaseline: return "Set your relaxed face"
+        case .faceForward: return "Face the camera"
         case .none: return "No clear cue"
         case .calibrating: return "Calibrating"
         case .holding(let cue): return "Hold \(cue.movement.lowercased())…"
@@ -97,6 +99,8 @@ struct ExpressionTesterView: View {
         switch engine.decision {
         case .noFace: return "Keep your face in view. A missing face never selects a preset."
         case .unavailable: return "Waiting for a complete, fresh set of facial signals."
+        case .needsBaseline: return "Capture your relaxed face below before testing. Your normal brow position and eye opening become the starting point for this camera."
+        case .faceForward: return "Return to the angle used for your relaxed face, or recapture it for this setup."
         case .none: return "No movement has stayed above its threshold for 300 ms."
         case .calibrating: return engine.calibration?.target.instruction ?? "Capturing movement range."
         case .holding(let cue): return "\(cue.movement) is above its threshold. Hold it for 300 ms."
@@ -107,8 +111,8 @@ struct ExpressionTesterView: View {
 
     private var calibration: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("1. Relax, then calibrate").font(.headline)
-            Text("Capture your relaxed face for two seconds. Then use the button on each cue to set its comfortable range.")
+            Text("Your face, your starting point").font(.headline)
+            Text("Relax your brows and mouth, with your eyes naturally open. Capture two seconds once; this phone will remember it. All cues start at the most sensitive setting. Try them, then optionally capture a comfortable range on each card.")
                 .font(.subheadline).foregroundStyle(.secondary)
             if let capture = engine.calibration {
                 ProgressView(value: capture.progress)
@@ -116,7 +120,7 @@ struct ExpressionTesterView: View {
                 Text(capture.target.instruction).font(.subheadline.weight(.semibold))
                 Button("Cancel capture") { engine.cancelCalibration() }
             } else {
-                Button(engine.hasBaseline ? "Recapture relaxed face · 2 s" : "Capture relaxed face · 2 s") {
+                Button(engine.hasBaseline ? "Recapture relaxed face · 2 s" : "Use my relaxed face · 2 s") {
                     engine.startCalibration(.baseline)
                 }.buttonStyle(.bordered).disabled(!engine.hasCompleteFace || paused)
                     .accessibilityIdentifier("expression-baseline")
@@ -169,7 +173,7 @@ struct ExpressionTesterView: View {
             Button("Calibrate \(cue.movement.lowercased()) · 2 s") {
                 engine.startCalibration(.cue(cue))
             }.font(.subheadline).frame(minHeight: 44)
-                .disabled(!engine.hasBaseline || !engine.hasCompleteFace || engine.calibration != nil || paused)
+                .disabled(!engine.canUseBaseline || !engine.hasCompleteFace || engine.calibration != nil || paused || engine.decision == .faceForward)
                 .accessibilityIdentifier("expression-calibrate-\(cue.id)")
         }.padding(16).background(.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 18))
     }

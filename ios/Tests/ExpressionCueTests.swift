@@ -7,221 +7,317 @@ struct ExpressionCueTests {
         checks += 1
         guard value() else { fatalError("FAIL: \(message)") }
     }
-    static func signals(_ values: [ExpressionCue: Float] = [:]) -> [String: Float] {
-        var result: [String: Float] = [:]
-        for cue in ExpressionCue.allCases {
-            for channel in cue.channels { result[channel] = values[cue] ?? 0.05 }
-        }
-        return result
-    }
-    static func feed(_ engine: inout ExpressionCueEngine, from start: Int, through end: Int,
-                     values: [ExpressionCue: Float] = [:]) {
-        for time in stride(from: start, through: end, by: 100) {
-            engine.observe(timestampMS: time, hasFace: true, coefficients: signals(values))
-        }
-    }
-    static func calibrate(_ engine: inout ExpressionCueEngine,
-                          target: ExpressionCalibrationTarget, start: Int,
-                          values: [ExpressionCue: Float] = [:]) {
-        engine.startCalibration(target)
-        feed(&engine, from: start, through: start + 2000, values: values)
-    }
-
-    static func main() {
-        for cue in ExpressionCue.allCases {
-            var engine = ExpressionCueEngine()
-            engine.observe(timestampMS: 0, hasFace: true, coefficients: signals([cue: 0.9]))
-            expect(engine.decision == .holding(cue), "\(cue): must hold before activation")
-            feed(&engine, from: 100, through: 200, values: [cue: 0.9])
-            expect(engine.decision == .holding(cue), "\(cue): no early activation")
-            feed(&engine, from: 300, through: 500, values: [cue: 0.9])
-            expect(engine.decision == .active(cue), "\(cue): sustained cue activates")
-            feed(&engine, from: 600, through: 1200)
-            expect(engine.decision == .none, "\(cue): relaxing releases")
-        }
-
-        // Regressions from phone feedback: these movements never reached the
-        // former shared 0.55 cutoff. They must activate, but only when sustained.
-        let gentleSignals: [ExpressionCue: Float] = [
-            .joy: 0.52, .sadness: 0.52, .anger: 0.34, .fear: 0.29, .disgust: 0.34,
+    // Synthetic geometry tests behavior, not real-camera recognition accuracy.
+    // Neutral has small eyes and already-raised inner brows, like the reported case.
+    static func frame(eye: Double = 0.12, browDrop: Double = 0, innerLift: Double = 0,
+                      smile: Float = 0.05, lip: Float = 0.05,
+                      scale: Double = 1, angle: Double = 0, width: Int = 720,
+                      height: Int = 1280) -> SkeletonFrame {
+        var coordinates: [Int: (Double, Double)] = [
+            33:(180,400), 133:(260,400), 362:(460,400), 263:(540,400), 1:(360,490),
+            105:(220,348), 107:(250,340), 70:(185,356),
+            334:(500,348), 336:(470,340), 300:(535,356),
         ]
-        for cue in ExpressionCue.allCases {
-            var gentle = ExpressionCueEngine()
-            feed(&gentle, from: 0, through: 300)
-            feed(&gentle, from: 400, through: 1200, values: [cue: gentleSignals[cue]!])
-            expect(gentle.decision == .active(cue), "\(cue): gentler movement now activates")
-            feed(&gentle, from: 1300, through: 2200, values: [cue: 0.15])
-            expect(gentle.decision == .none, "\(cue): moderate resting level does not latch a sensitive preset")
-            gentle.resetTracking()
-            feed(&gentle, from: 0, through: 200)
-            feed(&gentle, from: 300, through: 400, values: [cue: gentleSignals[cue]!])
-            expect(gentle.decision != .active(cue), "\(cue): a short pulse still cannot activate")
-            feed(&gentle, from: 500, through: 1100)
-            expect(gentle.decision == .none, "\(cue): short pulse clears without activation")
+        for (up, down, x) in [(159,145,220.0), (158,153,235.0), (386,374,500.0), (385,380,485.0)] {
+            coordinates[up] = (x,400-eye*40)
+            coordinates[down] = (x,400+eye*40)
         }
-
-        var resting = ExpressionCueEngine()
-        for sample in 0...30 {
-            let level: Float = sample.isMultiple(of: 2) ? 0.10 : 0.15
-            resting.observe(timestampMS: sample * 100, hasFace: true,
-                            coefficients: signals(Dictionary(uniqueKeysWithValues:
-                                ExpressionCue.allCases.map { ($0, level) })))
-            expect(resting.decision == .none, "resting variation must not select a sensitive preset")
+        for id in [105,107,70,334,336,300] { coordinates[id]!.1 += browDrop }
+        for id in [107,336] { coordinates[id]!.1 -= innerLift }
+        let points = coordinates.map { id, pair in
+            let x = (pair.0-360)*scale, y = (pair.1-400)*scale
+            return SkeletonPoint(id: id,
+                x: Float((360+x*cos(angle)-y*sin(angle))/Double(width)),
+                y: Float((400+x*sin(angle)+y*cos(angle))/Double(height)), z: 0)
         }
-        feed(&resting, from: 3100, through: 3900, values: [.anger: 0.34, .fear: 0.29])
-        expect(resting.decision == .ambiguous([.anger, .fear]), "gentler conflicting cues still abstain")
-
-        for cue in [ExpressionCue.anger, .fear, .disgust] {
-            var calibrated = ExpressionCueEngine()
-            calibrated.observe(timestampMS: 0, hasFace: true, coefficients: signals())
-            calibrate(&calibrated, target: .baseline, start: 100)
-            calibrate(&calibrated, target: .cue(cue), start: 2200, values: [cue: 0.11])
-            expect(calibrated.peaks[cue] != nil, "\(cue): small, stable response can calibrate")
-            feed(&calibrated, from: 4300, through: 4900)
-            feed(&calibrated, from: 5000, through: 6000, values: [cue: 0.08])
-            expect(calibrated.decision == .active(cue), "\(cue): calibrated low-amplitude movement activates")
-            feed(&calibrated, from: 6100, through: 7000)
-            expect(calibrated.decision == .none, "\(cue): calibrated movement clears at rest")
-            calibrate(&calibrated, target: .cue(cue), start: 7100, values: [cue: 0.055])
-            expect(abs(calibrated.peaks[cue]! - 0.11) < 0.0001,
-                   "\(cue): almost-flat response cannot overwrite a usable range")
+        return SkeletonFrame(timestampMS: 0, width: width, height: height, camera: "front",
+            hands: [], pose: [], face: points, expressions: [
+                "mouthSmileLeft":smile, "mouthSmileRight":smile,
+                "mouthUpperUpLeft":lip, "mouthUpperUpRight":lip,
+                // These detector channels may be flat or biased. No dependency remains.
+                "eyeWideLeft":0, "eyeWideRight":0, "browDownLeft":0, "browDownRight":0,
+                "browInnerUp":0.9, "noseSneerLeft":0, "noseSneerRight":0,
+            ], timingsMS: [:])
+    }
+    static func reading(_ cue: ExpressionCue? = nil) -> ExpressionObservation {
+        let value: SkeletonFrame
+        switch cue {
+        case .joy: value = frame(eye: 0.09, smile: 0.5, lip: 0.6)
+        case .anger: value = frame(browDrop: 6)
+        case .fear: value = frame(eye: 0.135)
+        case .sadness: value = frame(innerLift: 4)
+        case .disgust: value = frame(eye: 0.09, lip: 0.4)
+        case nil: value = frame()
         }
-
-        var noisy = ExpressionCueEngine()
-        noisy.observe(timestampMS: 0, hasFace: true, coefficients: signals())
-        noisy.startCalibration(.baseline)
-        for sample in 0...20 {
-            let level: Float = sample.isMultiple(of: 2) ? 0.04 : 0.08
-            noisy.observe(timestampMS: 100 + sample * 100, hasFace: true,
-                          coefficients: signals([.anger: level, .fear: level, .disgust: level]))
+        return ExpressionObservation.from(value)!
+    }
+    static func replacing(_ source: SkeletonFrame, face: [SkeletonPoint]? = nil,
+                          expressions: [String: Float]? = nil) -> SkeletonFrame {
+        SkeletonFrame(timestampMS: source.timestampMS, width: source.width, height: source.height,
+                      camera: source.camera, hands: source.hands, pose: source.pose,
+                      face: face ?? source.face, expressions: expressions ?? source.expressions,
+                      timingsMS: source.timingsMS)
+    }
+    static func feed(_ engine: inout ExpressionCueEngine, _ observation: ExpressionObservation,
+                     from start: Int, through end: Int) {
+        for time in stride(from: start, through: end, by: 100) {
+            engine.observe(timestampMS: time, hasFace: true, observation: observation)
         }
-        for (index, cue) in [ExpressionCue.anger, .fear, .disgust].enumerated() {
-            calibrate(&noisy, target: .cue(cue), start: 2200 + index * 2100, values: [cue: 0.18])
-            expect(noisy.peaks[cue] == nil, "\(cue): movement too close to resting variation is rejected")
-        }
-        var guarded = noisy
-        calibrate(&guarded, target: .cue(.fear), start: 8500, values: [.fear: 0.30])
-        expect(guarded.peaks[.fear] != nil, "movement clearly above resting variation can calibrate")
-        for sample in 0...30 {
-            let level: Float = (sample / 6).isMultiple(of: 2) ? 0.04 : 0.08
-            guarded.observe(timestampMS: 10600 + sample * 100, hasFace: true,
-                            coefficients: signals([.fear: level]))
-            expect(guarded.decision == .none, "calibration must not amplify sustained resting variation into fear")
-        }
-        noisy.resetTracking()
-        noisy.observe(timestampMS: 0, hasFace: true, coefficients: signals())
-        calibrate(&noisy, target: .cue(.fear), start: 100, values: [.fear: 0.14])
-        expect(noisy.peaks[.fear] == nil, "resting-variation guard survives a tracking reset")
-        calibrate(&noisy, target: .baseline, start: 2200)
-        calibrate(&noisy, target: .cue(.fear), start: 4300, values: [.fear: 0.11])
-        expect(noisy.peaks[.fear] != nil, "a new stable baseline replaces the old variation bound")
-
+    }
+    static func calibrated() -> ExpressionCueEngine {
         var engine = ExpressionCueEngine()
-        var asymmetric = signals()
-        asymmetric["mouthSmileLeft"] = 0.8
-        asymmetric["mouthSmileRight"] = 0.2
-        expect(abs(ExpressionCue.joy.score(in: asymmetric)! - 0.5) < 0.0001, "bilateral mean")
-        asymmetric.removeValue(forKey: "mouthSmileRight")
-        expect(ExpressionCue.joy.score(in: asymmetric) == nil, "missing side is unavailable, never zero")
-        for invalid in [Float.nan, .infinity, -0.1, 1.1] {
-            var input = signals()
-            input["browInnerUp"] = invalid
-            engine.observe(timestampMS: 0, hasFace: true, coefficients: input)
-            expect(engine.decision == .unavailable, "invalid coefficient rejected")
+        engine.observe(timestampMS: 0, hasFace: true, observation: reading())
+        engine.startCalibration(.baseline)
+        feed(&engine, reading(), from: 100, through: 2100)
+        expect(engine.hasBaseline && engine.profile.isValid, "personal baseline is valid")
+        engine.resetTracking()
+        return engine
+    }
+    static func main() throws {
+        let neutral = reading()
+        expect(abs(neutral.values[.fear]! - 0.12) < 0.00001, "eye gap uses actual aspect-correct geometry")
+        expect(neutral.values[.anger]! < -0.6, "raised neutral brows are a measurable personal position")
+        expect(neutral.values[.sadness]! > 0.19, "raised inner brows exist at neutral")
+        for transformed in [frame(scale: 0.7, angle: 0.3), frame(width: 1280, height: 720)] {
+            let measured = ExpressionObservation.from(transformed)!
+            for cue in ExpressionCue.allCases {
+                expect(abs(measured.values[cue]! - neutral.values[cue]!) < 0.00001,
+                       "\(cue) geometry survives scale, roll and image aspect changes")
+            }
+            expect(measured.pose.isNear(neutral.pose), "pose guard is roll/scale invariant")
+        }
+        let missing = replacing(frame(), face: frame().face.filter { $0.id != 158 })
+        expect(ExpressionObservation.from(missing) == nil, "missing landmark is unavailable, never zero")
+        let duplicate = replacing(frame(), face: frame().face + [frame().face[0]])
+        expect(ExpressionObservation.from(duplicate) == nil, "duplicate IDs cannot silently change geometry")
+        var invalidSignals = frame().expressions
+        invalidSignals["mouthSmileLeft"] = .nan
+        var invalid = replacing(frame(), expressions: invalidSignals)
+        expect(ExpressionObservation.from(invalid) == nil, "nonfinite coefficients rejected")
+        invalidSignals.removeValue(forKey: "mouthSmileLeft")
+        invalid = replacing(frame(), expressions: invalidSignals)
+        expect(ExpressionObservation.from(invalid) == nil, "both mouth sides are required")
+        expect(ExpressionObservation.from(frame(width: 0)) == nil, "invalid image dimensions rejected")
+
+        var fresh = ExpressionCueEngine()
+        fresh.startCalibration(.baseline)
+        expect(fresh.calibration == nil, "cannot calibrate without face")
+        for cue in ExpressionCue.allCases {
+            expect(fresh.threshold(for: cue) == 0.15, "\(cue) defaults to the most sensitive setting")
+            feed(&fresh, reading(cue), from: 0, through: 600)
+            expect(fresh.decision == .needsBaseline, "no average-face classification before personal setup")
+            fresh.resetTracking()
+        }
+        fresh.observe(timestampMS: 0, hasFace: true, observation: neutral)
+        fresh.startCalibration(.cue(.joy))
+        expect(fresh.calibration == nil, "cue capture requires personal baseline")
+
+        for cue in ExpressionCue.allCases {
+            var engine = calibrated()
+            feed(&engine, neutral, from: 0, through: 600)
+            expect(engine.decision == .none, "\(cue): raised neutral brows and small eyes select no preset")
             engine.resetTracking()
+            engine.observe(timestampMS: 0, hasFace: true, observation: reading(cue))
+            expect(engine.decision == .holding(cue), "\(cue): isolated cue starts a fresh hold")
+            feed(&engine, reading(cue), from: 100, through: 200)
+            expect(engine.decision == .holding(cue), "\(cue): no early activation")
+            feed(&engine, reading(cue), from: 300, through: 600)
+            expect(engine.decision == .active(cue), "\(cue): deliberate movement activates without ambiguity")
+            feed(&engine, neutral, from: 700, through: 1700)
+            expect(engine.decision == .none, "\(cue): relaxing clears the preset")
+            engine.startCalibration(.cue(cue))
+            feed(&engine, reading(cue), from: 1800, through: 3800)
+            expect(engine.peaks[cue] != nil && engine.profile.isValid, "\(cue): comfortable range can be saved")
+            expect(engine.decision == .none, "capture never emits a preset")
+            let previous = engine.peaks[cue]
+            engine.startCalibration(.cue(cue))
+            feed(&engine, neutral, from: 3900, through: 5900)
+            expect(engine.peaks[cue] == previous, "\(cue): flat response cannot overwrite a good range")
         }
-
-        feed(&engine, from: 0, through: 400, values: [.joy: 0.9])
-        expect(engine.decision == .active(.joy), "joy active before ambiguity")
-        feed(&engine, from: 500, through: 900, values: [.joy: 0.9, .anger: 0.9])
-        expect(engine.decision == .ambiguous([.joy, .anger]), "two cues abstain; no arbitrary winner")
-        feed(&engine, from: 1000, through: 1500)
-        expect(engine.decision == .none, "neutral is no cue, not a forced emotion")
-
+        var engine = calibrated()
+        feed(&engine, reading(.joy), from: 0, through: 800)
+        expect(engine.decision == .active(.joy) && engine.levels[.disgust] == 0,
+               "smile + upper lip lift + narrowed eyes is joy, never joy/disgust ambiguity")
         engine.resetTracking()
-        feed(&engine, from: 0, through: 300, values: [.joy: 0.8])
-        feed(&engine, from: 400, through: 1500, values: [.joy: 0.48])
-        expect(engine.decision == .active(.joy), "hysteresis keeps active cue above release threshold")
-        feed(&engine, from: 1600, through: 2300, values: [.joy: 0.2])
-        expect(engine.decision == .none, "below release threshold clears")
-        feed(&engine, from: 2400, through: 3000, values: [.joy: 0.48])
-        expect(engine.decision == .none, "release threshold does not activate a new cue")
-
+        let lipOnly = ExpressionObservation.from(frame(lip: 0.8))!
+        feed(&engine, lipOnly, from: 0, through: 800)
+        expect(engine.decision == .none, "upper lip lift alone no longer means disgust")
+        engine.startCalibration(.cue(.disgust))
+        feed(&engine, reading(.joy), from: 900, through: 2900)
+        expect(engine.peaks[.disgust] == nil, "a smile cannot be calibrated as disgust")
         engine.resetTracking()
-        engine.observe(timestampMS: 0, hasFace: true, coefficients: signals([.fear: 0.9]))
-        for _ in 0..<30 {
-            engine.observe(timestampMS: 0, hasFace: true, coefficients: signals([.fear: 0.9]))
+        let shut = ExpressionObservation.from(frame(eye: 0.015, lip: 0.8))!
+        feed(&engine, shut, from: 0, through: 800)
+        expect(engine.decision == .none, "closed eyes plus lip movement do not become disgust")
+        engine.resetTracking()
+        feed(&engine, reading(.disgust), from: 0, through: 800)
+        engine.observe(timestampMS: 900, hasFace: true, observation: reading(.joy))
+        expect(engine.decision != .active(.disgust) && engine.levels[.disgust] == 0,
+               "a smile immediately releases active disgust without a smoothed conflict")
+        engine.resetTracking()
+        var mixed = reading(.anger)
+        mixed.values[.fear] = reading(.fear).values[.fear]
+        feed(&engine, mixed, from: 0, through: 800)
+        expect(engine.decision == .ambiguous([.anger,.fear]), "genuinely separate conflicting cues still abstain")
+        engine.resetTracking()
+        var incidental = reading(.joy)
+        incidental.values[.sadness]! += 0.028 // Level 0.20, versus a strong smile.
+        feed(&engine, incidental, from: 0, through: 800)
+        expect(engine.decision == .active(.joy), "weak secondary brow movement does not cancel a clear smile")
+        engine.resetTracking()
+        incidental.values[.sadness]! += 0.10
+        feed(&engine, incidental, from: 0, through: 800)
+        expect(engine.decision == .ambiguous([.joy,.sadness]), "two strong cues remain ambiguous")
+
+        // A blink in the baseline should not enlarge the eye-wide noise bound.
+        var blinking = ExpressionCueEngine()
+        blinking.observe(timestampMS: 0, hasFace: true, observation: neutral)
+        blinking.startCalibration(.baseline)
+        for sample in 0...20 {
+            blinking.observe(timestampMS: 100+sample*100, hasFace: true,
+                             observation: (8...10).contains(sample) ? ExpressionObservation.from(frame(eye: 0.015))! : neutral)
         }
-        expect(engine.decision == .holding(.fear), "duplicate frames do not advance hold")
-        engine.observe(timestampMS: 1000, hasFace: true, coefficients: signals([.fear: 0.9]))
-        expect(engine.decision == .holding(.fear), "large gap restarts hold")
-        engine.observe(timestampMS: 900, hasFace: true, coefficients: signals([.fear: 0.9]))
-        expect(engine.decision == .unavailable, "backward timestamp clears result")
-        feed(&engine, from: 1100, through: 1400, values: [.fear: 0.9])
-        engine.observe(timestampMS: 1500, hasFace: false, coefficients: signals([.fear: 0.9]))
-        expect(engine.decision == .noFace && engine.raw.isEmpty && engine.levels.isEmpty, "face loss clears all scores")
-        engine.observe(timestampMS: 1600, hasFace: true, coefficients: signals([.fear: 0.9]))
-        expect(engine.decision == .holding(.fear), "re-entry starts a fresh hold")
+        expect(blinking.hasBaseline, "naturally blinking during relaxed capture is accepted")
+        feed(&blinking, reading(.fear), from: 2200, through: 3000)
+        expect(blinking.decision == .active(.fear), "small-eye widening still works after a blink in calibration")
 
-        engine.resetTracking()
-        feed(&engine, from: 0, through: 300, values: [.sadness: 0.9])
-        var incomplete = signals([.sadness: 0.9])
-        incomplete.removeValue(forKey: "eyeWideLeft")
-        engine.observe(timestampMS: 400, hasFace: true, coefficients: incomplete)
-        expect(engine.decision == .unavailable && engine.levels.isEmpty, "partial data cannot win over unknown cues")
-        engine.observe(timestampMS: 500, hasFace: true, coefficients: signals([.sadness: 0.9]))
-        expect(engine.decision == .holding(.sadness), "missing channel invalidates previous active state")
-        engine.setThreshold(0.95, for: .sadness)
-        feed(&engine, from: 600, through: 1000, values: [.sadness: 0.9])
-        expect(engine.decision == .none, "adjustable per-cue threshold takes effect")
-        engine.setThreshold(.nan, for: .sadness)
-        expect(engine.threshold(for: .sadness) == 0.95, "nonfinite threshold ignored")
-        engine.setThreshold(-1, for: .sadness)
-        expect(engine.threshold(for: .sadness) == 0.15, "threshold has a safe lower bound")
-
-        engine = ExpressionCueEngine()
-        engine.startCalibration(.baseline)
-        expect(engine.calibration == nil, "cannot calibrate without a face")
-        engine.observe(timestampMS: 0, hasFace: true, coefficients: signals())
-        engine.startCalibration(.cue(.joy))
-        expect(engine.calibration == nil, "cue calibration requires a baseline")
-        calibrate(&engine, target: .baseline, start: 100)
-        expect(engine.hasBaseline && engine.calibration == nil, "two-second relaxed baseline captured")
-        expect(abs(engine.baselines[.joy]! - 0.05) < 0.0001, "baseline uses measured score")
-        for (index, cue) in ExpressionCue.allCases.enumerated() {
-            calibrate(&engine, target: .cue(cue), start: 2200 + index * 2100, values: [cue: 0.65])
-            expect(abs(engine.peaks[cue]! - 0.65) < 0.0001, "\(cue): range calibrated independently")
-            expect(engine.decision == .none, "calibration never emits an emotion preset")
+        // Sustained, all-cue resting variation at minimum sensitivity must stay neutral.
+        var noisy = ExpressionCueEngine()
+        noisy.observe(timestampMS: 0, hasFace: true, observation: neutral)
+        noisy.startCalibration(.baseline)
+        var upperRest = neutral
+        for cue in ExpressionCue.allCases { upperRest.values[cue]! += cue.noiseFloor * 1.5 }
+        for sample in 0...20 {
+            noisy.observe(timestampMS: 100+sample*100, hasFace: true,
+                          observation: sample.isMultiple(of: 2) ? neutral : upperRest)
         }
-        feed(&engine, from: 12700, through: 13500)
-        feed(&engine, from: 13600, through: 14500, values: [.joy: 0.45])
-        expect(engine.decision == .active(.joy), "calibrated range enables a below-default raw score")
-        expect(engine.levels[.joy]! > 0.6 && engine.levels[.joy]! < 0.7, "level normalized relative to baseline/range")
+        for sample in 0...40 {
+            noisy.observe(timestampMS: 2200+sample*100, hasFace: true,
+                          observation: (sample/8).isMultiple(of: 2) ? neutral : upperRest)
+            expect(noisy.decision == .none, "resting variation cannot make everything ambiguous")
+        }
+        let savedNoise = noisy.profile
+        noisy.resetTracking()
+        expect(noisy.profile == savedNoise, "resting noise guards survive pauses")
+
+        engine = calibrated()
+        engine.observe(timestampMS: 0, hasFace: true, observation: reading(.fear))
+        for _ in 0..<20 { engine.observe(timestampMS: 0, hasFace: true, observation: reading(.fear)) }
+        expect(engine.decision == .holding(.fear), "duplicates never advance hold time")
+        engine.observe(timestampMS: 1000, hasFace: true, observation: reading(.fear))
+        expect(engine.decision == .holding(.fear), "long gap restarts the hold")
+        engine.observe(timestampMS: 900, hasFace: true, observation: reading(.fear))
+        expect(engine.decision == .unavailable, "backward timestamp invalidates tracking")
+        feed(&engine, reading(.fear), from: 1100, through: 1800)
+        engine.observe(timestampMS: 1900, hasFace: false, observation: nil)
+        expect(engine.decision == .noFace && engine.raw.isEmpty && engine.levels.isEmpty, "face loss clears results")
+        engine.observe(timestampMS: 2000, hasFace: true, observation: reading(.fear))
+        expect(engine.decision == .holding(.fear), "re-entry starts a new hold")
+        engine.observe(timestampMS: 2100, hasFace: true, observation: nil)
+        expect(engine.decision == .unavailable && !engine.hasCompleteFace, "missing geometry abstains")
+        var bad = neutral
+        bad.values[.fear] = .infinity
+        engine.observe(timestampMS: 2200, hasFace: true, observation: bad)
+        expect(engine.decision == .unavailable, "engine also rejects invalid measurements")
         engine.resetTracking()
-        expect(engine.hasBaseline && engine.peaks.count == 5, "pause keeps session calibration")
-        expect(engine.decision == .noFace, "pause clears the decision")
-        engine.observe(timestampMS: 0, hasFace: true, coefficients: signals())
-        calibrate(&engine, target: .cue(.joy), start: 100, values: [.joy: 0.08])
-        expect(abs(engine.peaks[.joy]! - 0.65) < 0.0001, "weak response never overwrites usable calibration")
-        expect(engine.calibrationMessage.contains("barely changed"), "weak channel produces actionable feedback")
+        var turn = reading(.fear)
+        turn.pose.horizontal += 0.2
+        feed(&engine, turn, from: 0, through: 800)
+        expect(engine.decision == .faceForward && engine.levels.isEmpty, "view angle change abstains")
+        feed(&engine, reading(.fear), from: 900, through: 1600)
+        expect(engine.decision == .active(.fear), "returning to original angle restores classification")
+        var rear = reading(.fear)
+        rear.camera = "back"
+        feed(&engine, rear, from: 1700, through: 2300)
+        expect(engine.decision == .needsBaseline && !engine.canUseBaseline, "different camera needs its own neutral")
+        engine.startCalibration(.cue(.fear))
+        expect(engine.calibration == nil, "wrong camera cannot calibrate a cue against old neutral")
+
+        engine = calibrated()
+        engine.setThreshold(0.7, for: .fear)
+        engine.setThreshold(.nan, for: .fear)
+        expect(engine.threshold(for: .fear) == 0.7, "invalid threshold ignored")
+        feed(&engine, reading(.fear), from: 0, through: 800)
+        expect(engine.decision == .none, "raising threshold makes small eye change insufficient")
+        engine.setThreshold(-1, for: .fear)
+        expect(engine.threshold(for: .fear) == 0.15, "threshold clamps to sensitive bound")
+        feed(&engine, reading(.fear), from: 900, through: 1700)
+        expect(engine.decision == .active(.fear), "minimum threshold restores gentle-eye activation")
+        engine.resetTracking()
+        var borderline = neutral
+        borderline.values[.joy]! += 0.015 + 0.4 * 0.13
+        feed(&engine, borderline, from: 0, through: 800)
+        expect(engine.decision == .none, "release margin cannot activate a new cue")
+        feed(&engine, reading(.joy), from: 900, through: 1700)
+        feed(&engine, borderline, from: 1800, through: 2800)
+        expect(engine.decision == .active(.joy), "hysteresis holds until below release threshold")
+        feed(&engine, neutral, from: 2900, through: 3900)
+        expect(engine.decision == .none, "neutral releases the hysteresis hold")
+
+        engine = calibrated()
+        engine.observe(timestampMS: 0, hasFace: true, observation: neutral)
+        let previous = engine.profile
         engine.startCalibration(.baseline)
-        engine.observe(timestampMS: 2200, hasFace: true, coefficients: signals())
-        expect(engine.decision == .calibrating, "calibration suppresses classification")
-        engine.observe(timestampMS: 2300, hasFace: false, coefficients: [:])
-        expect(engine.calibration == nil && engine.hasBaseline, "face loss aborts capture and keeps previous profile")
-        expect(engine.calibrationMessage.contains("interrupted"), "interrupted calibration is explained")
-        engine.observe(timestampMS: 2400, hasFace: true, coefficients: signals())
-        engine.startCalibration(.baseline)
-        engine.observe(timestampMS: 2500, hasFace: true, coefficients: signals())
-        engine.observe(timestampMS: 3500, hasFace: true, coefficients: signals())
-        expect(engine.calibration == nil, "capture gap aborts calibration")
+        feed(&engine, neutral, from: 100, through: 500)
+        engine.observe(timestampMS: 600, hasFace: false, observation: nil)
+        expect(engine.calibration == nil && engine.profile == previous, "interrupted capture preserves saved profile")
+        engine.observe(timestampMS: 700, hasFace: true, observation: neutral)
         engine.startCalibration(.baseline)
         engine.cancelCalibration()
-        expect(engine.calibration == nil && engine.hasBaseline, "cancel preserves calibration")
-        calibrate(&engine, target: .baseline, start: 3600)
-        expect(engine.peaks.isEmpty, "new baseline invalidates old cue ranges")
-        engine.resetCalibration()
-        expect(!engine.hasBaseline && engine.thresholds.isEmpty && engine.raw.isEmpty, "reset clears profile and readings")
-        print("PASS: \(checks) expression checks (five cues, abstention, timing, hysteresis, missing data, calibration)")
+        expect(engine.profile == previous, "cancel keeps completed calibration")
+        engine.startCalibration(.baseline)
+        engine.observe(timestampMS: 800, hasFace: true, observation: neutral)
+        engine.observe(timestampMS: 1800, hasFace: true, observation: neutral)
+        expect(engine.calibration == nil && engine.profile == previous, "frame gap aborts calibration")
+        engine.startCalibration(.baseline)
+        for sample in 0...20 {
+            var motion = neutral
+            if sample.isMultiple(of: 2) { motion.pose.horizontal += 0.15 }
+            engine.observe(timestampMS: 1900+sample*100, hasFace: true, observation: motion)
+        }
+        expect(engine.profile == previous && engine.calibrationMessage.contains("head still"), "moving baseline rejected")
+        engine.startCalibration(.baseline)
+        for sample in 0...20 {
+            engine.observe(timestampMS: 4000+sample*100, hasFace: true,
+                           observation: sample.isMultiple(of: 2) ? neutral : reading(.joy))
+        }
+        expect(engine.profile == previous && engine.calibrationMessage.contains("expression changed"),
+               "unstable neutral capture cannot silently create an unusably large dead zone")
+
+        // Complete numeric profile roundtrip; corrupted/older/incomplete profiles fail closed.
+        let suite = "Signloop.ExpressionTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        engine = calibrated()
+        engine.observe(timestampMS: 0, hasFace: true, observation: neutral)
+        engine.startCalibration(.cue(.joy))
+        feed(&engine, reading(.joy), from: 100, through: 2100)
+        engine.setThreshold(0.25, for: .sadness)
+        ExpressionProfileStore.save(engine.profile, to: defaults)
+        let loaded = ExpressionProfileStore.load(from: defaults)
+        expect(loaded == engine.profile, "neutral, noise, camera, ranges and sliders all roundtrip")
+        var restored = ExpressionCueEngine(profile: loaded)
+        feed(&restored, neutral, from: 0, through: 800)
+        expect(restored.decision == .none, "saved own-face baseline stays neutral after restart")
+        feed(&restored, reading(.anger), from: 900, through: 1700)
+        expect(restored.decision == .active(.anger), "furrow is relative to restored raised brows")
+        var corrupted = loaded
+        corrupted.version = 99
+        defaults.set(try JSONEncoder().encode(corrupted), forKey: ExpressionProfileStore.key)
+        expect(!ExpressionProfileStore.load(from: defaults).hasBaseline, "unknown feature schema rejected")
+        corrupted = loaded
+        corrupted.noise.removeValue(forKey: .fear)
+        expect(!ExpressionCueEngine(profile: corrupted).hasBaseline, "partial profile rejected")
+        corrupted = loaded
+        corrupted.thresholds[.fear] = -1
+        expect(!corrupted.isValid, "invalid persisted threshold rejected")
+        defaults.set(Data("broken".utf8), forKey: ExpressionProfileStore.key)
+        expect(!ExpressionProfileStore.load(from: defaults).hasBaseline, "corrupt storage fails safely")
+        ExpressionProfileStore.save(loaded, to: defaults)
+        restored.resetCalibration()
+        ExpressionProfileStore.save(restored.profile, to: defaults)
+        expect(defaults.object(forKey: ExpressionProfileStore.key) == nil, "forget face actually deletes stored data")
+        expect(!restored.hasBaseline && restored.thresholds.isEmpty, "reset restores most-sensitive defaults")
+        print("PASS: \(checks) expression checks (personal neutral, geometry, smile/scrunch separation, noise, lifecycle, persistence)")
     }
 }

@@ -83,7 +83,8 @@ final class SingleScreenUITests: XCTestCase {
             app.collectionViews.firstMatch.swipeUp()
         }
         XCTAssertTrue(privacy.exists)
-        XCTAssertTrue(privacy.label.contains("nothing is recorded or sent"))
+        XCTAssertTrue(privacy.label.contains("no images or video are recorded or sent"))
+        XCTAssertTrue(privacy.label.contains("numeric calibration"))
         app.buttons["Done"].tap()
         XCTAssertTrue(app.staticTexts["analysis-mode"].label.contains("Offline"))
     }
@@ -125,7 +126,7 @@ final class SingleScreenUITests: XCTestCase {
         app.buttons["Done"].tap()
     }
 
-    func testExpressionThresholdsAreAdjustableAndPersistAcrossSheetReopen() {
+    func testExpressionThresholdsAreAdjustableAndPersistAcrossRelaunch() {
         XCTAssertTrue(app.buttons["expression-lab"].waitForExistence(timeout: 10))
         app.buttons["expression-lab"].tap()
         let slider = app.sliders["expression-threshold-joy"]
@@ -156,6 +157,30 @@ final class SingleScreenUITests: XCTestCase {
             app.scrollViews.firstMatch.swipeUp()
         }
         XCTAssertEqual(slider.value as? String, value)
+        app.buttons["Done"].tap()
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.buttons["expression-lab"].waitForExistence(timeout: 10))
+        app.buttons["expression-lab"].tap()
+        for _ in 0..<6 {
+            if slider.isHittable && slider.frame.maxY < app.frame.maxY - 80 { break }
+            app.scrollViews.firstMatch.swipeUp()
+        }
+        XCTAssertEqual(slider.value as? String, value)
+        let reset = app.buttons["expression-reset"]
+        for _ in 0..<12 {
+            if reset.isHittable && reset.frame.maxY < app.frame.maxY - 40 { break }
+            app.scrollViews.firstMatch.swipeUp()
+        }
+        reset.tap()
+        app.terminate()
+        app.launch()
+        app.buttons["expression-lab"].tap()
+        for _ in 0..<12 {
+            if slider.isHittable && slider.frame.maxY < app.frame.maxY - 80 { break }
+            app.scrollViews.firstMatch.swipeUp()
+        }
+        XCTAssertEqual(slider.value as? String, "0.15")
         app.buttons["Done"].tap()
     }
 

@@ -14,7 +14,7 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var showProbe = false
     @State private var showExpressions = false
-    @State private var expressionEngine = ExpressionCueEngine()
+    @State private var expressionEngine = ExpressionCueEngine(profile: ExpressionProfileStore.load())
     @State private var probe = SkeletonProbe()
     @AppStorage("showTrackingStats") private var showTrackingStats = false
     private let clock = Timer.publish(every: 0.25, on: .main, in: .common).autoconnect()
@@ -60,6 +60,9 @@ struct ContentView: View {
             if phase == .active && !paused { tracker.start() } else { tracker.pause() }
         }
         .onReceive(clock) { _ in tracker.expireLocalResult() }
+        .onChange(of: expressionEngine.profile) { _, profile in
+            ExpressionProfileStore.save(profile)
+        }
         .onDisappear { tracker.pause() }
         .sheet(isPresented: $showSettings) {
             CameraSettings(tracker: tracker, showTrackingStats: $showTrackingStats)
@@ -172,7 +175,7 @@ private struct CameraSettings: View {
                 Section("What this build does") {
                     Text("Tracks up to two hands, one upper body and one face. Stand alone with your head, hands and hips in view. Hidden or uncertain points are not drawn.")
                     Text("Facial blendshapes describe movement. Expression lab maps five cues to experimental presets; it does not infer emotion or ASL meaning. There is no sign recognition or transcription in this build.")
-                    Text("Offline only: nothing is recorded or sent to a server. A rolling two-second landmark buffer lives only in memory and clears on pause, camera switch or stale capture.")
+                    Text("Offline only: no images or video are recorded or sent to a server. A rolling two-second landmark buffer lives only in memory and clears on pause, camera switch or stale capture. Expression lab saves only your numeric calibration and sensitivity settings on this phone; reset them in the lab to delete them.")
                         .accessibilityIdentifier("offline-privacy")
                 }.font(.footnote)
             }.navigationTitle("Settings").navigationBarTitleDisplayMode(.inline)
