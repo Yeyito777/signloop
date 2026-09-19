@@ -36,6 +36,10 @@ See [local recognition evaluation](docs/recognition-evaluation.md) for replay,
 dataset restrictions, results and the remaining phone-validation requirements.
 No research recordings or derived landmark references are distributed in this repo.
 
+The [native Swift temporal engine](docs/native-temporal-matcher.md) now implements
+the same V2 matcher without a server. It is parity-tested but **not enabled in the
+camera UI**: distributable references and live rejection validation are still needed.
+
 ## Parallel development
 
 Use a separate branch/checkout per task while keeping `yeyito` available:

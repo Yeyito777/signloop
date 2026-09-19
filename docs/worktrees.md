@@ -20,6 +20,7 @@ scripts/dev/create-worktree classifier-client origin/main
 
 scripts/dev/signlooptest camera-polish          # core Swift tests
 scripts/dev/signlooptest camera-polish backend  # offline Python backend tests
+scripts/dev/signlooptest camera-polish native   # Swift HTTP + temporal-matcher parity
 scripts/dev/signlooptest camera-polish build    # unsigned iPhone build
 scripts/dev/signlooptest camera-polish open     # open its own Xcode project
 
