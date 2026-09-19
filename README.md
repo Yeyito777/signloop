@@ -53,6 +53,11 @@ developer-only test entry. The separate live worker now uses the same native
 engine when exact private Debug assets are present; the screen clearly identifies
 that research mode instead of claiming it is available in every build.
 
+**Latest larger frozen check:** 43/82 additional supported recordings produced a
+correct displayed sign; 1/35 unsupported recordings falsely displayed PLEASE.
+[Full protocol and limitations](docs/frozen-additional-evaluation.md).
+This is still a research prototype; good live accuracy has not been established.
+
 ## Parallel development
 
 Use a separate branch/checkout per task while keeping `yeyito` available:

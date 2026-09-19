@@ -81,6 +81,11 @@ Do not send the fixture to providers or a physical phone.
 
 ### Native replay observed September 19, 2026
 
+**A subsequent [larger frozen evaluation](frozen-additional-evaluation.md)
+found substantial misses (43/82 supported clips) and one unsupported false
+display.** The smaller results below must not be presented alone as general
+accuracy evidence.
+
 61 local clips, one cold camera-policy run per clip (not three timing phases):
 
 | Split | Supported clips with correct display | Unsupported clips with false display | Any wrong displayed label |

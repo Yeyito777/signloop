@@ -31,60 +31,89 @@ struct NativeLiveReplay: View {
         let split: String
         let label: String
         let frames: [LandmarkFrame]
+        let gestures: [[LocalHandGesture]]?
     }
     private struct Fixture: Decodable { let source: String; let clips: [Clip] }
     private func run(_ folder: URL) throws -> [String: Any] {
         let data = try Data(contentsOf: folder.appendingPathComponent("live-replay-fixture.json"))
-        guard data.count <= 25_000_000 else { throw PretrainedSignPolicy.Failure.invalidFrames }
+        guard data.count <= 64_000_000 else { throw PretrainedSignPolicy.Failure.invalidFrames }
         let fixture = try JSONDecoder().decode(Fixture.self, from: data)
-        guard fixture.source == "LOCAL_RESEARCH_ONLY_ASL_CITIZEN", (1...100).contains(fixture.clips.count) else {
+        guard fixture.source == "LOCAL_RESEARCH_ONLY_ASL_CITIZEN", (1...256).contains(fixture.clips.count) else {
             throw PretrainedSignPolicy.Failure.invalidFrames
         }
         let engine = try PretrainedSignEngine(model: folder.appendingPathComponent("model.tflite"),
                                              vocabulary: folder.appendingPathComponent("sign_to_prediction_index_map.json"))
         var counts: [String: [String: Int]] = [:]
+        var wrongLabels: [String: Int] = [:]
+        var reasons: [String: Int] = [:]
         var durations: [Double] = []
         var modelCalls = 0
         for clip in fixture.clips {
             _ = try PretrainedSignPolicy.pack(clip.frames)
-            var policy = LiveWindowPolicy()
-            var visible = Set<String>()
-            var pending: (LiveWindowPolicy.Job, Classification, Int)?
-            func collect() {
-                if let sign = policy.visible { visible.insert(sign) }
+            guard clip.gestures == nil || clip.gestures?.count == clip.frames.count else {
+                throw PretrainedSignPolicy.Failure.invalidFrames
             }
-            for frame in clip.frames {
+            var policy = LiveWindowPolicy()
+            var ilyFilter = LocalGestureFilter()
+            var currentILY: String?
+            var hasHands = false
+            var latestFrame = -1
+            var visible = Set<String>()
+            var rawAccepted = Set<String>()
+            var pending: (LiveWindowPolicy.Job, Classification, Int)?
+            func collect(at time: Int) {
+                // Same ILY-over-learned precedence and no-hands rule as the UI.
+                guard hasHands, time-latestFrame <= 400 else { return }
+                if let sign = currentILY ?? policy.visible { visible.insert(sign) }
+            }
+            func finish(_ completion: (LiveWindowPolicy.Job, Classification, Int)) {
+                if policy.complete(completion.0, result: completion.1, nowMS: completion.2),
+                   !completion.1.unknown, let label = completion.1.candidates.first?.label {
+                    rawAccepted.insert(label)
+                }
+                collect(at: completion.2)
+            }
+            for (index, frame) in clip.frames.enumerated() {
                 if let completion = pending, completion.2 <= frame.timestampMS {
-                    policy.complete(completion.0, result: completion.1, nowMS: completion.2)
-                    collect()
+                    finish(completion)
                     pending = nil
                 }
+                hasHands = !frame.hands.isEmpty
+                latestFrame = frame.timestampMS
+                let gestures = clip.gestures?[index] ?? []
+                currentILY = ilyFilter.update(gestures.count == frame.hands.count ? gestures : [],
+                                              timestampMS: frame.timestampMS)
+                if let currentILY { rawAccepted.insert(currentILY) }
                 if let job = policy.ingest(frame, nowMS: frame.timestampMS) {
                     let start = ProcessInfo.processInfo.systemUptime
                     let result = try engine.classify(job.frames)
+                    reasons[result.reason ?? "unspecified", default: 0] += 1
                     let ms = (ProcessInfo.processInfo.systemUptime-start)*1000
                     durations.append(ms)
                     modelCalls += 1
                     pending = (job, result, frame.timestampMS+max(1, Int(ceil(ms))))
                 }
-                collect()
+                collect(at: frame.timestampMS)
             }
             if let completion = pending {
-                policy.complete(completion.0, result: completion.1, nowMS: completion.2)
-                collect()
+                finish(completion)
             }
+            for label in visible where label != clip.label { wrongLabels[label, default: 0] += 1 }
             for key in [clip.split, clip.split+"/"+clip.label] {
                 var value = counts[key] ?? [:]
                 value["clips", default: 0] += 1
                 value["correct_display", default: 0] += visible.contains(clip.label) ? 1 : 0
                 value["wrong_display", default: 0] += visible.contains(where: { $0 != clip.label }) ? 1 : 0
                 value["unknown_only", default: 0] += visible.isEmpty ? 1 : 0
+                value["raw_correct", default: 0] += rawAccepted.contains(clip.label) ? 1 : 0
+                value["raw_wrong", default: 0] += rawAccepted.contains(where: { $0 != clip.label }) ? 1 : 0
                 counts[key] = value
             }
         }
         let sorted = durations.sorted()
-        return ["completed": true, "scope": "Previously inspected local research clips, no camera. Actual native classifier and app scheduler; virtual capture timing includes measured simulator inference duration.",
-                "counts": counts, "model_calls": modelCalls,
+        return ["completed": true, "scope": "Local research clips, no camera. Actual native classifier, app scheduler and ILY priority; virtual capture timing includes measured simulator inference duration. Read selection manifest for prior-use limitations.",
+                "counts": counts, "model_calls": modelCalls, "wrong_displayed_labels": wrongLabels,
+                "request_reasons": reasons,
                 "mean_inference_ms": durations.reduce(0, +)/Double(max(1, durations.count)),
                 "p95_inference_ms": sorted.isEmpty ? 0 : sorted[min(sorted.count-1, Int(Double(sorted.count)*0.95))],
                 "model": PretrainedSignPolicy.motionModelName]
