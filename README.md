@@ -2,6 +2,13 @@
 
 Hack the North · limited-vocabulary ASL-to-English prototype.
 
+## Consumer app design system
+
+The [Playroom design system](design-system/README.md) contains the agreed visual foundation,
+portable tokens, React Native text styles, CSS variables, and reusable UI icons.
+Screen layouts are still drafts. A teammate is developing the future 3D goose;
+the design system keeps character rendering and animation assets replaceable.
+
 ## Developer MVP: real on-device hand tracking
 
 Native iPhone app with **Google MediaPipe Hand Landmarker**, not simulated joints.
