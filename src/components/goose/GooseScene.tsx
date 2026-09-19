@@ -1,8 +1,10 @@
 import { useEffect, useRef, type RefObject } from 'react';
 import { Group, Mesh, MeshBasicMaterial, OrthographicCamera } from 'three';
 import { useFrame, useThree } from './GooseCanvas';
-import { colors } from './settings';
+import { colors, motion } from './settings';
 import { advanceTime, composePose, stillPose, stepPose, type GooseActivity, type GooseEmotion, type GoosePose } from './motion';
+import { levelAt, type LipSync } from '../../voice/envelope.ts';
+import { gestureAt } from '../../voice/gestures.ts';
 
 type Vec3 = [number, number, number];
 type PebbleProps = {
@@ -41,11 +43,12 @@ function Eye({ side, blinkRef }: { side: number; blinkRef: RefObject<Group | nul
   );
 }
 
-function Goose({ animate, reducedMotion, activity, emotion }: {
+function Goose({ animate, reducedMotion, activity, emotion, lipSync }: {
   animate: boolean;
   reducedMotion: boolean;
   activity: GooseActivity;
   emotion?: GooseEmotion;
+  lipSync?: RefObject<LipSync>;
 }) {
   const root = useRef<Group>(null);
   const body = useRef<Group>(null);
@@ -63,15 +66,22 @@ function Goose({ animate, reducedMotion, activity, emotion }: {
   const invalidate = useThree(state => state.invalidate);
 
   function applyPose(pose: GoosePose) {
-    if (root.current) root.current.position.y = pose.bob;
+    if (root.current) {
+      root.current.position.y = pose.bob;
+      root.current.rotation.y = pose.bodyYaw;
+    }
     if (body.current) body.current.scale.set(1 + (pose.breath - 1) * 0.5, pose.breath, pose.breath);
     if (head.current) {
       head.current.rotation.x = pose.pitch;
       head.current.rotation.y = pose.yaw;
       head.current.rotation.z = pose.tilt;
     }
-    if (leftWing.current) leftWing.current.rotation.z = -0.14 - pose.wing;
-    if (rightWing.current) rightWing.current.rotation.z = 0.14 + pose.wing;
+    if (leftWing.current) {
+      leftWing.current.rotation.set(pose.leftWingPitch, pose.leftWingYaw, -0.14 - pose.wing - pose.leftWing);
+    }
+    if (rightWing.current) {
+      rightWing.current.rotation.set(pose.rightWingPitch, pose.rightWingYaw, 0.14 + pose.wing + pose.rightWing);
+    }
     if (leftEye.current) leftEye.current.scale.y = pose.eyes;
     if (rightEye.current) rightEye.current.scale.y = pose.eyes;
     if (upperBeak.current) upperBeak.current.position.y = -0.16 + pose.beak * 0.045;
@@ -119,7 +129,11 @@ function Goose({ animate, reducedMotion, activity, emotion }: {
   useFrame((_, delta) => {
     if (!animate) return;
     time.current = advanceTime(time.current, delta, true);
-    displayed.current = stepPose(displayed.current, composePose(time.current, activity, emotion), delta);
+    const clock = lipSync?.current?.currentTime() ?? 0;
+    const speakingLevel = activity === 'speaking' ? levelAt(lipSync?.current?.envelope, clock) : undefined;
+    const gesture = activity === 'speaking' ? gestureAt(lipSync?.current?.gestures, clock) : undefined;
+    const blend = speakingLevel === undefined && !gesture ? motion.blendSeconds : motion.lipSyncSeconds;
+    displayed.current = stepPose(displayed.current, composePose(time.current, activity, emotion, speakingLevel, gesture), delta, blend);
     applyPose(displayed.current);
     applyEffects(time.current, emotion);
   });
@@ -186,6 +200,7 @@ export function GooseScene(props: {
   reducedMotion: boolean;
   activity: GooseActivity;
   emotion?: GooseEmotion;
+  lipSync?: RefObject<LipSync>;
 }) {
   const { camera, size, invalidate } = useThree();
   useEffect(() => {

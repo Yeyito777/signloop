@@ -39,6 +39,8 @@ export const motion = {
   speakingBeakSeconds: 0.24,
   speakingBob: 0.006,
   speakingBreath: 0.007,
+  lipSyncSeconds: 0.045,
+  gestureSeconds: 1.15,
   fearJump: 0.09,
   fearJumpSeconds: 1.2,
 };
@@ -46,10 +48,12 @@ export const motion = {
 export const poseLimits = {
   breath: 0.06,
   bob: 0.14,
-  tilt: 0.16,
-  wing: 0.12,
-  yaw: 0.2,
-  pitch: 0.2,
+  tilt: 0.2,
+  wing: 1.15,
+  wingTwist: 1.1,
+  yaw: 0.45,
+  bodyYaw: 0.55,
+  pitch: 0.28,
   beak: 1,
   eyesMin: 0.039,
 };

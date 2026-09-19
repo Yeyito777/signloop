@@ -3,7 +3,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import type { GooseEmotion } from '../components/goose/motion.ts';
 import { voiceConfig } from '../voice/config.ts';
+import { envelopeFromMpeg, type LipSync } from '../voice/envelope.ts';
 import { prepareSpeechText, speakEnglish, VoiceError } from '../voice/elevenlabs.ts';
+import { cuesFromText, cuesFromWords, wordsFromAlignment } from '../voice/gestures.ts';
 import { playClip, unlockPlayback } from '../voice/playClip.ts';
 
 export type VoiceStatus = 'idle' | 'loading' | 'speaking' | 'error';
@@ -29,6 +31,7 @@ export function useGooseVoice() {
   const stopPlayback = useRef<(() => void) | null>(null);
   const clipRef = useRef<CachedClip | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const lipSync = useRef<LipSync>({ currentTime: () => 0 });
 
   const releaseClip = useCallback(() => {
     stopPlayback.current?.();
@@ -41,6 +44,7 @@ export function useGooseVoice() {
     requestId.current += 1;
     abortRef.current?.abort();
     abortRef.current = null;
+    lipSync.current = { currentTime: () => 0 };
     releaseClip();
     setStatus('idle');
   }, [releaseClip]);
@@ -57,23 +61,33 @@ export function useGooseVoice() {
     abortRef.current?.abort();
     const abort = new AbortController();
     abortRef.current = abort;
+    lipSync.current = { currentTime: () => 0 };
     releaseClip();
     setError(null);
     setStatus('loading');
 
     try {
       const spoken = prepareSpeechText(text);
-      const buffer = await speakEnglish(spoken, abort.signal, emotion);
+      const clipAudio = await speakEnglish(spoken, abort.signal, emotion);
       if (id !== requestId.current) return;
-      const clip = cacheSpeechAudio(buffer);
+      const envelope = await envelopeFromMpeg(clipAudio.buffer);
+      if (id !== requestId.current) return;
+      const clip = cacheSpeechAudio(clipAudio.buffer);
       clipRef.current = clip;
       const playback = await playClip(clip.uri, () => {
-        if (id === requestId.current) setStatus('idle');
+        if (id === requestId.current) {
+          lipSync.current = { currentTime: () => 0 };
+          setStatus('idle');
+        }
       });
       if (id !== requestId.current) {
         playback.stop();
         return;
       }
+      const gestures = clipAudio.alignment
+        ? cuesFromWords(wordsFromAlignment(clipAudio.alignment))
+        : cuesFromText(spoken);
+      lipSync.current = { envelope, gestures, currentTime: playback.currentTime };
       stopPlayback.current = playback.stop;
       setLastSpoken(spoken);
       setStatus('speaking');
@@ -96,6 +110,7 @@ export function useGooseVoice() {
     lastSpoken,
     configured: voiceConfig.voiceConfigured,
     setupMessage: voiceConfig.setupMessage,
+    lipSync,
     speak,
     stop,
   };

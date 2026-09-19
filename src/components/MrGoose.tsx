@@ -1,6 +1,7 @@
-import { Component, type ReactNode } from 'react';
+import { Component, type ReactNode, type RefObject } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useMotionPreferences } from '../hooks/useMotionPreferences';
+import type { LipSync } from '../voice/envelope.ts';
 import { Canvas } from './goose/GooseCanvas';
 import { GooseScene } from './goose/GooseScene';
 import { type GooseActivity, type GooseEmotion } from './goose/motion';
@@ -20,11 +21,12 @@ export type MrGooseProps = {
   animationEnabled?: boolean;
   activity?: GooseActivity;
   emotion?: GooseEmotion;
+  lipSync?: RefObject<LipSync>;
   style?: StyleProp<ViewStyle>;
 };
 
 /** A self-contained 3D character. Give its container a width and height. */
-export function MrGoose({ animationEnabled = true, activity = 'idle', emotion, style }: MrGooseProps) {
+export function MrGoose({ animationEnabled = true, activity = 'idle', emotion, lipSync, style }: MrGooseProps) {
   const { reducedMotion, appActive } = useMotionPreferences();
   const animate = animationEnabled && !reducedMotion && appActive;
   return (
@@ -34,7 +36,7 @@ export function MrGoose({ animationEnabled = true, activity = 'idle', emotion, s
         <Canvas orthographic camera={{ position: [0, 3.15, 8], zoom: 110, near: 0.1, far: 30 }}
           frameloop={animate ? 'always' : 'demand'}
           gl={{ antialias: true, alpha: false }}>
-          <GooseScene animate={animate} reducedMotion={reducedMotion} activity={activity} emotion={emotion} />
+          <GooseScene animate={animate} reducedMotion={reducedMotion} activity={activity} emotion={emotion} lipSync={lipSync} />
         </Canvas>
       </RenderBoundary>
     </View>

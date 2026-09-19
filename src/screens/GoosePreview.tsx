@@ -80,7 +80,7 @@ export function GoosePreview() {
           <View style={styles.eyebrow}><View style={styles.dot} /><Text style={styles.eyebrowText}>SIGNLOOP</Text></View>
           <Text accessibilityRole="header" style={styles.title}>Mr. Goose</Text>
         </View>
-        <MrGoose animationEnabled={animationEnabled} activity={activity} emotion={emotion} style={styles.goose} />
+        <MrGoose animationEnabled={animationEnabled} activity={activity} emotion={emotion} lipSync={voice.lipSync} style={styles.goose} />
         {voice.lastSpoken ? <Text style={styles.spoken} accessibilityLiveRegion="polite">{voice.lastSpoken}</Text> : null}
         <View style={styles.controls}>
           <TextInput

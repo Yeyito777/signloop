@@ -4,7 +4,9 @@ import {
   buildSpeechRequest,
   ELEVENLABS_MODEL_ID,
   ELEVENLABS_OUTPUT_FORMAT,
+  emotionTags,
   emotionVoice,
+  performanceText,
   seedForSpeechText,
   messageForSpeechError,
   prepareSpeechText,
@@ -20,18 +22,32 @@ test('speech text is trimmed', () => {
   assert.equal(prepareSpeechText('  hello goose  '), 'hello goose');
 });
 
-test('speech request uses the convert endpoint, key header, and multilingual model', () => {
+test('speech request uses timestamps, the key header, and eleven v3', () => {
   const request = buildSpeechRequest('Hi from SignLoop.', 'goose-voice-id', 'test-key');
-  assert.equal(request.url, `https://api.elevenlabs.io/v1/text-to-speech/goose-voice-id?output_format=${ELEVENLABS_OUTPUT_FORMAT}`);
+  assert.equal(ELEVENLABS_MODEL_ID, 'eleven_v3');
+  assert.equal(request.url, `https://api.elevenlabs.io/v1/text-to-speech/goose-voice-id/with-timestamps?output_format=${ELEVENLABS_OUTPUT_FORMAT}`);
   assert.equal(request.headers['xi-api-key'], 'test-key');
   assert.equal(request.headers['Content-Type'], 'application/json');
-  assert.equal(request.headers.Accept, 'audio/mpeg');
+  assert.equal(request.headers.Accept, 'application/json');
   assert.deepEqual(JSON.parse(request.body), {
-    text: 'Hi from SignLoop.',
+    text: performanceText('Hi from SignLoop.', 'joy'),
     model_id: ELEVENLABS_MODEL_ID,
     seed: seedForSpeechText('Hi from SignLoop.', 'joy'),
     voice_settings: emotionVoice.joy,
   });
+});
+
+test('captions stay on the raw English while TTS gets audio tags', () => {
+  assert.equal(prepareSpeechText('  hello goose  '), 'hello goose');
+  assert.equal(performanceText('hello goose', 'joy'), '[happily] [excited] hello goose');
+  assert.equal(performanceText('hello goose', 'sadness'), '[sad] [sighs] [slowly] hello goose');
+  assert.equal(performanceText('hello goose', 'anger'), '[angry] hello goose');
+  assert.equal(performanceText('hello goose', 'fear'), '[worried] [nervously] hello goose');
+  for (const tags of Object.values(emotionTags)) {
+    for (const tag of tags) {
+      assert.equal(/^(hello|back|you|me|there)$/.test(tag), false);
+    }
+  }
 });
 
 test('the same line and emotion always uses the same speech seed', () => {
@@ -39,17 +55,25 @@ test('the same line and emotion always uses the same speech seed', () => {
   assert.notEqual(seedForSpeechText('Hello from SignLoop.', 'joy'), seedForSpeechText('Hello from SignLoop.', 'sadness'));
 });
 
-test('each emotion sends different voice settings', () => {
+test('each emotion sends different voice settings and tagged text', () => {
   const joy = JSON.parse(buildSpeechRequest('Hi', 'id', 'key', 'joy').body);
   const sad = JSON.parse(buildSpeechRequest('Hi', 'id', 'key', 'sadness').body);
+  const anger = JSON.parse(buildSpeechRequest('Hi', 'id', 'key', 'anger').body);
+  const fear = JSON.parse(buildSpeechRequest('Hi', 'id', 'key', 'fear').body);
   assert.deepEqual(joy.voice_settings, emotionVoice.joy);
   assert.deepEqual(sad.voice_settings, emotionVoice.sadness);
   assert.notDeepEqual(joy.voice_settings, sad.voice_settings);
+  assert.notDeepEqual(joy.voice_settings, anger.voice_settings);
+  assert.notDeepEqual(joy.voice_settings, fear.voice_settings);
+  assert.equal(joy.text, performanceText('Hi', 'joy'));
+  assert.equal(sad.text, performanceText('Hi', 'sadness'));
+  assert.notEqual(joy.text, sad.text);
+  assert.notEqual(anger.text, fear.text);
 });
 
 test('voice ids are encoded in the request URL', () => {
   const request = buildSpeechRequest('Hi', 'id with space', 'key');
-  assert.equal(request.url, `https://api.elevenlabs.io/v1/text-to-speech/id%20with%20space?output_format=${ELEVENLABS_OUTPUT_FORMAT}`);
+  assert.equal(request.url, `https://api.elevenlabs.io/v1/text-to-speech/id%20with%20space/with-timestamps?output_format=${ELEVENLABS_OUTPUT_FORMAT}`);
 });
 
 test('speech errors map to short user-facing messages', () => {

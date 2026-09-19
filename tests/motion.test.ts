@@ -4,8 +4,10 @@ import {
   activityOffset,
   advanceTime,
   composePose,
+  gestureOffset,
   gooseActivities,
   gooseEmotions,
+  gooseGestures,
   idlePose,
   stepPose,
 } from '../src/components/goose/motion.ts';
@@ -35,7 +37,11 @@ test('blink fully closes then reopens, including across the cycle boundary', () 
 });
 
 test('neutral pose has open eyes; all idle motion stays within small limits', () => {
-  assert.deepEqual(idlePose(0), { breath: 1, bob: 0, tilt: 0, wing: 0, eyes: 1, yaw: 0, pitch: 0, beak: 0 });
+  assert.deepEqual(idlePose(0), {
+    breath: 1, bob: 0, tilt: 0, wing: 0, leftWing: 0, rightWing: 0,
+    leftWingYaw: 0, rightWingYaw: 0, leftWingPitch: 0, rightWingPitch: 0,
+    eyes: 1, yaw: 0, bodyYaw: 0, pitch: 0, beak: 0,
+  });
   for (let t = 0; t < 100; t += 0.01) {
     const p = idlePose(t);
     assert.ok(Math.abs(p.breath - 1) <= motion.breathingAmount + 1e-9);
@@ -46,6 +52,9 @@ test('neutral pose has open eyes; all idle motion stays within small limits', ()
     assert.equal(p.yaw, 0);
     assert.equal(p.pitch, 0);
     assert.equal(p.beak, 0);
+    assert.equal(p.leftWing, 0);
+    assert.equal(p.rightWing, 0);
+    assert.equal(p.bodyYaw, 0);
   }
 });
 
@@ -60,6 +69,11 @@ test('Speaking opens the beak; Idle does not', () => {
   assert.equal(composePose(0.2, 'idle').beak, 0);
   const peak = motion.speakingBeakSeconds * 0.25;
   assert.ok(composePose(peak, 'speaking').beak > 0.2);
+});
+
+test('lip-sync loudness opens the beak more than silence', () => {
+  assert.ok(composePose(0, 'speaking', undefined, 1).beak > composePose(0, 'speaking', undefined, 0).beak + 0.2);
+  assert.ok(composePose(0, 'speaking', undefined, 0).beak < 0.1);
 });
 
 test('Watching and Thinking change the pose versus Idle', () => {
@@ -77,6 +91,25 @@ test('Fear hops higher than Idle', () => {
   assert.ok(maxFear > maxIdle + 0.03);
 });
 
+test('hello and you lift a wing; back turns the head', () => {
+  assert.ok((gestureOffset('hello', 0.5).rightWing ?? 0) > 0.2);
+  assert.ok((gestureOffset('you', 0.5).rightWingPitch ?? 0) > 0.4);
+  assert.ok((gestureOffset('me', 0.5).rightWingYaw ?? 0) > 0.4);
+  assert.ok((gestureOffset('there', 0.5).bodyYaw ?? 0) > 0.2);
+  assert.ok((gestureOffset('back', 0.5).bodyYaw ?? 0) < -0.2);
+  assert.notDeepEqual(gestureOffset('hello', 0.5), gestureOffset('you', 0.5));
+  assert.notDeepEqual(gestureOffset('you', 0.5), gestureOffset('me', 0.5));
+  assert.notDeepEqual(gestureOffset('me', 0.5), gestureOffset('there', 0.5));
+  assert.notDeepEqual(gestureOffset('there', 0.5), gestureOffset('back', 0.5));
+  for (const name of gooseGestures) {
+    const p = composePose(0, 'idle', undefined, undefined, { name, localTime: 0.5 });
+    assert.ok(Math.abs(p.rightWing) <= poseLimits.wing + 1e-9);
+    assert.ok(Math.abs(p.bodyYaw) <= poseLimits.bodyYaw + 1e-9);
+    assert.ok(Math.abs(p.rightWingPitch) <= poseLimits.wingTwist + 1e-9);
+    assert.ok(Math.abs(p.rightWingYaw) <= poseLimits.wingTwist + 1e-9);
+  }
+});
+
 test('each of the four emotions changes the pose versus Idle', () => {
   for (const emotion of gooseEmotions) {
     assert.notDeepEqual(composePose(1.2, 'idle', emotion), composePose(1.2, 'idle'));
@@ -92,7 +125,14 @@ test('composed poses stay inside the small motion limits', () => {
         assert.ok(Math.abs(p.bob) <= poseLimits.bob + 1e-9);
         assert.ok(Math.abs(p.tilt) <= poseLimits.tilt + 1e-9);
         assert.ok(Math.abs(p.wing) <= poseLimits.wing + 1e-9);
+        assert.ok(Math.abs(p.leftWing) <= poseLimits.wing + 1e-9);
+        assert.ok(Math.abs(p.rightWing) <= poseLimits.wing + 1e-9);
+        assert.ok(Math.abs(p.leftWingYaw) <= poseLimits.wingTwist + 1e-9);
+        assert.ok(Math.abs(p.rightWingYaw) <= poseLimits.wingTwist + 1e-9);
+        assert.ok(Math.abs(p.leftWingPitch) <= poseLimits.wingTwist + 1e-9);
+        assert.ok(Math.abs(p.rightWingPitch) <= poseLimits.wingTwist + 1e-9);
         assert.ok(Math.abs(p.yaw) <= poseLimits.yaw + 1e-9);
+        assert.ok(Math.abs(p.bodyYaw) <= poseLimits.bodyYaw + 1e-9);
         assert.ok(Math.abs(p.pitch) <= poseLimits.pitch + 1e-9);
         assert.ok(p.beak >= 0 && p.beak <= poseLimits.beak);
         assert.ok(p.eyes >= poseLimits.eyesMin && p.eyes <= 1);
