@@ -1,0 +1,6 @@
+# Training / evaluation (any recent Python):
+numpy>=1.26
+torch>=2.4
+# Core ML export needs a Python that coremltools ships native code for (<= 3.12) and a torch it was tested with:
+#   python3.12 -m venv .runtime/venv-coreml && .runtime/venv-coreml/bin/pip install "torch==2.7.0" numpy coremltools
+coremltools>=9.0 ; python_version < "3.13"
