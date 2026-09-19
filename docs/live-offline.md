@@ -96,3 +96,17 @@ simulator, not an iPhone measurement and not camera-to-caption latency.
 The app's actual asset loader was also exercised: with assets, the UI showed
 the five-sign scope; without them, it showed the ILY fallback. No synthetic
 recognized caption was injected into the camera UI.
+
+Validation also passed 61 Python tests, core scheduling checks, native
+HTTP/DTW/tensor/articulation tests, and six UI tests **both without and with**
+private model assets (including permission recovery, contrast, overlays,
+pause/resume and large text).
+
+Debug build **6**, source `3411d1f`, was installed on Yeyito's iPhone at
+05:34 local time, September 19. The two exact pretrained assets were copied
+successfully into its private Documents container. No API keys or research
+observations were transferred. The phone was locked at the preceding check;
+the launch command failed with a CoreDevice/Mercury connection error.
+**Successful installation/provisioning does not establish successful launch,
+on-phone model performance or live recognition accuracy.** Unlock and open
+Signloop to validate; no Mac or Wi-Fi connection is needed for this mode.
