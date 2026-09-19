@@ -7,6 +7,7 @@ import QuartzCore
 final class SignloopCameraView: ExpoView {
     let onStatus = EventDispatcher()
     let onSign = EventDispatcher()
+    let onPrediction = EventDispatcher()
     let tracker: CameraTracker
     var active = false
     var captureId = 0
@@ -27,9 +28,12 @@ final class SignloopCameraView: ExpoView {
     required init(appContext: AppContext? = nil) {
         let resourceURL = Bundle(for: SignloopCameraView.self).url(forResource: "SignloopCameraModels", withExtension: "bundle")
             ?? Bundle.main.url(forResource: "SignloopCameraModels", withExtension: "bundle")
-        let model = resourceURL.flatMap(Bundle.init(url:))?.path(forResource: "gesture_recognizer", ofType: "task")
-        tracker = CameraTracker(modelPath: model)
+        let resourceBundle = resourceURL.flatMap(Bundle.init(url:))
+        let model = resourceBundle?.path(forResource: "gesture_recognizer", ofType: "task")
+        // Optional on-device SignEngine package (policy + Core ML), present only if one was cleared and bundled.
+        tracker = CameraTracker(modelPath: model, signEngineDirectory: resourceBundle.flatMap(SignEngine.locate(in:)))
         super.init(appContext: appContext)
+        tracker.onPrediction = { [weak self] prediction in self?.emitPrediction(prediction) }
         clipsToBounds = true
         backgroundColor = .black
         preview.previewLayer.session = tracker.session
@@ -120,6 +124,22 @@ final class SignloopCameraView: ExpoView {
         lastStatus = key
         onStatus(["captureId": captureId, "status": status, "handCount": handCount, "message": message])
         if status != "tracking" { emitSign(nil) }
+    }
+
+    /// Completed attempts and state changes only. The payload is a decision, never landmarks or pixels;
+    /// the JS session flow still requires the user to confirm before anything becomes a caption.
+    private func emitPrediction(_ p: SignPrediction) {
+        guard isCapturing else { return }
+        onPrediction([
+            "captureId": captureId,
+            "label": p.label as Any? ?? NSNull(),
+            "confidence": p.confidence,
+            "state": p.state,
+            "trackingQuality": p.trackingQuality,
+            "tier": p.tier as Any? ?? NSNull(),
+            "reason": p.reason as Any? ?? NSNull(),
+            "observedAtMS": Date().timeIntervalSince1970 * 1000,
+        ])
     }
 
     private func emitSign(_ label: String?) {
