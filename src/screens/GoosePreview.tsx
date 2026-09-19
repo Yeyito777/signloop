@@ -91,7 +91,7 @@ export function GoosePreview() {
             onChangeText={setAsrText}
             onFocus={() => setTextFocused(true)}
             onBlur={() => setTextFocused(false)}
-            multiline
+            returnKeyType="done"
             style={styles.input}
           />
           <View style={styles.row}>
@@ -132,14 +132,14 @@ const styles = StyleSheet.create({
   heading: { alignItems: 'center', paddingTop: 12, paddingHorizontal: 24 },
   eyebrow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 6 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#788775' },
-  eyebrowText: { color: '#6D7668', fontSize: 10, fontWeight: '700', letterSpacing: 2.2 },
+  eyebrowText: { color: '#6D7668', fontSize: 12, fontWeight: '700', letterSpacing: 2.2 },
   title: { fontSize: 32, fontWeight: '700', letterSpacing: -1.4, color: '#30372F' },
   goose: { flex: 1, minHeight: 280 },
-  spoken: { color: '#5C6558', fontSize: 14, textAlign: 'center', paddingHorizontal: 28, paddingBottom: 6 },
+  spoken: { color: '#5C6558', fontSize: 17, textAlign: 'center', paddingHorizontal: 28, paddingBottom: 6 },
   controls: { alignItems: 'center', paddingHorizontal: 24, paddingTop: 4, paddingBottom: 14, overflow: 'visible', zIndex: 2 },
   input: {
-    width: '100%', maxWidth: 310, minHeight: 48, maxHeight: 88, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 10,
-    backgroundColor: '#FFFDF8', borderWidth: 1, borderColor: '#D8D2C4', color: '#30372F', fontSize: 15, marginBottom: 10, textAlignVertical: 'top',
+    width: '100%', maxWidth: 310, height: 40, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 8,
+    backgroundColor: '#FFFDF8', borderWidth: 1, borderColor: '#D8D2C4', color: '#30372F', fontSize: 14, marginBottom: 10,
   },
   row: { width: '100%', maxWidth: 310, flexDirection: 'row', gap: 10, marginBottom: 10, overflow: 'visible', zIndex: 2 },
   dropdown: { flex: 1, position: 'relative', zIndex: 3 },
@@ -148,8 +148,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 14,
   },
   dropdownPressed: { backgroundColor: '#E7E2D4' },
-  dropdownLabel: { color: '#394738', fontSize: 15, fontWeight: '600' },
-  dropdownCaret: { color: '#394738', fontSize: 12 },
+  dropdownLabel: { color: '#394738', fontSize: 17, fontWeight: '600' },
+  dropdownCaret: { color: '#394738', fontSize: 13 },
   dropdownMenu: {
     position: 'absolute', left: 0, right: 0, bottom: 54, backgroundColor: '#FFFDF8',
     borderRadius: 16, borderWidth: 1, borderColor: '#D8D2C4', overflow: 'hidden',
@@ -157,16 +157,16 @@ const styles = StyleSheet.create({
   dropdownItem: { paddingHorizontal: 14, paddingVertical: 11 },
   dropdownItemSelected: { backgroundColor: '#394738' },
   dropdownItemPressed: { opacity: 0.75 },
-  dropdownItemText: { color: '#394738', fontSize: 15, fontWeight: '600' },
+  dropdownItemText: { color: '#394738', fontSize: 17, fontWeight: '600' },
   dropdownItemTextSelected: { color: '#FFFDF5' },
   half: { flex: 1, maxWidth: undefined },
   button: { minHeight: 48, width: '100%', maxWidth: 310, borderRadius: 24, backgroundColor: '#394738', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 12 },
   buttonPressed: { backgroundColor: '#53634D' },
   buttonDisabled: { opacity: 0.4 },
-  buttonIcon: { color: '#FFFDF5', fontSize: 16, fontWeight: '600' },
-  buttonText: { color: '#FFFDF5', fontSize: 15, fontWeight: '600' },
+  buttonIcon: { color: '#FFFDF5', fontSize: 17, fontWeight: '600' },
+  buttonText: { color: '#FFFDF5', fontSize: 17, fontWeight: '600' },
   secondary: { minHeight: 48, borderRadius: 24, borderWidth: 1.5, borderColor: '#394738', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 12 },
   secondaryPressed: { backgroundColor: '#E7E2D4' },
-  secondaryText: { color: '#394738', fontSize: 15, fontWeight: '600' },
-  note: { color: '#8C887D', fontSize: 11, marginTop: 2, textAlign: 'center' },
+  secondaryText: { color: '#394738', fontSize: 17, fontWeight: '600' },
+  note: { color: '#8C887D', fontSize: 15, marginTop: 4, textAlign: 'center' },
 });
