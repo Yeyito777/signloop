@@ -90,3 +90,8 @@ tests, existing native HTTP/DTW/tensor/articulation parity, six simulator UI tes
 and signed iPhone build. A replay using the actual default (no threshold flag)
 matched every count from the explicit .45 run. The native calibration entry
 also rejected the non-calibration cohort in an intentional negative test.
+
+Build **8**, source `ab482b9`, was installed on Yeyito's iPhone at 06:24 local
+time, September 19. The existing private pretrained assets remain separate
+from the app bundle. This records installation, not verified launch or live
+phone signing accuracy.
