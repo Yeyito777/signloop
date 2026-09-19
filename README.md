@@ -65,6 +65,10 @@ Facial signals are **not sentiment/emotion labels or recognized ASL grammar**.
 Coordinates share the camera image plane, not a calibrated 3D coordinate system.
 See [architecture, probe schema and testing](docs/multimodal-skeleton.md).
 
+Tap the smiling-face button for [Expression lab](docs/expression-tester.md):
+five live facial-cue bars, per-cue calibration and adjustable thresholds.
+The experimental presets do not infer emotion or ASL meaning.
+
 This replaces the standalone camera's earlier ILY/five-sign research display;
 old recognition experiments remain below for reference and are not called by the new camera UI.
 No private sign-model assets are needed. Installing build 11 replaces the previous
