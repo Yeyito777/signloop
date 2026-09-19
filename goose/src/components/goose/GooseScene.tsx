@@ -2,6 +2,7 @@ import { useEffect, useRef, type RefObject } from 'react';
 import { Group, Mesh, MeshBasicMaterial, OrthographicCamera } from 'three';
 import { useFrame, useThree } from './GooseCanvas';
 import { colors, motion } from './settings';
+import { useSoftwarePreview } from './renderQuality';
 import { advanceTime, composePose, stillPose, stepPose, type GooseActivity, type GooseEmotion, type GoosePose } from './motion';
 import { levelAt, type LipSync } from '../../voice/envelope.ts';
 import { gestureAt } from '../../voice/gestures.ts';
@@ -17,10 +18,11 @@ type PebbleProps = {
 
 // Every part is a smooth, scaled sphere. No model downloads or texture assets.
 function Pebble({ color, position, scale, rotation, glossy = false }: PebbleProps) {
+  const software = useSoftwarePreview();
   return (
     <mesh position={position} scale={scale} rotation={rotation}>
       <sphereGeometry args={[1, 32, 24]} />
-      <meshStandardMaterial color={color} roughness={glossy ? 0.18 : 0.83} metalness={0} />
+      {software ? <meshLambertMaterial color={color} /> : <meshStandardMaterial color={color} roughness={glossy ? 0.18 : 0.83} metalness={0} />}
     </mesh>
   );
 }
@@ -195,7 +197,8 @@ function Goose({ animate, reducedMotion, activity, emotion, lipSync }: {
   );
 }
 
-export function GooseScene(props: {
+export function GooseScene({ background = colors.background, ...props }: {
+  background?: string | null;
   animate: boolean;
   reducedMotion: boolean;
   activity: GooseActivity;
@@ -213,7 +216,7 @@ export function GooseScene(props: {
 
   return (
     <>
-      <color attach="background" args={[colors.background]} />
+      {background && <color attach="background" args={[background]} />}
       <hemisphereLight args={['#FFF9EF', '#B5A38C', 1.5]} />
       <directionalLight position={[-3, 5, 7]} color="#FFF8EC" intensity={2.5} />
       <directionalLight position={[4, 3, 5]} color="#EAF0FF" intensity={1} />

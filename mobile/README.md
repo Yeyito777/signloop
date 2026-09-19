@@ -32,8 +32,8 @@ After the first build, `npm start` and then `i` reopens the installed app. To op
 
 Start conversation requests camera permission on iPhone and shows a mirrored preview, native joint overlay, and hand visibility feedback. Permission denial offers Settings. Simulator and platforms without the module show an unavailable state with an explicit UI demo option.
 
-Home offers Start conversation, Voice settings, and an explicitly labelled sample
-preview. Live capture recognizes only the public model's ILY handshape: extend
+Home offers Start conversation and Voice settings. Simulator camera guidance
+links to an explicitly labelled sample preview. Live capture recognizes only the public model's ILY handshape: extend
 thumb, index, and pinky; fold the other two fingers. A tentative result is **not**
 spoken until Confirm. Unknown gestures and expired results produce no words.
 Release the handshape before repeating it. This is not validated general ASL
@@ -49,14 +49,15 @@ Fonts are bundled locally. The UI imports canonical `../design-system/` tokens/i
 and respects system text size and Reduce Motion. The live app imports Sanvi's
 reusable `../goose/src/components/MrGoose` renderer. Metro resolves shared-source
 dependencies from `mobile/node_modules`, never the standalone Expo 57 runtime.
+See [character handoff](src/avatar/README.md) for native rendering adaptations.
 TypeScript-only path mappings are disabled in Metro (`experiments.tsconfigPaths:
 false`) so declaration files cannot become runtime modules.
 
-Home and Conversation share one avatar container: the blue stage travels into the lower half as the camera and caption area appear. The character renderer stays mounted; only its outer container moves. Direct entry and Reduce Motion skip this movement. Navigation also uses a short native crossfade. Reanimated drives press/release springs, caption layout, and pause/status fades. Gorhom sheets support dragging, a fading backdrop, content resizing, and keyboard-aware correction. Their content remains mounted until dismissal finishes; capture resumes and correction playback begins only afterward. Ending a session keeps capture stopped through the return to Home. OS Reduce Motion disables animation. Expo Haptics supplements completed taps where supported; iOS suppresses haptics while its camera is active, so all meaningful feedback is visual.
+The selected Go big direction uses “You were saying?” on Home, oversized artwork, one ink Start button, open captions, and dark sheets. Home and Conversation share one avatar container: the large character moves into a centered, reserved stage while the camera and caption area appear. Its blue backdrop recedes and a decorative curved line changes shape during the transition. The character renderer stays mounted; only its outer container moves. Direct entry and Reduce Motion skip this movement. Navigation also uses a short native crossfade. Reanimated drives press/release springs, stage travel, and pause/status fades. Gorhom sheets support dragging, a fading backdrop, content resizing, and keyboard-aware correction. Their content remains mounted until dismissal finishes; capture resumes and correction playback begins only afterward. Ending a session keeps capture stopped through the return to Home. OS Reduce Motion disables animation. Expo Haptics supplements completed taps where supported; iOS suppresses haptics while its camera is active, so all meaningful feedback is visual.
 
-Motion timings and springs come from `../design-system/tokens.json`; `src/ui/motion.tsx` owns the shared runtime policy. Use `Touch`, `Button`, `IconButton`, and `Sheet` for new controls. Keep the native camera and future 3D avatar mounted when visual status changes. Adding these native animation/gesture/haptic packages requires a new development build once; later JS-only motion tuning uses Fast Refresh.
+Motion timings and springs come from `../design-system/tokens.json`; `src/ui/motion.tsx` owns the shared runtime policy. Use `Touch`, `Button`, `IconButton`, and `Sheet` for new controls. Keep the native camera and 3D avatar mounted when visual status changes. Adding these native animation/gesture/haptic packages requires a new development build once; later JS-only motion tuning uses Fast Refresh.
 
-Camera corner guides settle after 300 ms of stable readiness; transient framing changes wait 450 ms before changing the guidance. This filters presentation only: recognition still reacts immediately to raw scanner events, and permission/device failures appear immediately. Accepted captions remain visible while another phrase is processed or framing is lost. Long captions borrow room from the stage, and correction briefly shows “Correction saved.”
+Camera corner guides settle after 300 ms of stable readiness; transient framing changes wait 450 ms before changing the guidance. This filters presentation only: recognition still reacts immediately to raw scanner events, and permission/device failures appear immediately. Accepted captions remain visible while another phrase is processed or framing is lost. The conversation reserves roughly 45% camera, 30% goose, and 25% captions. Larger system text gets more caption space without shrinking the goose. Long captions and recovery actions scroll inside that region; edit/replay remain above them. Correction briefly shows “Correction saved.”
 
 Manual demo scenarios stay selected until restarted. “Run sample conversation,” retry, or Resume starts a fresh finite example; opening sheets no longer silently starts another sample over a correction.
 

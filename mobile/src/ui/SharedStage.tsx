@@ -2,9 +2,9 @@ import { createContext, forwardRef, useCallback, useContext, useEffect, useImper
 import { AppState, StyleSheet, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
 import { usePathname } from 'expo-router';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
-import Animated, { cancelAnimation, interpolate, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
+import Animated, { cancelAnimation, interpolate, useAnimatedProps, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
+import Svg, { Path } from 'react-native-svg';
 import type { AvatarProps } from '../integrations/contracts';
-import { Copy } from './primitives';
 import { motion, useReducedMotion } from './motion';
 import { tokens } from './theme';
 
@@ -22,7 +22,24 @@ type StageContextValue = {
 };
 const StageContext = createContext<StageContextValue | null>(null);
 const EMPTY_FRAME = { x: 0, y: 0, width: 0, height: 0 };
-const AVATAR_SIZE = 240;
+// Portrait surface fits the full 3D character. It never resizes during route travel.
+const AVATAR_WIDTH = 320;
+const AVATAR_HEIGHT = 440;
+const AnimatedPath = Animated.createAnimatedComponent(Path);
+// Matching cubic control points let one line change shape with the travelling stage.
+const HOME_LOOP = [[1.04,.40],[.70,.38],[.59,.55],[.64,.63],[.70,.74],[.87,.76],[.87,.65],[.87,.53],[.68,.58],[.65,.73],[.60,.94],[.20,.92],[.14,.74],[.08,.60],[-.02,.53],[-.12,.67]];
+const CONVERSATION_LOOP = [[.04,.32],[.10,.22],[.16,.22],[.20,.38],[.27,.61],[.24,.81],[.19,.67],[.15,.51],[.23,.35],[.32,.52],[.42,.74],[.61,.54],[.72,.55],[.84,.57],[.90,.76],[.98,.70]];
+
+function loopPath(rect: Frame, progress: number, width: number) {
+  'worklet';
+  let path = '';
+  for (let i = 0; i < HOME_LOOP.length; i++) {
+    const x = CONVERSATION_LOOP[i][0] * width * (1 - progress) + (rect.x + HOME_LOOP[i][0] * rect.width) * progress;
+    const y = rect.y + (CONVERSATION_LOOP[i][1] * (1 - progress) + HOME_LOOP[i][1] * progress) * rect.height;
+    path += `${i === 0 ? 'M' : (i - 1) % 3 === 0 ? 'C' : ''}${x},${y} `;
+  }
+  return path;
+}
 
 export function SharedStageProvider({ children }: { children: ReactNode }) {
   const reduced = useReducedMotion();
@@ -98,7 +115,7 @@ export const StageSlot = forwardRef<StageSlotHandle, Presentation & { owner: Own
 export function SharedStageLayer() {
   const pathname = usePathname();
   const { frame, home, homeViewport, presentation } = useSharedStage();
-  const { height } = useWindowDimensions();
+  const { width: windowWidth, height } = useWindowDimensions();
   const reduced = useReducedMotion();
   const [foreground, setForeground] = useState(AppState.currentState === 'active');
   useEffect(() => {
@@ -108,25 +125,23 @@ export function SharedStageLayer() {
   const avatar = useAnimatedStyle(() => {
     const rect = frame.value;
     return { opacity: rect.width > 0 ? 1 : 0, transform: [
-      { translateX: rect.x + (rect.width - AVATAR_SIZE) / 2 },
-      { translateY: rect.y + (rect.height - AVATAR_SIZE) / 2 },
-      { scale: Math.min(rect.width, rect.height) / AVATAR_SIZE },
+      { translateX: rect.x + (rect.width - AVATAR_WIDTH) / 2 },
+      { translateY: rect.y + (rect.height - AVATAR_HEIGHT) / 2 },
+      { scale: Math.min(rect.width / AVATAR_WIDTH, rect.height / AVATAR_HEIGHT) },
     ] };
   });
   const oval = useAnimatedStyle(() => {
     const rect = frame.value;
-    const width = Math.min(rect.width * interpolate(home.value, [0, 1], [0.6, 0.85]), rect.height * 1.7);
+    const width = rect.width * 1.08;
     return {
-      left: rect.x + (rect.width - width) / 2, top: rect.y + rect.height * 0.21,
-      width, height: rect.height * 0.66,
-      opacity: 1,
-      transform: [{ rotate: `${interpolate(home.value, [0, 1], [-4, -8])}deg` }],
+      left: rect.x + rect.width * 0.19, top: rect.y + rect.height * 0.04,
+      width, height: rect.height * 0.92,
+      opacity: home.value,
+      transform: [{ rotate: '-18deg' }],
     };
   });
-  const greeting = useAnimatedStyle(() => ({
-    left: frame.value.x + frame.value.width - 96, top: frame.value.y + 18,
-    opacity: home.value, transform: [{ scale: interpolate(home.value, [0, 1], [0.85, 1]) }, { rotate: '6deg' }],
-  }));
+  const homeLoop = useAnimatedProps(() => ({ d: loopPath(frame.value, home.value, windowWidth), opacity: frame.value.width > 0 ? home.value : 0 }));
+  const conversationLoop = useAnimatedProps(() => ({ d: loopPath(frame.value, home.value, windowWidth), opacity: frame.value.width > 0 ? 1 - home.value : 0 }));
   // Match Home's scroll viewport so the floating stage never covers its header or Start button.
   const clip = useAnimatedStyle(() => ({
     top: home.value * homeViewport.value.top,
@@ -141,7 +156,10 @@ export function SharedStageLayer() {
     <Animated.View style={[styles.avatar, avatar]}>
       <Renderer mode={presentation.mode} emotion={presentation.emotion} reducedMotion={reduced || presentation.reducedMotion || !foreground} style={StyleSheet.absoluteFill} />
     </Animated.View>
-    <Animated.View style={[styles.hello, greeting]}><Copy role="sectionTitle" allowFontScaling={false}>Hello!</Copy></Animated.View>
+    <Svg width={windowWidth} height={height} style={StyleSheet.absoluteFill} accessible={false}>
+      <AnimatedPath animatedProps={homeLoop} fill="none" stroke={tokens.color.paper} strokeWidth={3.5} strokeLinecap="round" />
+      <AnimatedPath animatedProps={conversationLoop} fill="none" stroke={tokens.color.coral} strokeWidth={2.5} strokeLinecap="round" />
+    </Svg>
     </Animated.View>
   </Animated.View>;
 }
@@ -163,6 +181,5 @@ const styles = StyleSheet.create({
   clip: { position: 'absolute', left: 0, right: 0, overflow: 'hidden' },
   contents: { position: 'absolute', left: 0, right: 0 },
   oval: { position: 'absolute', backgroundColor: tokens.color.blue, borderRadius: 999 },
-  avatar: { position: 'absolute', width: AVATAR_SIZE, height: AVATAR_SIZE },
-  hello: { position: 'absolute', paddingHorizontal: 18, paddingVertical: 12, backgroundColor: tokens.color.paper, borderWidth: 1.5, borderColor: tokens.color.ink, borderRadius: 20, borderBottomLeftRadius: 4 },
+  avatar: { position: 'absolute', width: AVATAR_WIDTH, height: AVATAR_HEIGHT },
 });
