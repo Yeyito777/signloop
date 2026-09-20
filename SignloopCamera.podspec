@@ -13,13 +13,22 @@ Pod::Spec.new do |s|
   s.dependency 'ExpoModulesCore'
   s.dependency 'MediaPipeTasksVision', '0.10.21'
   s.source_files = 'mobile/modules/signloop-camera/ios/*.swift',
-    'ios/Signloop/{CameraPreview,CaptureLifecycle,CaptureCadence,CaptureFreshness,Recognition,SignSegmenter,Skeleton,SkeletonCameraTracker,SkeletonPipeline,BasicSignMatcher,BasicSignSegmentation,BasicLiveRecognition}.swift'
+    'ios/Signloop/{CameraPreview,CaptureLifecycle,CaptureCadence,CaptureFreshness,Recognition,SignSegmenter,Skeleton,SkeletonCameraTracker,SkeletonPipeline,BasicSignMatcher,BasicSignSegmentation,BasicLiveRecognition,ExpressionCues,ExpressionMeasurements,TaughtExpressionProfile,GooseExpression}.swift'
   # Private references are provisioned in Documents, never bundled for distribution.
   s.resource_bundles = { 'SignloopCameraModels' => ['ios/Signloop/Resources/hand_landmarker.task',
-                                                    'ios/Signloop/Resources/pose_landmarker_lite.task'] }
+                                                    'ios/Signloop/Resources/pose_landmarker_lite.task',
+                                                    'ios/Signloop/Resources/face_landmarker.task',
+                                                    'ios/Signloop/Resources/DemoExpressionProfile.json'] }
+  # Personal profiles are optional for caption-only builds, but never bundle an unchecked export.
+  expression_profile = File.join(__dir__, 'ios/Signloop/Resources/DemoExpressionProfile.json')
+  if File.exist?(expression_profile)
+    unless system('bash', File.join(__dir__, 'ios/scripts/check-expression-profile.sh'), expression_profile)
+      raise 'Invalid expression profile. Export a checked demo profile from Expression lab.'
+    end
+  end
   s.frameworks = 'AVFoundation', 'CoreMedia', 'CoreVideo', 'CoreML', 'QuartzCore', 'UIKit', 'Combine', 'SwiftUI'
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
-  %w[hand_landmarker pose_landmarker_lite].each do |model|
+  %w[hand_landmarker pose_landmarker_lite face_landmarker].each do |model|
     unless File.exist?(File.join(__dir__, "ios/Signloop/Resources/#{model}.task"))
       raise "Missing #{model}. Run npm run camera:assets from mobile/ before installing pods."
     end

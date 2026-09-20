@@ -66,10 +66,11 @@ export function ConversationSheets({ state, dispatch, onEnd, demo }: { state: Se
       ] as [Framing, IconName, string][]).map(([framing, icon, label]) => <MenuRow key={framing} icon={icon} label={label} onPress={() => commit({ type: 'demo-framing', framing })} />)}
       {([
         ['Goose thinking', 'info', { type: 'thinking' }],
-        ['Goose joy', 'play', { type: 'accepted', id: `joy-${state.captureId}`, text: 'I’m so glad you’re here!', emotion: 'happy' }],
+        ['Goose joy', 'play', { type: 'accepted', id: `joy-${state.captureId}`, text: 'I’m so glad you’re here!', emotion: 'joy' }],
         ['Goose sadness', 'play', { type: 'accepted', id: `sadness-${state.captureId}`, text: 'I wish we had more time together.', emotion: 'sadness' }],
         ['Goose anger', 'play', { type: 'accepted', id: `anger-${state.captureId}`, text: 'That was really frustrating.', emotion: 'anger' }],
         ['Goose fear', 'play', { type: 'accepted', id: `fear-${state.captureId}`, text: 'That gave me a fright!', emotion: 'fear' }],
+        ['Goose disgust', 'play', { type: 'accepted', id: `disgust-${state.captureId}`, text: 'That smells awful.', emotion: 'disgust' }],
         ['Uncertain translation', 'info', { type: 'uncertain' }],
         ['Connection lost', 'offline', { type: 'offline' }],
         ['Long caption', 'transcript', { type: 'accepted', id: `long-${state.captureId}`, text: 'Could we find somewhere a little quieter? I would love to hear more about your project, and it would be easier to have a conversation by the window.', emotion: 'neutral' }],

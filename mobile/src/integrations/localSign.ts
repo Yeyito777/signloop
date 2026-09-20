@@ -1,5 +1,6 @@
 import type { TranslationEvent } from './contracts.ts';
 import type { SignPredictionEvent } from '../../modules/signloop-camera/events.ts';
+import { isEmotion } from '../../../goose/src/emotion.ts';
 
 /** Exact presentation vocabulary shared with BasicSignScore.presentationVocabulary. */
 export const signText = {
@@ -30,6 +31,7 @@ export function candidateFromPrediction(event: SignPredictionEvent, active: bool
     || event.label !== event.candidates[0].label) return { type: 'clear-candidate' };
   const options = event.candidates.map(({ label }) => ({ label, text: signText[label as keyof typeof signText] }));
   return { type: 'candidate', ...options[0], attemptId: event.attemptId!, options,
+    emotion: isEmotion(event.emotion) ? event.emotion : 'neutral',
     observedAtMS: event.observedAtMS, selected: false,
     // Complete-segment scores have not been calibrated as probabilities.
     uncertain: true, expiresAtMS: event.observedAtMS + SIGN_REVIEW_MS };

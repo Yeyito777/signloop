@@ -97,7 +97,7 @@ def make_server(host: str, port: int, service: Service | None, token: str,
                 if self.path == "/v1/caption":
                     return service.caption(body.get("raw_signs"))
                 if self.path == "/v1/speech":
-                    text, emotion = validate_speech_input(body.get("text"), body.get("emotion", "joy"))
+                    text, emotion = validate_speech_input(body.get("text"), body.get("emotion", "neutral"))
                     return speech.speak(text, emotion)
             raise ServiceError("not_found", "Unknown endpoint.", 404)
 

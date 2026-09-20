@@ -22,3 +22,6 @@ fetch_model hand_landmarker \
 fetch_model pose_landmarker_lite \
   59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a \
   https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task
+fetch_model face_landmarker \
+  64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff \
+  https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task

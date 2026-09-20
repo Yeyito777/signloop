@@ -8,6 +8,8 @@ import { useGooseVoice } from '../hooks/useGooseVoice';
 import { useMotionPreferences } from '../hooks/useMotionPreferences';
 
 const emotionLabel: Record<GooseEmotion, string> = {
+  neutral: 'Neutral',
+  disgust: 'Disgust',
   joy: 'Joy',
   sadness: 'Sadness',
   anger: 'Anger',
@@ -58,7 +60,7 @@ export function GoosePreview() {
   const [animationEnabled, setAnimationEnabled] = useState(true);
   const [asrText, setAsrText] = useState('');
   const [textFocused, setTextFocused] = useState(false);
-  const [emotion, setEmotion] = useState<GooseEmotion>('joy');
+  const [emotion, setEmotion] = useState<GooseEmotion>('neutral');
   const { reducedMotion } = useMotionPreferences();
   const voice = useGooseVoice();
   const trimmed = asrText.trim();

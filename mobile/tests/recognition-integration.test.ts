@@ -59,7 +59,8 @@ test('an old native binary is diagnosed before trying its incompatible view', ()
   assert.equal(cameraAvailability({ recognitionVersion: 1 }), 'camera-update-required');
   assert.equal(cameraAvailability({ recognitionVersion: 2 }), 'camera-update-required');
   assert.equal(cameraAvailability({ recognitionVersion: 3 }), 'camera-update-required');
-  assert.equal(cameraAvailability({ recognitionVersion: 4 }), null);
+  assert.equal(cameraAvailability({ recognitionVersion: 4 }), 'camera-update-required');
+  assert.equal(cameraAvailability({ recognitionVersion: 5 }), null);
 });
 
 test('setup failures and missing shoulders cannot leave a candidate ready to confirm', () => {

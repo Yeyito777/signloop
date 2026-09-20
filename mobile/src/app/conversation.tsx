@@ -15,11 +15,12 @@ import { Button, Copy, Icon, IconButton, Wordmark, Touch } from '../ui/primitive
 import { useMotion } from '../ui/motion';
 import { StageSlot, useConversationEntrance } from '../ui/SharedStage';
 import { tokens } from '../ui/theme';
+import { conversationEmotion } from '../integrations/expression';
 
 export default function Conversation() {
   const { demo } = useLocalSearchParams<{ demo?: string }>();
   const kit = demo === '1' ? demoKit : cameraKit;
-  const { state: liveState, dispatch, captureActive, onFraming, onTranslation } = useConversation(kit);
+  const { state: liveState, dispatch, captureActive, onFraming, onTranslation, onExpression } = useConversation(kit);
   const { reduced, enter, exit } = useMotion();
   const entrance = useConversationEntrance();
   const { height, fontScale } = useWindowDimensions();
@@ -29,8 +30,6 @@ export default function Conversation() {
   useLayoutEffect(() => { if (!liveState.sheet) uncovered.current = liveState; }, [liveState]);
   const state = liveState.sheet ? uncovered.current : liveState;
   const Camera = kit.Camera;
-  const phrase = state.phrases.at(-1);
-  const speakingPhrase = state.speech ? state.phrases.find(item => item.id === state.speech?.phraseId) : undefined;
   const paused = state.paused;
   const covered = !!liveState.sheet;
   const openEnd = () => dispatch({ type: 'open-sheet', sheet: 'end' });
@@ -48,7 +47,7 @@ export default function Conversation() {
     </View>
     <View onLayout={event => setAvailableHeight(Math.max(0, event.nativeEvent.layout.height - 36))} style={styles.split} pointerEvents={covered ? 'none' : 'auto'} accessibilityElementsHidden={covered} importantForAccessibility={covered ? 'no-hide-descendants' : 'auto'}>
       <Animated.View style={[styles.camera, { height: regions.camera }, entrance.camera]}>
-        <Camera active={captureActive} captureId={liveState.captureId} framing={liveState.framing} onFraming={onFraming} onTranslation={onTranslation} style={StyleSheet.absoluteFill} />
+        <Camera active={captureActive} captureId={liveState.captureId} framing={liveState.framing} onFraming={onFraming} onTranslation={onTranslation} onExpression={onExpression} style={StyleSheet.absoluteFill} />
         {!paused && <CameraGuidance framing={state.framing} active={captureActive} mode={kit.mode} dispatch={dispatch} demo={kit.mode === 'demo'} />}
         {paused && <Animated.View entering={enter} exiting={exit} style={styles.pauseLayer}><ScrollView contentContainerStyle={styles.pauseContent}>
           <Icon name="pause" size={28} /><Copy role="sheetTitle">Paused</Copy><Copy>Camera and voice are paused.</Copy>
@@ -58,7 +57,7 @@ export default function Conversation() {
           <Icon name="info" size={16} /><Copy role="label">Demo · try states</Copy>
         </Touch>}
       </Animated.View>
-      <StageSlot owner="conversation" Renderer={kit.Avatar} mode={mode} emotion={speakingPhrase?.emotion ?? phrase?.emotion ?? 'neutral'} reducedMotion={reduced || paused || covered} style={[styles.stage, { height: regions.goose }]} />
+      <StageSlot owner="conversation" Renderer={kit.Avatar} mode={mode} emotion={conversationEmotion(liveState)} reducedMotion={reduced || paused || covered} style={[styles.stage, { height: regions.goose }]} />
       <Animated.View style={[styles.captionRegion, { height: regions.caption }, entrance.caption]}>
         <CaptionPanel state={state} mode={kit.mode} dispatch={dispatch} />
       </Animated.View>

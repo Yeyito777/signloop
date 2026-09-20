@@ -17,20 +17,24 @@ export const ELEVENLABS_VOICE_SETTINGS = {
 
 /** Stage directions for the cloned voice. None of these are words we sign. */
 export const emotionTags = {
+  neutral: [],
   joy: ['happily', 'excited'],
   sadness: ['sad', 'sighs', 'slowly'],
   anger: ['angry'],
   fear: ['worried', 'nervously'],
+  disgust: ['disgusted'],
 } as const satisfies Record<GooseEmotion, readonly string[]>;
 
 export const emotionVoice = {
+  neutral: { stability: 0.5, similarity_boost: 0.8, style: 0, speed: 1, use_speaker_boost: true },
   joy: { stability: 0, similarity_boost: 0.68, style: 0.85, speed: 1.16, use_speaker_boost: true },
   sadness: { stability: 0.5, similarity_boost: 0.84, style: 0.55, speed: 0.76, use_speaker_boost: true },
   anger: { stability: 0, similarity_boost: 0.6, style: 0.92, speed: 1.08, use_speaker_boost: true },
   fear: { stability: 0, similarity_boost: 0.64, style: 0.78, speed: 1.2, use_speaker_boost: true },
+  disgust: { stability: 0.5, similarity_boost: 0.72, style: 0.7, speed: 0.92, use_speaker_boost: true },
 } as const satisfies Record<GooseEmotion, typeof ELEVENLABS_VOICE_SETTINGS>;
 
-export function seedForSpeechText(text: string, emotion: GooseEmotion = 'joy'): number {
+export function seedForSpeechText(text: string, emotion: GooseEmotion = 'neutral'): number {
   const material = `${emotion}:${text}`;
   let hash = 2166136261;
   for (let i = 0; i < material.length; i += 1) {
@@ -54,12 +58,12 @@ export function prepareSpeechText(text: string): string {
 }
 
 /** What ElevenLabs actually hears. Captions and gestures still use the plain English. */
-export function performanceText(text: string, emotion: GooseEmotion = 'joy'): string {
+export function performanceText(text: string, emotion: GooseEmotion = 'neutral'): string {
   const tags = emotionTags[emotion].map(tag => `[${tag}]`).join(' ');
-  return `${tags} ${text}`;
+  return tags ? `${tags} ${text}` : text;
 }
 
-export function buildSpeechRequest(text: string, voiceId: string, apiKey: string, emotion: GooseEmotion = 'joy') {
+export function buildSpeechRequest(text: string, voiceId: string, apiKey: string, emotion: GooseEmotion = 'neutral') {
   const performed = performanceText(text, emotion);
   return {
     url: `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}/with-timestamps?output_format=${ELEVENLABS_OUTPUT_FORMAT}`,
@@ -77,7 +81,7 @@ export function buildSpeechRequest(text: string, voiceId: string, apiKey: string
   };
 }
 
-export function buildMpegSpeechRequest(text: string, voiceId: string, apiKey: string, emotion: GooseEmotion = 'joy') {
+export function buildMpegSpeechRequest(text: string, voiceId: string, apiKey: string, emotion: GooseEmotion = 'neutral') {
   const request = buildSpeechRequest(text, voiceId, apiKey, emotion);
   return {
     ...request,
@@ -86,7 +90,7 @@ export function buildMpegSpeechRequest(text: string, voiceId: string, apiKey: st
   };
 }
 
-export function buildStreamSpeechRequest(text: string, voiceId: string, apiKey: string, emotion: GooseEmotion = 'joy') {
+export function buildStreamSpeechRequest(text: string, voiceId: string, apiKey: string, emotion: GooseEmotion = 'neutral') {
   const request = buildSpeechRequest(text, voiceId, apiKey, emotion);
   return {
     ...request,
@@ -192,7 +196,7 @@ function alignmentFromBody(body: { alignment?: SpeechAlignment; normalized_align
 /** Turns a finished English phrase into speech, streaming audio as soon as the first chunk exists. */
 export async function speakEnglishStream(
   text: string,
-  emotion: GooseEmotion = 'joy',
+  emotion: GooseEmotion = 'neutral',
   signal: AbortSignal | undefined,
   onChunk: (chunk: { samples: Float32Array; sampleRate: number; alignment?: SpeechAlignment }) => void,
 ): Promise<void> {
@@ -254,7 +258,7 @@ async function forEachStreamObject(response: Response, signal: AbortSignal | und
 }
 
 /** Turns English text into an MP3 buffer plus word timings. Used if the stream path cannot run. */
-export async function speakEnglish(text: string, signal?: AbortSignal, emotion: GooseEmotion = 'joy'): Promise<SpokenClip> {
+export async function speakEnglish(text: string, signal?: AbortSignal, emotion: GooseEmotion = 'neutral'): Promise<SpokenClip> {
   if (!voiceConfig.voiceConfigured) throw new VoiceError(voiceConfig.setupMessage);
   const request = buildSpeechRequest(prepareSpeechText(text), voiceConfig.voiceId, voiceConfig.apiKey, emotion);
   let response: Response;

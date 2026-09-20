@@ -7,6 +7,7 @@ import { useMotion } from '../ui/motion';
 import { tokens } from '../ui/theme';
 import { captionPresentation } from './captionPresentation';
 import type { Action, Session } from './model';
+import { expressionNotice } from '../integrations/expression';
 
 export function CaptionPanel({ state, mode, dispatch }: { state: Session; mode: IntegrationKit['mode']; dispatch: Dispatch<Action> }) {
   const { enter } = useMotion();
@@ -42,6 +43,7 @@ export function CaptionPanel({ state, mode, dispatch }: { state: Session; mode: 
       </View>}
     </View>
     <ScrollView ref={scroll} style={styles.textScroll} contentContainerStyle={styles.textContent} showsVerticalScrollIndicator keyboardShouldPersistTaps="handled">
+      {!!expressionNotice(state.expression) && !state.paused && <Copy role="supporting" style={styles.muted}>{expressionNotice(state.expression)}</Copy>}
       {state.candidate && !state.paused && <View style={styles.notice}>
         <View style={{ flex: 1, gap: 8 }}>
           <Copy role="supporting">{state.candidate.selected

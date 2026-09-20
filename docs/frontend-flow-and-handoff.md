@@ -20,18 +20,18 @@ Home retains one primary Start action. `/conversation?demo=1` explicitly selects
 
 - Pause stops capture and current/queued speech. Resume starts a fresh framing generation. Backgrounding pauses the conversation and revokes voice-upload consent; returning requires Resume.
 - Sheets temporarily stop capture and playback. Dismissal resumes framing if the conversation was previously active; an explicit pause remains paused. Correction playback waits for dismissal.
-- Drafts and tentative candidates are never spoken. Live ILY estimates require explicit confirmation before becoming a caption. Holding a confirmed gesture does not repeat it; release permits a new confirmation.
+- Drafts and tentative candidates are never spoken. Live sign estimates require selection and explicit confirmation before becoming a caption. Holding a confirmed gesture does not repeat it; a new attempt permits another confirmation.
 - Correction edits the most recent accepted phrase and retains its original wording. Save & speak requests playback; with voice off, Save correction changes text only. Sign it again restarts framing.
 - The transcript stays in memory. End clears it, releases capture, and returns Home.
 - Capture generations, candidate expiry, and playback IDs reject stale callbacks. Accepted phrases play in order. Continuous ASL translation still needs a defined phrase-boundary and speech-backlog policy.
 
 ## Camera and recognition
 
-[`CameraProps`](../mobile/src/integrations/contracts.ts) includes `active`, `captureId`, framing state, `onFraming`, and `onTranslation`. A native preview owns capture and processing together. Never open a second Expo camera over it.
+[`CameraProps`](../mobile/src/integrations/contracts.ts) includes `active`, `captureId`, framing state, `onFraming`, `onTranslation`, and `onExpression`. A native preview owns capture and processing together. Never open a second Expo camera over it.
 
-The [Expo camera module](../mobile/modules/signloop-camera/README.md) compiles shared Swift sources from root `ios/Signloop/`. The merge retains `main`'s Gesture Recognizer, cadence/freshness checks, lifecycle handling, and tentative ILY events. A complete hand must be visible inside the actual crop for readiness. This does not establish lighting, distance, emotion, or full ASL confidence; unsupported diagnoses remain demo-only.
+The [Expo camera module](../mobile/modules/signloop-camera/README.md) compiles shared Swift sources from root `ios/Signloop/`. One tracker supplies hand, shoulder, and face observations. The temporal matcher produces tentative choices for the 11-word presentation vocabulary; the existing taught-expression runtime separately matches a checked personal profile. These are experimental matches, not calibrated ASL or emotional confidence.
 
-Live recognition is a limited public-model ILY handshape preview: extend thumb, index, and pinky, then confirm the proposed English. It is not validated general ASL translation. The separate native five-sign research engine and private weights are not compiled into the Expo camera pod. The camera view makes no network requests.
+Live recognition requires the private reference bank in the goose app's own storage. Expression delivery requires a checked profile, optionally bundled or provisioned locally. The camera view makes no network requests. See [expression setup and data flow](goose-expression-integration.md).
 
 Expo generates its own `mobile/ios/`; preserve the root native project. Changes to Swift, podspecs, native dependencies, or Expo config require rebuilding the development app.
 
@@ -45,11 +45,11 @@ Framing presentation waits for 300 ms of stable readiness and 450 ms before chan
 
 ## Shared goose and voice
 
-[`GooseAvatar`](../mobile/src/integrations/GooseAvatar.tsx) adapts the app's activity/emotion contract to the canonical character in `goose/src/`. Home, camera, and demo kits use the same component identity. Listening maps to watching, happy to joy; neutral/thoughtful do not assign an emotion. The mobile wrapper supplies transparency, the illustrated fallback, motion preferences, and `gooseLipSync`. See the [character handoff](../mobile/src/avatar/README.md).
+[`GooseAvatar`](../mobile/src/integrations/GooseAvatar.tsx) adapts the app's activity/emotion contract to the canonical character in `goose/src/`. Home, camera, and demo kits use the same component identity. Listening maps to watching. Neutral leaves the base pose unchanged; joy, sadness, anger, fear, and disgust share one contract across the app and renderer. The live face controls listening; the frozen phrase expression controls speech preparation and playback, then the goose returns to the fresh live expression or neutral. The mobile wrapper supplies transparency, the illustrated fallback, motion preferences, and `gooseLipSync`. See the [character handoff](../mobile/src/avatar/README.md).
 
 Metro keeps mobile on Expo SDK 55 even if the standalone goose app has its Expo 57 dependencies installed. Both source trees resolve Three to the same ESM instance. The software-renderer preview retains the idle fix while hardware keeps Sanvi's original materials.
 
-`VoiceAdapter.speak(text, signal, onPlaybackStart)` resolves after playback and aborts local audio on cancellation. The live kit uses `main`'s authenticated `/v1/speech` backend; the demo uses a labelled silent timer. Backend credentials/provider selection remain server-side. Voice settings requires explicit upload consent; confirmed or edited English is uploaded, never camera images or landmarks. Consent is held in memory and revoked on backgrounding.
+`VoiceAdapter.speak({ text, emotion }, signal, onPlaybackStart)` resolves after playback and aborts local audio on cancellation. The live kit uses `main`'s authenticated `/v1/speech` backend; the demo uses a labelled silent timer. Backend credentials/provider selection remain server-side. Voice settings requires explicit upload consent; confirmed or edited English and its expression label are uploaded, never camera images or landmarks. Consent is held in memory and revoked on backgrounding.
 
 The native MP3 player feeds its clock and alignment-based gesture cues to the goose. The beak currently uses procedural speech motion because no amplitude envelope is supplied. Native PCM streaming and general ASL translation remain future work. See [voice backend setup](voice-backend.md) and [combined branch status](branch-integration.md).
 

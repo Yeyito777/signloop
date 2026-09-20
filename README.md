@@ -136,6 +136,10 @@ is always in the toolbar: save unfinished setup progress to resume later, or
 export a checked demo profile after the six guided checks pass.
 The experimental presets do not infer emotion or ASL meaning.
 
+The Expo goose app now consumes the same checked profile and stable expression
+matches for its live pose and phrase delivery. See [goose expression integration](docs/goose-expression-integration.md)
+for recovering the scanner's saved profile, provisioning, and phone validation.
+
 This replaces the standalone camera's earlier ILY/five-sign research display;
 old recognition experiments remain below for reference and are not called by the new camera UI.
 No private sign-model assets are needed for skeleton tracking. Temporal word

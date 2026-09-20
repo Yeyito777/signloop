@@ -2,7 +2,7 @@
 
 The canonical character source is now [`goose/src/`](../../../goose/src), imported on `main` from `origin/sanvi-signloop` through `341afb4`. The duplicate character under `mobile/src/avatar/` was removed when resolving the merge. Sanvi's geometry, poses, effects, and motion stay in `goose/src/components/goose/`.
 
-The mobile adapter is [`GooseAvatar.tsx`](../integrations/GooseAvatar.tsx). Home, live capture, and the explicit UI demo use the same component identity. It maps listening → watching and happy → joy; neutral/thoughtful have no emotional override. During playback, the emotion follows the phrase being played.
+The mobile adapter is [`GooseAvatar.tsx`](../integrations/GooseAvatar.tsx). Home, live capture, and the explicit UI demo use the same component identity. It maps listening → watching. The shared expression values are neutral, joy, sadness, anger, fear, and disgust; neutral has no emotional override. While listening, the goose follows fresh stable native expression events. During speech preparation and playback, it follows the frozen phrase expression. Pause, sheets, and unavailable/stale tracking return it to neutral. See [expression integration](../../../docs/goose-expression-integration.md).
 
 ## Shared rendering
 

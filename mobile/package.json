@@ -43,6 +43,8 @@
     "start": "expo start --dev-client",
     "camera:assets": "bash ../ios/scripts/fetch-skeleton-models.sh",
     "camera:references": "bash scripts/provision-sign-references.sh",
+    "camera:expressions": "bash scripts/provision-expression-profile.sh",
+    "camera:recover-expressions": "bash scripts/recover-expression-profile.sh",
     "preios": "npm run camera:assets",
     "ios": "expo run:ios",
     "android": "expo run:android",

@@ -1,4 +1,6 @@
 import { backendOrigin, type VoiceSettings } from './voiceSettings.ts';
+import type { SpeechRequest } from './contracts.ts';
+import { isEmotion } from '../../../goose/src/emotion.ts';
 import { toByteArray } from 'base64-js';
 import { assertNotAborted } from './abort.ts';
 import { alignmentWithoutAudioTags, type SpeechAlignment } from '../../../goose/src/voice/gestures.ts';
@@ -22,16 +24,18 @@ export function validateAlignment(value: unknown): SpeechAlignment | undefined {
   return alignmentWithoutAudioTags(v);
 }
 
-export async function fetchSpeech(text: string, settings: VoiceSettings, signal: AbortSignal, request: typeof fetch = fetch): Promise<SpeechClip> {
+export async function fetchSpeech(speech: SpeechRequest, settings: VoiceSettings, signal: AbortSignal, request: typeof fetch = fetch): Promise<SpeechClip> {
+  const { text, emotion } = speech;
   if (!settings.enabled) throw new Error('Enable text-to-voice uploads in Settings first.');
   const origin = backendOrigin(settings.url);
   if (settings.token.trim().length < 24) throw new Error('Enter the backend access token in Settings.');
   if (!text.trim() || text.length > 500) throw new Error('Speech needs 1–500 characters.');
+  if (!isEmotion(emotion)) throw new Error('Unsupported speech emotion.');
   assertNotAborted(signal);
   const response = await request(`${origin}/v1/speech`, {
     method: 'POST', signal, redirect: 'error',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${settings.token.trim()}` },
-    body: JSON.stringify({ text: text.trim(), emotion: 'joy' }),
+    body: JSON.stringify({ text: text.trim(), emotion }),
   });
   assertNotAborted(signal);
   if (!response.ok) throw new Error(response.status === 401 ? 'The backend access token was rejected.'

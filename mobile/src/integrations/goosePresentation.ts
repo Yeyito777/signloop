@@ -5,11 +5,11 @@ const activities: Record<AvatarMode, GooseActivity> = {
   idle: 'idle', listening: 'watching', thinking: 'thinking', speaking: 'speaking',
 };
 const emotions: Record<Emotion, GooseEmotion | undefined> = {
-  neutral: undefined, happy: 'joy', thoughtful: undefined,
-  sadness: 'sadness', anger: 'anger', fear: 'fear',
+  neutral: undefined, joy: 'joy',
+  sadness: 'sadness', anger: 'anger', fear: 'fear', disgust: 'disgust',
 };
 
-/** Activity describes the app; emotion comes only from the accepted phrase. */
+/** Activity describes the app; expression is live or owned by the playing phrase. */
 export function goosePresentation(mode: AvatarMode, emotion: Emotion) {
   return { activity: activities[mode], emotion: emotions[emotion] };
 }

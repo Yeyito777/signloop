@@ -7,6 +7,7 @@ import QuartzCore
 final class SignloopCameraView: ExpoView {
     let onStatus = EventDispatcher()
     let onPrediction = EventDispatcher()
+    let onExpression = EventDispatcher()
     let tracker: SkeletonCameraTracker
     private let recognition = BasicLiveRecognition(activeLabels: BasicSignScore.presentationVocabulary,
         weMotionScale: BasicSignMatcher.compactWEMotionScale)
@@ -25,21 +26,34 @@ final class SignloopCameraView: ExpoView {
     private var renderScheduled = false
     private var expiryTimer: Timer?
     private let missingModels: [String]
+    private let modelBundle: Bundle
+    private let faceModelAvailable: Bool
+    private var expressions: GooseExpressionTracker
+    private var lastExpression: GooseExpressionSnapshot?
+    private var lastExpressionMS = -1000
 
     required init(appContext: AppContext? = nil) {
         let url = Bundle(for: SignloopCameraView.self).url(forResource: "SignloopCameraModels", withExtension: "bundle")
             ?? Bundle.main.url(forResource: "SignloopCameraModels", withExtension: "bundle")
         let modelBundle = url.flatMap(Bundle.init(url:)) ?? .main
+        self.modelBundle = modelBundle
+        faceModelAvailable = modelBundle.path(forResource: "face_landmarker", ofType: "task") != nil
+        expressions = GooseExpressionTracker(source: Self.expressionProfile(in: modelBundle), modelAvailable: faceModelAvailable)
         missingModels = ["hand_landmarker", "pose_landmarker_lite"].filter {
             modelBundle.path(forResource: $0, ofType: "task") == nil
         }
-        tracker = SkeletonCameraTracker(modelBundle: modelBundle, faceTrackingEnabled: false)
+        tracker = SkeletonCameraTracker(modelBundle: modelBundle, faceTrackingEnabled: faceModelAvailable)
         super.init(appContext: appContext)
         tracker.onSkeletonFrame = { [weak self] frame in
             guard let self, self.acceptsEvents, frame.timestampMS >= self.captureStartedMS else { return }
+            self.expressions.observe(frame)
+            self.emitExpression(at: frame.timestampMS)
             self.recognition.receive(frame)
         }
-        tracker.onSkeletonReset = { [weak self] in self?.recognition.reset() }
+        tracker.onSkeletonReset = { [weak self] in
+            self?.resetExpressions()
+            self?.recognition.reset()
+        }
         recognition.onPrediction = { [weak self] in self?.emitPrediction($0) }
         clipsToBounds = true
         backgroundColor = .black
@@ -75,6 +89,33 @@ final class SignloopCameraView: ExpoView {
 
     private var acceptsEvents: Bool { active && isCapturing && appliedCaptureId == captureId }
 
+    private static func expressionProfile(in bundle: Bundle) -> GooseExpressionProfile {
+        let local = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("DemoExpressionProfile.json")
+        return GooseExpressionProfile.load(localURL: local,
+            bundledURL: bundle.url(forResource: "DemoExpressionProfile", withExtension: "json"))
+    }
+
+    private func resetExpressions() {
+        expressions.reset()
+        lastExpression = nil
+        lastExpressionMS = -1000
+        emitExpression(at: Int(CaptureClock.now * 1000))
+    }
+
+    private func emitExpression(at timestamp: Int) {
+        guard acceptsEvents, timestamp >= captureStartedMS else { return }
+        let snapshot = expressions.snapshot
+        // Transitions clear immediately; unchanged states heartbeat at 5 Hz so
+        // JS can expire a stalled or interrupted camera without guessing.
+        guard snapshot != lastExpression || timestamp - lastExpressionMS >= 200 else { return }
+        lastExpression = snapshot
+        lastExpressionMS = timestamp
+        let ageMS = max(0, CaptureClock.now * 1000 - Double(timestamp))
+        onExpression(["captureId": captureId, "observedAtMS": Date().timeIntervalSince1970 * 1000 - ageMS,
+                      "status": snapshot.status.rawValue, "emotion": snapshot.emotion.rawValue])
+    }
+
     private func scheduleRender() {
         guard !renderScheduled else { return }
         renderScheduled = true
@@ -109,6 +150,10 @@ final class SignloopCameraView: ExpoView {
         appliedCaptureId = captureId
         captureStartedMS = Int(CaptureClock.now * 1000)
         lastStatus = ""
+        if startCamera {
+            expressions = GooseExpressionTracker(source: Self.expressionProfile(in: modelBundle), modelAvailable: faceModelAvailable)
+        }
+        resetExpressions()
         recognition.reset()
         recognition.load() // Retries a failed load after the user chooses Retry.
         // Hand loss changes the JS generation. Keep expensive trackers alive;
@@ -131,6 +176,7 @@ final class SignloopCameraView: ExpoView {
         expiryTimer?.invalidate()
         expiryTimer = nil
         guard isCapturing else { return }
+        resetExpressions()
         emitPrediction(.cleared())
         isCapturing = false
         skeleton.path = nil
@@ -172,7 +218,10 @@ final class SignloopCameraView: ExpoView {
         onPrediction(["captureId": captureId, "engine": "basic-temporal-v3",
                       "phase": prediction.phase.rawValue, "attemptId": prediction.attemptID as Any? ?? NSNull(),
                       "candidates": candidates, "label": prediction.label as Any? ?? NSNull(),
-                      "matched": prediction.matched, "observedAtMS": observedAtMS])
+                      "matched": prediction.matched, "observedAtMS": observedAtMS,
+                      "emotion": prediction.timestampMS.map { end in
+                          expressions.history.emotion(from: prediction.startTimestampMS ?? end, through: end).rawValue
+                      } ?? "neutral"])
     }
 
     private func renderTracking() {

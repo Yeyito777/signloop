@@ -32,7 +32,7 @@ export default function Settings() {
     setTesting(true);
     setMessage('Requesting a short voice sample…');
     try {
-      await gooseVoice.speak('Hello from Honk & Tell.', abort.signal, () => setMessage('Playing the voice sample…'));
+      await gooseVoice.speak({ text: 'Hello from Honk & Tell.', emotion: 'neutral' }, abort.signal, () => setMessage('Playing the voice sample…'));
       if (!abort.signal.aborted) setMessage('Voice playback completed.');
     } catch {
       if (!abort.signal.aborted) setMessage('Voice failed. Check the backend, access token, and ElevenLabs configuration.');
@@ -41,7 +41,7 @@ export default function Settings() {
   return <SafeAreaView style={styles.screen}>
     <View style={styles.header}><IconButton icon="back" label="Back" onPress={() => router.back()} /><Copy role="sectionTitle">Voice settings</Copy></View>
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <Copy>Recognition runs on your iPhone. Optional voice sends only confirmed or edited English text to your backend and ElevenLabs—not camera images or landmarks.</Copy>
+      <Copy>Recognition runs on your iPhone. Optional voice sends confirmed or edited English text and its expression label to your backend. ElevenLabs receives the text with delivery directions. Camera images and landmarks stay on your iPhone.</Copy>
       <Copy role="label">Backend URL</Copy>
       <TextInput accessibilityLabel="Backend URL" value={url} onChangeText={setUrl} autoCapitalize="none" autoCorrect={false} placeholder="http://your-mac.local:8787" keyboardType="url" style={styles.input} />
       <Copy role="label">Backend access token</Copy>

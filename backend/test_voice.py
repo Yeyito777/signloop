@@ -55,6 +55,21 @@ def provider_body(audio=b"ID3-test", alignment=None):
 
 
 class VoiceAdapterTests(unittest.TestCase):
+    def test_neutral_is_untagged_and_disgust_has_its_own_delivery(self):
+        voice = ElevenLabsVoice("test-key", "test-voice")
+        for emotion in ("neutral", "joy", "sadness", "anger", "fear", "disgust"):
+            with self.subTest(emotion=emotion):
+                with mock.patch("backend.voice._PROVIDER_OPENER.open", return_value=FakeResponse(provider_body())) as request:
+                    voice.speak("Hello.", emotion)
+                payload = json.loads(request.call_args.args[0].data)
+                self.assertTrue(payload["text"].endswith("Hello."))
+                if emotion == "neutral":
+                    self.assertEqual(payload["text"], "Hello.")
+                    self.assertEqual(payload["voice_settings"]["style"], 0)
+                if emotion == "disgust":
+                    self.assertEqual(payload["text"], "[disgusted] Hello.")
+                self.assertEqual(payload["seed"], seed_for_speech_text("Hello.", emotion))
+
     def test_request_matches_frontend_contract_and_validates_response(self):
         alignment = {
             "characters": ["[", "h", "i", "]", " ", "H"],
@@ -181,6 +196,17 @@ class VoiceAdapterTests(unittest.TestCase):
 
 
 class VoiceServerTests(unittest.TestCase):
+    def test_all_expression_labels_and_neutral_default_reach_speech(self):
+        speech = FakeSpeech()
+        base = self.start_server(speech)
+        for emotion in ("neutral", "joy", "sadness", "anger", "fear", "disgust"):
+            status, _ = self.request(base, "/v1/speech", {"text": "Hello.", "emotion": emotion})
+            self.assertEqual(status, 200)
+            self.assertEqual(speech.calls[-1], ("Hello.", emotion))
+        status, _ = self.request(base, "/v1/speech", {"text": "Hello."})
+        self.assertEqual(status, 200)
+        self.assertEqual(speech.calls[-1], ("Hello.", "neutral"))
+
     def start_server(self, speech=None):
         server = make_server("127.0.0.1", 0, None, TOKEN, speech)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -225,7 +251,7 @@ class VoiceServerTests(unittest.TestCase):
         self.assertEqual(self.request(base, "/v1/caption", {"raw_signs": []})[0], 503)
         status, body = self.request(base, "/v1/speech", {"text": "Hello"})
         self.assertEqual((status, body), (200, {"audio_base64": "c291bmQ="}))
-        self.assertEqual(speech.calls, [("Hello", "joy")])
+        self.assertEqual(speech.calls, [("Hello", "neutral")])
 
     def test_speech_auth_and_input_validation(self):
         speech = FakeSpeech()

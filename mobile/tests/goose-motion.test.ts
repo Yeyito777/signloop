@@ -110,9 +110,10 @@ test('hello and you lift a wing; back turns the head', () => {
   }
 });
 
-test('each of the four emotions changes the pose versus Idle', () => {
+test('expressive emotions change the pose while neutral preserves Idle', () => {
   for (const emotion of gooseEmotions) {
-    assert.notDeepEqual(composePose(1.2, 'idle', emotion), composePose(1.2, 'idle'));
+    if (emotion === 'neutral') assert.deepEqual(composePose(1.2, 'idle', emotion), composePose(1.2, 'idle'));
+    else assert.notDeepEqual(composePose(1.2, 'idle', emotion), composePose(1.2, 'idle'));
   }
 });
 

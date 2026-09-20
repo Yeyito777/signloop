@@ -14,13 +14,14 @@ const unavailable = cameraAvailability(nativeModule);
 const NativeCamera: typeof CameraView | null = unavailable === null
   ? require('../../modules/signloop-camera').SignloopCamera : null;
 
-function Camera({ active, captureId, onFraming, onTranslation, style }: CameraProps) {
+function Camera({ active, captureId, onFraming, onTranslation, onExpression, style }: CameraProps) {
   useEffect(() => {
     if (unavailable && active) onFraming(unavailable, captureId);
   }, [active, captureId, onFraming]);
   if (!NativeCamera) return <View style={style} />;
   return <NativeCamera active={active} captureId={captureId} showSkeleton style={style}
     accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
+    onExpression={({ nativeEvent }) => { if (active && nativeEvent.captureId === captureId) onExpression(nativeEvent); }}
     onPrediction={({ nativeEvent }) => {
       const event = candidateFromPrediction(nativeEvent, active, captureId);
       if (event) onTranslation(event, captureId);

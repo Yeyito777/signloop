@@ -1,11 +1,13 @@
 import type { ComponentType } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
+import type { Emotion } from '../../../goose/src/emotion';
+import type { ExpressionEvent } from '../../modules/signloop-camera/events';
+export type { Emotion } from '../../../goose/src/emotion';
 
 /** Emit only diagnoses supported by the scanner. Hand tracking is not ASL recognition. */
 export type Framing = 'finding' | 'ready' | 'hands-missing' | 'too-close' | 'too-far' | 'low-light' | 'away'
   | 'camera-denied' | 'camera-unavailable' | 'camera-error' | 'camera-update-required' | 'camera-model-missing'
   | 'body-missing' | 'recognizer-loading' | 'recognizer-missing' | 'recognizer-error';
-export type Emotion = 'neutral' | 'happy' | 'thoughtful' | 'sadness' | 'anger' | 'fear';
 export type AvatarMode = 'idle' | 'listening' | 'thinking' | 'speaking';
 export type AvatarProps = {
   mode: AvatarMode;
@@ -21,6 +23,7 @@ export type CameraProps = {
   framing: Framing;
   onFraming: (framing: Framing, captureId: number) => void;
   onTranslation: (event: TranslationEvent, captureId: number) => void;
+  onExpression: (event: ExpressionEvent) => void;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -32,6 +35,7 @@ export type SignCandidate = SignChoice & {
   options: SignChoice[];
   expiresAtMS: number;
   uncertain: boolean;
+  emotion: Emotion;
 };
 
 export type TranslationEvent =
@@ -48,9 +52,10 @@ export interface TranslationAdapter {
   /** Return a cancellation function. Each new captureId starts a fresh generation. */
   start(captureId: number, emit: (event: TranslationEvent) => void): () => void;
 }
+export type SpeechRequest = Readonly<{ text: string; emotion: Emotion }>;
 export interface VoiceAdapter {
   /** Resolve after playback ends, reject on failure, stop immediately on abort. */
-  speak(text: string, signal: AbortSignal, onPlaybackStart?: () => void): Promise<void>;
+  speak(request: SpeechRequest, signal: AbortSignal, onPlaybackStart?: () => void): Promise<void>;
 }
 
 export interface IntegrationKit {

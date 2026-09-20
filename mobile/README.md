@@ -2,7 +2,7 @@
 
 Expo SDK 55 / React Native Playroom app with the **shared 3D goose, native Swift
 camera, offline 11-sign temporal matching, explicit confirmation, captions, and
-optional server-proxied ElevenLabs voice**. A separate sample conversation
+optional server-proxied ElevenLabs voice, and taught facial-expression delivery**. A separate sample conversation
 preserves the UI review flow; real hand detection never generates sample captions.
 The goose is expressive animation, not an ASL signing avatar.
 
@@ -17,7 +17,7 @@ npm ci
 npm run ios
 ```
 
-`preios` downloads and checksum-verifies Google's public Hand Landmarker and
+`preios` downloads and checksum-verifies Google's public Hand, Face, and
 lite Pose Landmarker models. CocoaPods installs MediaPipe 0.10.21. Expo generates `mobile/ios/`,
 builds a development app, opens Simulator, and starts Metro. Native folders are
 generated and ignored by Git. The camera requires iOS 17+.
@@ -43,7 +43,7 @@ waiting for gesture completion. Tap the intended choice to freeze it, then
 original ten-second expiry and clears on tracking loss. **Review another sign**
 starts a fresh attempt after confirmation or rejection. This is a limited research preview,
 not validated general ASL translation. Rebuild the native app for recognition
-contract version 4; a Metro reload alone cannot update native review behavior.
+contract version 5; a Metro reload alone cannot update native expression tracking.
 
 Install the working recognizer's private reference bank in the goose app's own
 storage after rebuilding; the standalone scanner's file does not transfer:
@@ -58,6 +58,21 @@ setup or pause/resume. An old installed binary, missing tracking models, and
 missing/invalid references have explicit UI states. See the
 [native recognition handoff](modules/signloop-camera/README.md) for the contract
 and phone checklist.
+
+Expression delivery uses the standalone scanner's checked personal profile. With
+the scanner's phone connected, recover its saved profile before rebuilding:
+
+```sh
+npm run camera:recover-expressions -- DEVICE_ID
+npx pod-install ios
+npm run ios -- --device
+```
+
+Alternatively, install an existing checked export into the rebuilt app with
+`npm run camera:expressions -- /absolute/path/DemoExpressionProfile.json DEVICE_ID`,
+then pause/resume. Profiles stay out of Git. Without one, captions still work and
+the app explains that expression setup is needed; delivery stays neutral.
+See [expression integration and recovery](../docs/goose-expression-integration.md).
 
 For UI testing, `/conversation?demo=1` runs a finite sample: framing → ready → draft
 → thinking → accepted phrase → silent voice preview. “Demo · try states” opens
@@ -104,8 +119,12 @@ npm test
    deployed origin) and **SIGNLOOP_BACKEND_TOKEN**, never an ElevenLabs key.
 3. Enable text-upload consent, save, and tap Test voice. Provider keys and voice
    selection are configured on the backend. Settings are held in app memory only.
-4. Start a conversation. Confirm a recognized ILY estimate. The caption appears
+4. Start a conversation. Select and confirm a recognized sign. The caption appears
    immediately; optional speech follows. Corrections require explicit Save & speak.
+
+The live goose follows stable taught expressions while listening. Each selected
+sign freezes its own expression for confirmation, queued speech, replay, and
+correction. Voice uploads include the confirmed text and that expression label.
 
 Backgrounding revokes upload consent and cancels local playback. Pause, mute,
 ending, and replacement speech also cancel local playback and clean temporary

@@ -3,7 +3,7 @@
 The Expo SDK 55 module runs the same `SkeletonCameraTracker` → `SkeletonPipeline`
 → `BasicLiveRecognition` → `BasicSignMatcher` path as the standalone scanner.
 It uses one camera session. Images and landmark windows stay native and in RAM;
-only status and tentative word predictions cross into JavaScript.
+only status, tentative word predictions, and expression labels cross into JavaScript.
 
 ## Build and provision
 
@@ -16,10 +16,17 @@ npm run ios -- --device
 npm run camera:references -- /absolute/path/basic-references.json DEVICE_ID
 ```
 
-The assets command downloads and SHA-256 verifies Google's public hand and lite
-pose models. CocoaPods includes them in `SignloopCameraModels.bundle`. Face
-tracking is disabled for this word-only Expo path. The standalone app retains
-its own settings and optional face/expression functionality.
+The assets command downloads and SHA-256 verifies Google's public hand, face, and
+lite pose models. CocoaPods includes them in `SignloopCameraModels.bundle`. Face
+tracking shares the existing camera and feeds the scanner's `TaughtExpressionRuntime`.
+The standalone app retains its own settings and expression teaching UI.
+
+Load a checked expression profile from `Documents/DemoExpressionProfile.json`
+in the goose app, or optionally bundle the gitignored
+`ios/Signloop/Resources/DemoExpressionProfile.json` before installing pods and
+rebuilding. A local profile takes precedence; an invalid local replacement is
+reported instead of silently using a different profile. Pause/resume reloads it.
+See [recovery and provisioning commands](../../../docs/goose-expression-integration.md).
 
 Recognition also requires the existing private word reference bank in
 **`com.signloop.mobile` → `Documents/basic-references.json`**. The provisioning
@@ -33,7 +40,7 @@ Missing and invalid banks have distinct visible states, and load failures can
 be retried without restarting the app. A missing tracking model requires a
 complete new native build.
 
-Swift changes require reinstalling the native app. `recognitionVersion: 4`
+Swift changes require reinstalling the native app. `recognitionVersion: 5`
 lets the JS adapter detect an incompatible native installation and explain that a
 rebuild is needed instead of silently showing no results. Expo Go cannot load
 this module. Simulator can exercise UI but cannot recognize camera input.
@@ -41,7 +48,7 @@ this module. Simulator can exercise UI but cannot recognize camera input.
 ## Contract
 
 `SignloopCamera` accepts `active`, `captureId`, `showSkeleton`, view styles,
-`onStatus`, and `onPrediction`. Types are in `events.ts`.
+`onStatus`, `onPrediction`, and `onExpression`. Types are in `events.ts`.
 
 - Status includes a capture ID, hand count, diagnostic message and state:
   camera startup/access/errors; missing models; reference loading/failure;
@@ -51,6 +58,17 @@ this module. Simulator can exercise UI but cannot recognize camera input.
   frame's** wall-clock observation time. Rolling and completed rankings share an
   attempt ID and include up to three ranked labels with distances. Distances are not confidence
   probabilities; completed results remain explicitly uncertain.
+- Predictions also carry `emotion`: neutral, joy, sadness, anger, fear, or disgust.
+  It summarizes stable expression observations from that prediction's input
+  interval, so a slow matcher does not use a later face. More than half the interval
+  must support the same expression; unknown time and ties fall back to neutral.
+  Selecting a choice freezes its expression together with the word and expiry.
+- `onExpression` carries capture ID, wall-clock observation time, status, and the
+  same six-value emotion contract. The taught matcher requires a 300 ms hold;
+  nonmatching, ambiguous, missing, or misaligned faces clear to neutral. Native
+  transitions emit immediately, with a 200 ms heartbeat. JS rejects old
+  generations/out-of-order samples and clears unrefreshed expression after 600 ms.
+  Setup failures have explicit statuses and do not block hand/body recognition.
 - The presentation vocabulary is HELLO, MY, NAME, TODAY, WE, SHOW, PHONE,
   PLEASE, SORRY, THANKYOU, ILOVEYOU. There is no alphabet/spelling UI in Expo.
 - Fresh rolling guesses immediately offer up to three choices and **None of these**.
@@ -103,3 +121,6 @@ On a physical phone with the private bank installed:
    No old prediction may reappear or remain confirmable.
 5. Test missing/invalid references and Retry after installing a valid bank.
    Do not interpret tracking readiness or offline tests as accuracy validation.
+6. With the checked personal expression profile installed, test all six labels,
+   face loss, pause, and expression changes between signing, selection, and speech.
+   Follow the [expression device checklist](../../../docs/goose-expression-integration.md#phone-validation).
