@@ -16,12 +16,13 @@ struct TaughtExpressionTests {
         case .neutral: vector = [0.05,-0.70,0.12,0.20,-0.24]
         case .joy: vector = [0.65,-0.72,0.10,0.21,-0.20]
         case .anger: vector = [0.08,-0.50,0.10,0.15,-0.24]
-        case .fear: vector = [0.07,-0.78,0.15,0.20,-0.24]
+        case .fear: vector = [0.07,-0.78,0.30,0.20,-0.24]
         case .sadness: vector = [0.05,-0.78,0.11,0.38,-0.24]
         case .disgust: vector = [0.08,-0.64,0.09,0.16,-0.20]
         }
         return ExpressionObservation(values: Dictionary(uniqueKeysWithValues: zip(ExpressionCue.allCases,vector.map { $0+delta })),
-                                     pose: ExpressionPose(horizontal: 0, vertical: 0.25), camera: "front")
+                                     pose: ExpressionPose(horizontal: 0, vertical: 0.25), camera: "front",
+                                     jawOpening: (label == .fear ? 0.8 : 0.2)+delta)
     }
     static func take(_ teacher: inout ExpressionTeacher, label: TaughtExpressionLabel, time: inout Int) {
         time += 100
@@ -51,10 +52,11 @@ struct TaughtExpressionTests {
             let target = ExpressionCue.allCases.map { sample(label).values[$0]! }
             for strength in [0.4, 0.65, 1.3] {
                 let vector = zip(neutral,target).map { $0+($1-$0)*strength }
-                expect(model.match(vector).label == label, "\(label): recognizes \(strength) of the taught pattern")
+                let jaw = 0.2 + ((label == .fear ? 0.8 : 0.2)-0.2)*strength
+                expect(model.match(vector, jawOpening: jaw).label == label, "\(label): recognizes \(strength) of the taught pattern")
             }
             let reversed = zip(neutral,target).map { $0-($1-$0)*0.65 }
-            expect(model.match(reversed).label != label, "\(label): opposite movement cannot trigger the label")
+            expect(model.match(reversed, jawOpening: 0.2).label != label, "\(label): opposite movement cannot trigger the label")
         }
         // Raised resting brows, small eyes, and a much larger sad-brow motion.
         // These small repeatable changes were overwhelmed by the old global range.
@@ -65,7 +67,8 @@ struct TaughtExpressionTests {
             examples[label] = (0..<2).map { _ in ExpressionExample(center: target, spread: [0,0.0002,0.0001,0,0], sampleCount: 21) }
         }
         examples[.neutral] = (0..<2).map { _ in ExpressionExample(center: neutral, spread: [0,0.0002,0.0001,0,0], sampleCount: 21) }
-        let subtle = try TaughtExpressionModel(examples: examples)
+        // Older nose-v2 profiles keep their eye-based fear sensitivity.
+        let subtle = try TaughtExpressionModel(examples: examples, measurement: .noseScrunch)
         for label in [TaughtExpressionLabel.anger, .fear] {
             let target = examples[label]![0].center
             for strength in [0.4,0.75,1.0,1.3] {
@@ -95,7 +98,7 @@ struct TaughtExpressionTests {
         try sensitiveMovementChecks(profile)
         for label in TaughtExpressionLabel.allCases {
             let vector = ExpressionCue.allCases.map { sample(label,delta: 0.003).values[$0]! }
-            expect(model.match(vector).label == label, "\(label): fresh measurements match the taught pattern")
+            expect(model.match(vector, jawOpening: sample(label,delta: 0.003).jawOpening).label == label, "\(label): fresh measurements match the taught pattern")
         }
         expect(sample(.joy).values[.disgust] == sample(.disgust).values[.disgust], "whole pattern separates smile/disgust even if the nose also moves in a smile")
         var runtime = TaughtExpressionRuntime(profile: profile)
@@ -197,7 +200,21 @@ struct TaughtExpressionTests {
         let data = try TaughtExpressionStore.encode(profile)
         let decoded = try TaughtExpressionStore.decode(data)
         expect(decoded == profile, "export/import is lossless")
-        var old = profile; old.matchingVersion = nil; old.measurementVersion = ExpressionMeasurement.upperLip.rawValue
+        var noseV2 = profile; noseV2.measurementVersion = ExpressionMeasurement.noseScrunch.rawValue
+        for label in TaughtExpressionLabel.allCases {
+            for index in 0..<2 { noseV2.examples[label]![index].jawOpening = nil; noseV2.examples[label]![index].jawSpread = nil }
+            noseV2.validation[label]!.example.jawOpening = nil; noseV2.validation[label]!.example.jawSpread = nil
+        }
+        let decodedNoseV2 = try TaughtExpressionStore.decode(JSONEncoder().encode(noseV2))
+        var noseRuntime = TaughtExpressionRuntime(profile: decodedNoseV2)
+        expect(noseRuntime.needsJawDropRetake && !noseRuntime.needsNoseScrunchRetake,
+               "build-14 nose profile remains installed and requests only the new jaw teaching flow")
+        var eyeObservation = sample(.fear); eyeObservation.measurement = .noseScrunch
+        noseRuntime.observe(timestampMS: 0, hasFace: true, observation: eyeObservation)
+        expect(noseRuntime.result == .holding(.fear), "build-14 profile keeps interpreting its original eye measurements")
+        noseRuntime.observe(timestampMS: 100, hasFace: true, observation: sample(.fear))
+        expect(noseRuntime.result == .unavailable, "old eye profile never silently reads new jaw units")
+        var old = noseV2; old.matchingVersion = nil; old.measurementVersion = ExpressionMeasurement.upperLip.rawValue
         for label in TaughtExpressionLabel.allCases {
             for index in 0..<2 { old.examples[label]![index].center[4] += 1 }
             old.validation[label]!.example.center[4] += 1

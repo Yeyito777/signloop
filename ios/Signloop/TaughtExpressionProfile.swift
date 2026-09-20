@@ -6,10 +6,10 @@ enum TaughtExpressionLabel: String, CaseIterable, Codable, Identifiable {
     var title: String { self == .neutral ? "Relaxed face" : rawValue.capitalized }
     var instruction: String {
         switch self {
-        case .neutral: return "Relax your face, with your eyes naturally open."
+        case .neutral: return "Relax your face and jaw, with your mouth in its natural resting position."
         case .joy: return "Show the smile you will use in the demo."
         case .anger: return "Show your angry expression, including your natural brow furrow."
-        case .fear: return "Show your fear expression, opening your eyes comfortably wider."
+        case .fear: return "Drop your jaw and open your mouth comfortably. Keep the corners relaxed without smiling. Your eyes can stay relaxed."
         case .sadness: return "Show your sad expression as you will use it in the demo."
         case .disgust: return "Scrunch your nose as if something smells bad. Keep your head steady and your mouth relaxed; hold the same comfortable scrunch each time."
         }
@@ -21,24 +21,32 @@ struct ExpressionTeachingError: LocalizedError {
     var errorDescription: String? { message }
 }
 
-/// Five measurements, always in ExpressionCue.allCases order. A taught label
-/// describes the ENTIRE vector; there are no hard-coded emotion/cue rules here.
+/// Five measurements in ExpressionCue.allCases order, plus the independent raw
+/// jaw reference for v3 profiles. Labels describe the whole taught pattern.
 struct ExpressionExample: Codable, Equatable {
     var center: [Double]
     var spread: [Double]
     var sampleCount: Int
+    var jawOpening: Double?
+    var jawSpread: Double?
     var isValid: Bool {
         center.count == 5 && spread.count == 5 && (12...120).contains(sampleCount) &&
+        ((jawOpening == nil && jawSpread == nil) ||
+            (jawOpening.map { $0.isFinite && (0...1).contains($0) } == true &&
+             jawSpread.map { $0.isFinite && (0...1).contains($0) } == true)) &&
         // Accept either representation here; the model checks exact versioned bounds.
         zip(ExpressionCue.allCases, center).allSatisfy { $1.isFinite && ($0 == .disgust ? -2...1 : $0.rawBounds).contains($1) } &&
         spread.allSatisfy { $0.isFinite && (0...4).contains($0) }
     }
     static func summarize(_ observations: [ExpressionObservation]) -> Self {
         let columns = ExpressionCue.allCases.map { cue in observations.map { $0.values[cue]! }.sorted() }
+        let jaws = observations.compactMap(\.jawOpening).sorted()
         func percentile(_ column: [Double], _ p: Double) -> Double { column[Int(Double(column.count-1)*p)] }
         return Self(center: columns.map { percentile($0, 0.5) },
                     spread: columns.map { (percentile($0, 0.9)-percentile($0, 0.1))/2 },
-                    sampleCount: observations.count)
+                    sampleCount: observations.count,
+                    jawOpening: jaws.count == observations.count ? percentile(jaws,0.5) : nil,
+                    jawSpread: jaws.count == observations.count ? (percentile(jaws,0.9)-percentile(jaws,0.1))/2 : nil)
     }
 }
 
@@ -89,7 +97,7 @@ struct TaughtExpressionProfile: Codable, Equatable {
         let model = try TaughtExpressionModel(examples: examples, sensitiveGeometry: sensitiveGeometry, measurement: measurement!)
         for label in TaughtExpressionLabel.allCases {
             guard let check = validation[label], check.isValid,
-                  model.match(check.example.center).label == label else {
+                  model.match(check.example.center, jawOpening: check.example.jawOpening).label == label else {
                 throw ExpressionTeachingError(message: "The saved \(label.title.lowercased()) check is missing or does not match its examples.")
             }
         }
@@ -112,12 +120,17 @@ struct TaughtExpressionModel {
     private var neutralNoise: [Double]
     let sensitiveGeometry: Bool
     let measurement: ExpressionMeasurement
+    private var smileGate: Double?
+    private var jawMinimum: Double?
+    private var neutralJaw: Double?
+    private var jawSignalMinimum: Double?
 
     init(examples: [TaughtExpressionLabel: [ExpressionExample]], sensitiveGeometry: Bool = true,
          measurement: ExpressionMeasurement = .current) throws {
         guard examples.count == 6, TaughtExpressionLabel.allCases.allSatisfy({
             examples[$0]?.count == 2 && examples[$0]!.allSatisfy { example in
-                example.isValid && zip(ExpressionCue.allCases, example.center).allSatisfy { measurement.bounds(for: $0).contains($1) }
+                example.isValid && (!measurement.usesJaw || example.jawOpening != nil) &&
+                zip(ExpressionCue.allCases, example.center).allSatisfy { measurement.bounds(for: $0).contains($1) }
             }
         }) else { throw ExpressionTeachingError(message: "Capture two examples of your relaxed face and every expression.") }
         let all = TaughtExpressionLabel.allCases.flatMap { examples[$0]! }
@@ -128,16 +141,38 @@ struct TaughtExpressionModel {
         // Geometry ratios can carry a real, repeatable change of just 0.01.
         // Use captured noise and the smallest distinguishable class difference,
         // so a large sad-brow raise cannot drown out a small angry-brow drop.
-        let floors = [0.015, 0.001, 0.0005, 0.008, measurement == .noseScrunch ? 0.0015 : 0.015]
+        let floors = [0.015, 0.001, measurement.usesJaw ? 0.003 : 0.0005, 0.008, measurement.usesNose ? 0.0015 : 0.015]
         let neutralNoise = (0..<5).map { index in
             max(floors[index] * 3,
                 examples[.neutral]!.map { $0.spread[index] * 3 + abs($0.center[index]-neutral[index]) }.max()!)
         }
-        if measurement == .noseScrunch {
+        if measurement.usesNose {
             let minimumChange = max(neutralNoise[4], examples[.disgust]!.map { $0.spread[4]*3 }.max()!)
             guard examples[.disgust]!.allSatisfy({ $0.center[4]-neutral[4] > minimumChange }) else {
                 throw ExpressionTeachingError(message: "The nose scrunch did not show enough repeatable nose movement. Retake disgust with your head steady and scrunch your nose; lifting your lip alone won't pass this check.")
             }
+        }
+        var smileGate: Double?, jawMinimum: Double?, neutralJaw: Double?, jawSignalMinimum: Double?
+        if measurement.usesJaw {
+            let restingJaw = examples[.neutral]!.map { $0.jawOpening! }.reduce(0,+)/2
+            let jawNoise = examples[.neutral]!.map { $0.jawSpread!*3 + abs($0.jawOpening!-restingJaw) }.max()!
+            guard examples[.fear]!.allSatisfy({ $0.jawOpening!-$0.jawSpread!*3-restingJaw > max(0.08,jawNoise) }) else {
+                throw ExpressionTeachingError(message: "The jaw signal did not change enough from your relaxed face. Retake fear by lowering your jaw, not just parting your lips.")
+            }
+            neutralJaw = restingJaw; jawSignalMinimum = max(0.06,jawNoise)
+            let smileChange = examples[.joy]!.map { $0.center[0]-$0.spread[0]*3-neutral[0] }.min()!
+            guard smileChange > neutralNoise[0]*2 else {
+                throw ExpressionTeachingError(message: "The smile needs a clearer, repeatable difference from your relaxed mouth so it can block fear. Retake joy with your usual smile.")
+            }
+            let gate = neutral[0] + max(neutralNoise[0], smileChange*0.20)
+            guard examples[.fear]!.allSatisfy({ $0.center[0]+$0.spread[0]*3 < gate }) else {
+                throw ExpressionTeachingError(message: "Your fear examples include a smile. Retake fear by dropping your jaw with the mouth corners relaxed; a smile always blocks fear.")
+            }
+            let minimum = max(0.03, neutralNoise[2])
+            guard examples[.fear]!.allSatisfy({ $0.center[2]-$0.spread[2]*3-neutral[2] > max(0.04, minimum) }) else {
+                throw ExpressionTeachingError(message: "The fear examples need a visible jaw drop beyond your relaxed mouth. Retake fear by lowering your jaw, without smiling or just parting your lips.")
+            }
+            smileGate = gate; jawMinimum = minimum
         }
         let scales = (0..<5).map { index in
             if !sensitiveGeometry {
@@ -146,7 +181,7 @@ struct TaughtExpressionModel {
                     all.map { $0.spread[index] * 4 }.max()!)
             }
             let noise = max(floors[index] * 4, all.map { $0.spread[index] * 4 }.max()!)
-            guard index == 1 || index == 2 || (index == 4 && measurement == .noseScrunch) else {
+            guard index == 1 || index == 2 || (index == 4 && measurement.usesNose) else {
                 return max(noise, all.map { $0.center[index] }.max()! - all.map { $0.center[index] }.min()!)
             }
             let differences = centers.flatMap { a in centers.map { b in abs(a[index]-b[index]) } }
@@ -180,21 +215,39 @@ struct TaughtExpressionModel {
         self.neutral = neutral; self.neutralNoise = neutralNoise
         self.sensitiveGeometry = sensitiveGeometry
         self.measurement = measurement
+        self.smileGate = smileGate; self.jawMinimum = jawMinimum
+        self.neutralJaw = neutralJaw; self.jawSignalMinimum = jawSignalMinimum
     }
 
-    func match(_ vector: [Double]) -> Match {
+    func match(_ vector: [Double], jawOpening: Double? = nil) -> Match {
         guard vector.count == 5, zip(ExpressionCue.allCases,vector).allSatisfy({
             $1.isFinite && measurement.bounds(for: $0).contains($1)
         }) else { return Match() }
+        if measurement.usesJaw, jawOpening.map({ $0.isFinite && (0...1).contains($0) }) != true { return Match() }
         if sensitiveGeometry && zip(zip(vector, neutral), neutralNoise).allSatisfy({ abs($0.0.0-$0.0.1) <= $0.1 }) {
             return Match(label: .neutral, distance: 0)
         }
-        let ranked = TaughtExpressionLabel.allCases.map { label in
-            if measurement == .noseScrunch, label == .disgust, vector[4]-neutral[4] <= neutralNoise[4] {
+        let ranked: [(TaughtExpressionLabel, Double, Double)] = TaughtExpressionLabel.allCases.map { label -> (TaughtExpressionLabel, Double, Double) in
+            if measurement.usesNose, label == .disgust, vector[4]-neutral[4] <= neutralNoise[4] {
+                return (label, Double.infinity, radii[label]!)
+            }
+            if let smileGate, let jawMinimum, label == .fear,
+               vector[0] >= smileGate || vector[2]-neutral[2] <= jawMinimum {
+                return (label, Double.infinity, radii[label]!)
+            }
+            if let neutralJaw, let jawSignalMinimum, let jawOpening, label == .fear,
+               jawOpening-neutralJaw <= jawSignalMinimum {
                 return (label, Double.infinity, radii[label]!)
             }
             let closest = examples[label]!.map { example -> (Double, Double) in
-                let exact = sqrt(zip(zip(vector,example.center),scales).reduce(0) { $0 + pow(($1.0.0-$1.0.1)/$1.1,2) })
+                // A detected smile stays eligible for joy whether the jaw is
+                // closed or open. Fear has already been excluded above.
+                let ignoreJaw = label == .joy && (smileGate.map { vector[0] >= $0 } ?? false)
+                var squaredDistance = 0.0
+                for index in 0..<5 where !(ignoreJaw && index == 2) {
+                    squaredDistance += pow((vector[index]-example.center[index])/scales[index],2)
+                }
+                let exact = sqrt(squaredDistance)
                 let radius = radii[label]!
                 guard sensitiveGeometry, label == .anger || label == .fear else { return (exact, radius) }
                 // Accept a softer or slightly stronger version of the SAME
@@ -303,6 +356,7 @@ struct TaughtExpressionRuntime {
     private var model: TaughtExpressionModel?
     var needsSensitivityRetake: Bool { model?.sensitiveGeometry == false }
     var needsNoseScrunchRetake: Bool { profile?.measurement == .upperLip }
+    var needsJawDropRetake: Bool { profile != nil && profile?.measurement?.usesJaw != true }
     private(set) var result: Result = .noFace
     private(set) var observation: ExpressionObservation?
     private(set) var distance: Double?
@@ -332,7 +386,7 @@ struct TaughtExpressionRuntime {
         guard observation.measurement == profile.measurement else { clear(.unavailable); return }
         guard profile.camera == observation.camera else { clear(.wrongCamera); return }
         guard observation.pose.isNear(profile.pose) else { clear(.faceForward); return }
-        let match = model.match(ExpressionCue.allCases.map { observation.values[$0]! })
+        let match = model.match(ExpressionCue.allCases.map { observation.values[$0]! }, jawOpening: observation.jawOpening)
         distance = match.distance
         guard let label = match.label else { clear(match.alternatives.isEmpty ? .unknown : .ambiguous); return }
         if label == .neutral { clear(.neutral); return }

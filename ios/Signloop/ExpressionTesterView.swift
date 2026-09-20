@@ -43,7 +43,7 @@ struct ExpressionTesterView: View {
                     movementFeedback
                     Text("These are labels for the expressions you teach, not a reading of your feelings or ASL meaning. Images and video are never saved or uploaded. The profile contains only numeric examples and check results.")
                         .font(.footnote).foregroundStyle(.secondary)
-                    Text("Expression lab · nose scrunch · build \(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—")")
+                    Text("Expression lab · jaw drop & nose scrunch · build \(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—")")
                         .font(.caption2).foregroundStyle(.secondary).accessibilityIdentifier("expression-build")
                 }.padding(20)
             }
@@ -109,8 +109,8 @@ struct ExpressionTesterView: View {
                     .font(.subheadline).foregroundStyle(.secondary)
                 Text("It loads automatically, including after you close the app. Export it to use the same face profile in a demo build with no setup screens.")
                     .font(.subheadline)
-                if runtime.needsNoseScrunchRetake {
-                    Text("Your saved profile uses upper-lip lift. Teach one replacement profile to switch disgust to your nose scrunch. Your current profile stays active until you save it.")
+                if runtime.needsJawDropRetake {
+                    Text("Your saved profile uses widened eyes for fear. Teach one replacement profile to use a jaw drop for fear and a nose scrunch for disgust. Your current profile stays active until you save it.")
                         .font(.subheadline).foregroundStyle(accent)
                 } else if runtime.needsSensitivityRetake {
                     Text("Your earlier profile is still active. Teach a replacement using comfortable, steady expressions to enable the more sensitive brow and eye matching.")
@@ -120,7 +120,7 @@ struct ExpressionTesterView: View {
                 Text("Teach your relaxed face and five expressions. Two takes each, then six repeat checks. Your saved profile becomes the recognizer's fixed reference.")
                     .font(.subheadline)
             }
-            Button(runtime.profile == nil ? "Teach my expressions" : runtime.needsNoseScrunchRetake ? "Teach a nose-scrunch profile" : "Teach a replacement profile") { teacher = ExpressionTeacher() }
+            Button(runtime.profile == nil ? "Teach my expressions" : runtime.needsJawDropRetake ? "Teach a jaw-drop profile" : "Teach a replacement profile") { teacher = ExpressionTeacher() }
                 .buttonStyle(.borderedProminent).accessibilityIdentifier("expression-teach")
             Button("Export demo profile") {
                 do {
@@ -177,6 +177,7 @@ struct ExpressionTesterView: View {
 
     private var movementFeedback: some View {
         let observation = teacher != nil ? teacher?.observation : runtime.observation
+        let usesJaw = teacher != nil || runtime.profile?.measurement?.usesJaw != false
         let cues: [ExpressionCue] = teacher != nil || !runtime.needsNoseScrunchRetake ? [.anger, .fear, .disgust] : [.anger, .fear]
         return VStack(alignment: .leading, spacing: 12) {
             Text("Your facial movement").font(.headline)
@@ -187,7 +188,7 @@ struct ExpressionTesterView: View {
                     examples: teacher?.examples ?? runtime.profile?.examples ?? [:])
                 VStack(alignment: .leading, spacing: 5) {
                     HStack {
-                        Text(cue == .anger ? "Brow lowering" : cue == .fear ? "Eye opening" : "Nose scrunch")
+                        Text(cue == .anger ? "Brow lowering" : cue == .fear ? (usesJaw ? "Jaw drop" : "Eye opening") : "Nose scrunch")
                         Spacer()
                         if let fraction = reading?.fraction {
                             Text("\(Int(max(-9.99, min(9.99, fraction))*100))% of taught change").monospacedDigit()

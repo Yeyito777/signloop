@@ -3,10 +3,13 @@ import Foundation
 enum ExpressionMeasurement: String {
     case upperLip = "face-geometry-mouth-v1"
     case noseScrunch = "face-geometry-nose-v2"
-    static let current: Self = .noseScrunch
+    case jawDrop = "face-geometry-jaw-nose-v3"
+    static let current: Self = .jawDrop
+    var usesNose: Bool { self != .upperLip }
+    var usesJaw: Bool { self == .jawDrop }
 
     func bounds(for cue: ExpressionCue) -> ClosedRange<Double> {
-        self == .noseScrunch && cue == .disgust ? -2...0 : cue.rawBounds
+        usesNose && cue == .disgust ? -2...0 : cue.rawBounds
     }
 }
 
@@ -16,9 +19,11 @@ struct ExpressionObservation {
     var pose: ExpressionPose
     var camera: String
     var measurement: ExpressionMeasurement = .current
+    var jawOpening: Double?
 
     var isValid: Bool {
         ["front", "back"].contains(camera) && pose.isValid &&
+        (!measurement.usesJaw || jawOpening.map { $0.isFinite && (0...1).contains($0) } == true) &&
         values.count == ExpressionCue.allCases.count &&
         ExpressionCue.allCases.allSatisfy { cue in
             values[cue].map { $0.isFinite && measurement.bounds(for: cue).contains($0) } ?? false
@@ -73,7 +78,7 @@ struct ExpressionObservation {
         case .upperLip:
             guard let lip = bilateral("mouthUpperUp") else { return nil }
             fifth = lip
-        case .noseScrunch:
+        case .noseScrunch, .jawDrop:
             // FaceMesh 168 is the nose root; 98/327 are the paired nasal wings.
             // Scrunching raises the wings toward the root. Normalize their
             // projected separation by the eye-corner span, not nose width or
@@ -81,15 +86,29 @@ struct ExpressionObservation {
             guard let root = points[168], let rightWing = points[98], let leftWing = points[327] else { return nil }
             fifth = -cross(axis, (rightWing+leftWing)/2-root)/spanSquared
         }
+        let opening: Double
+        var jawOpening: Double?
+        if measurement.usesJaw {
+            guard let upperLip = points[13], let lowerLip = points[14],
+                  let jaw = frame.expressions["jawOpen"], jaw.isFinite, (0...1).contains(jaw) else { return nil }
+            // Require BOTH visible vertical mouth opening and jaw opening.
+            // Lip parting with a closed jaw cannot substitute for a jaw drop.
+            // Eye spacing normalizes scale without shrinking when a smile widens.
+            let gap = max(0, cross(axis, lowerLip-upperLip)/spanSquared)
+            opening = min(gap, Double(jaw))
+            jawOpening = Double(jaw)
+        } else {
+            opening = (right.0 + left.0)/2
+        }
         let observation = ExpressionObservation(values: [
             .joy: smile,
             .anger: -(right.1 + left.1)/2, // Lower than YOUR resting brows = positive change.
-            .fear: (right.0 + left.0)/2,
+            .fear: opening,
             .sadness: (right.2 + left.2)/2, // Inner lift relative to outer brow, not whole-brow raise.
             .disgust: fifth,
         ], pose: ExpressionPose(horizontal: dot(axis, nose-(a+b)/2)/spanSquared,
                                 vertical: cross(axis, nose-(a+b)/2)/spanSquared), camera: frame.camera,
-           measurement: measurement)
+           measurement: measurement, jawOpening: jawOpening)
         return observation.isValid ? observation : nil
     }
 }
