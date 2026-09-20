@@ -24,7 +24,8 @@ The standalone app retains its own settings and expression teaching UI.
 Load a checked expression profile from `Documents/DemoExpressionProfile.json`
 in the goose app, or optionally bundle the gitignored
 `ios/Signloop/Resources/DemoExpressionProfile.json` before installing pods and
-rebuilding. A local profile takes precedence; an invalid local replacement is
+rebuilding. A profile saved in the in-app Expression lab works too. The newest
+local profile takes precedence; an invalid local replacement is
 reported instead of silently using a different profile. Pause/resume reloads it.
 See [recovery and provisioning commands](../../../docs/goose-expression-integration.md).
 
@@ -32,7 +33,7 @@ Recognition also requires the existing private word reference bank in
 **`com.signloop.mobile` → `Documents/basic-references.json`**. The provisioning
 command validates the bank with the real Swift matcher and copies it into that
 app's container. The standalone scanner uses a different bundle ID; its file
-is not shared automatically. Use the packed bank from the working scanner and
+is not shared automatically. Use your own locally generated bank under the research license and
 keep it out of Git. No private bank is included in this repository or app bundle.
 
 After provisioning, tap **Retry recognition setup** (or pause and resume).
@@ -70,7 +71,7 @@ this module. Simulator can exercise UI but cannot recognize camera input.
   generations/out-of-order samples and clears unrefreshed expression after 600 ms.
   Setup failures have explicit statuses and do not block hand/body recognition.
 - The presentation vocabulary is HELLO, MY, NAME, TODAY, WE, SHOW, PHONE,
-  PLEASE, SORRY, THANKYOU, ILOVEYOU. There is no alphabet/spelling UI in Expo.
+  PLEASE, SORRY, THANKYOU, ILOVEYOU. Spell name separately supports the AURELIO alphabet.
 - Fresh rolling guesses immediately offer up to three choices and **None of these**.
   Gesture completion is an additional observation, not a review gate. Selecting a choice and confirming
   it are separate actions; only confirmation produces a caption or speech.
@@ -124,3 +125,15 @@ On a physical phone with the private bank installed:
 6. With the checked personal expression profile installed, test all six labels,
    face loss, pause, and expression changes between signing, selection, and speech.
    Follow the [expression device checklist](../../../docs/goose-expression-integration.md#phone-validation).
+
+# Integrated spelling, expression lab and licensed setup
+
+The version-5 bridge preserves the word-review contract above. Expo also exposes the
+shared AURELIO alphabet engine, optional face tracking, distance diagnostics and
+the existing native Expression lab. See [current integration/setup](../../../docs/expo-detection.md).
+
+**Private word coordinates are intentionally absent from Git.** Each researcher
+must read Microsoft's research-only terms and generate their own local bank:
+`bash scripts/dev/setup-expo-references --accept-research-license` from the repo
+root. Do not upload or send the bank to teammates. The provisioning helper below
+is only for your own locally generated bank, not a redistribution workflow.

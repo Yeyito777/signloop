@@ -63,6 +63,18 @@ struct GooseExpressionTests {
         try TaughtExpressionStore.encode(replacement).write(to: local)
         expect(GooseExpressionProfile.load(localURL: local, bundledURL: bundle).profile?.id == replacement.id,
             "checked local profile overrides bundle without retraining")
+        let taught = directory.appendingPathComponent("taught.json")
+        try TaughtExpressionStore.encode(profile).write(to: taught)
+        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 100)], ofItemAtPath: local.path)
+        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 200)], ofItemAtPath: taught.path)
+        expect(GooseExpressionProfile.load(localURL: local, taughtURL: taught, bundledURL: bundle).profile?.id == profile.id,
+            "a newer checked profile saved by Expo Expression lab is used")
+        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 300)], ofItemAtPath: local.path)
+        expect(GooseExpressionProfile.load(localURL: local, taughtURL: taught, bundledURL: bundle).profile?.id == replacement.id,
+            "a newer provisioned profile replaces an older lab profile")
+        try Data("{}".utf8).write(to: taught)
+        expect(GooseExpressionProfile.load(localURL: local, taughtURL: taught, bundledURL: bundle).failure == .profileInvalid,
+            "an invalid newest local profile cannot silently fall back")
         var tracker = GooseExpressionTracker(source: bundled, modelAvailable: false)
         expect(tracker.snapshot.status == .modelMissing && tracker.snapshot.emotion == .neutral, "missing face model stays neutral")
         tracker.reset()

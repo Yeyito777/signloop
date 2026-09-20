@@ -1,10 +1,19 @@
 # Honk & Tell mobile
 
 Expo SDK 55 / React Native Playroom app with the **shared 3D goose, native Swift
-camera, offline 11-sign temporal matching, explicit confirmation, captions, and
-optional server-proxied ElevenLabs voice, and taught facial-expression delivery**. A separate sample conversation
+camera, shared offline temporal matcher and name spelling, explicit confirmation, captions, and
+optional server-proxied ElevenLabs voice and taught expression delivery**. A separate sample conversation
 preserves the UI review flow; real hand detection never generates sample captions.
 The goose is expressive animation, not an ASL signing avatar.
+
+> **The word-reference bank is intentionally excluded from Git.** A fresh clone
+> can track hands/body and spell AURELIO, but cannot recognize words until each
+> researcher generates and provisions their own local bank. Do not share a bank
+> through GitHub, releases, chat, or a bundled app: the source license prohibits
+> redistribution of data and modifications. From the repository root, after
+> reading and accepting the research-only terms:
+> `bash scripts/dev/setup-expo-references --accept-research-license`.
+> [Full setup, license and phone instructions](../docs/expo-detection.md#private-word-references-required).
 
 ## Run on iOS
 
@@ -17,8 +26,8 @@ npm ci
 npm run ios
 ```
 
-`preios` downloads and checksum-verifies Google's public Hand, Face, and
-lite Pose Landmarker models. CocoaPods installs MediaPipe 0.10.21. Expo generates `mobile/ios/`,
+`preios` downloads Google's checksum-verified hand, pose-lite and face models.
+CocoaPods installs MediaPipe 0.10.21. Expo generates `mobile/ios/`,
 builds a development app, opens Simulator, and starts Metro. Native folders are
 generated and ignored by Git. The camera requires iOS 17+.
 
@@ -35,31 +44,32 @@ For an existing checkout upgrading to **Honk & Tell**, run `npx expo prebuild --
 Start conversation requests camera permission on iPhone and shows a mirrored preview, native joint overlay, and hand visibility feedback. Permission denial offers Settings. Simulator and platforms without the module show an unavailable state with an explicit UI demo option.
 
 Home offers Start conversation and Voice settings. Simulator camera guidance
-links to an explicitly labelled sample preview. The rebuilt native app runs the
-standalone recognizer's 11-word presentation vocabulary, with full-frame hand
-and shoulder tracking. Up to three uncertain choices update as you sign, without
-waiting for gesture completion. Tap the intended choice to freeze it, then
-**Confirm selected sign**, or choose **None of these**. A selection keeps its
-original ten-second expiry and clears on tracking loss. **Review another sign**
-starts a fresh attempt after confirmation or rejection. This is a limited research preview,
-not validated general ASL translation. Rebuild the native app for recognition
-contract version 5; a Metro reload alone cannot update native expression tracking.
+links to an explicitly labelled sample preview. Live capture now uses the shared
+11-sign temporal matcher (including ILOVEYOU), body-relative hand geometry and
+compact-WE guard. Private references must be separately provisioned into this
+app's container. Without them, tracking and bundled AURELIO spelling still work,
+but word recognition reports that references are unavailable. Best guesses can
+be wrong, including on unsupported inputs; they are **never** captions or voice
+until Confirm. The version-5 bridge's review behavior is preserved: up to three choices,
+tap one to hold it, **Confirm selected sign**, **None of these**, and a bounded
+ten-second review expiry. **Review another sign** starts a new attempt. Stale
+events and previous capture generations are rejected. Rebuild the native app;
+a Metro reload alone cannot update its recognition contract.
 
-Install the working recognizer's private reference bank in the goose app's own
-storage after rebuilding; the standalone scanner's file does not transfer:
+Use **Spell name**, hold one of A/U/R/E/L/I/O, then **Add letter**. Manual letters,
+delete and clear are also available. **Confirm spelled name** sends only the
+explicitly composed name into the existing caption/voice flow. The draft is not
+persisted. This is not automatic sentence translation.
 
-```sh
-npm run camera:references -- /absolute/path/basic-references.json DEVICE_ID
-```
+Conversation menu → **Detection settings** controls hand/body overlays, optional
+face tracking (on by default) and all 11 geometric distances (not probabilities). **Expression
+lab** opens the existing native teaching/import/export screen inside Expo. The
+conversation is paused before entry; tap Resume after returning. Facial labels
+are personal taught patterns, not inferred feelings or ASL grammar.
+See [provisioning, build and test instructions](../docs/expo-detection.md).
 
-The helper validates the actual Swift matcher and copies into
-`com.signloop.mobile/Documents/basic-references.json`. Then tap Retry recognition
-setup or pause/resume. An old installed binary, missing tracking models, and
-missing/invalid references have explicit UI states. See the
-[native recognition handoff](modules/signloop-camera/README.md) for the contract
-and phone checklist.
-
-Expression delivery uses the standalone scanner's checked personal profile. With
+Expression delivery uses a checked profile from the in-app Expression lab or
+the standalone scanner. With
 the scanner's phone connected, recover its saved profile before rebuilding:
 
 ```sh

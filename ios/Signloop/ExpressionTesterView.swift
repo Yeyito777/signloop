@@ -21,6 +21,7 @@ struct ExpressionTesterView: View {
     @ObservedObject var tracker: SkeletonCameraTracker
     @Binding var runtime: TaughtExpressionRuntime
     @Binding var paused: Bool
+    var onDone: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var teacher: ExpressionTeacher?
     @State private var showExport = false
@@ -78,7 +79,9 @@ struct ExpressionTesterView: View {
                     } label: { Text("Export") }
                     .accessibilityIdentifier("expression-export")
                 }
-                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.frame(minHeight: 44) }
+                ToolbarItem(placement: .confirmationAction) { Button("Done") {
+                    if let onDone { onDone() } else { dismiss() }
+                }.frame(minHeight: 44) }
             }
         }
         .preferredColorScheme(.dark).tint(accent)

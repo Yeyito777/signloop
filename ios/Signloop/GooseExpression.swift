@@ -16,14 +16,21 @@ struct GooseExpressionProfile {
     var profile: TaughtExpressionProfile?
     var failure: GooseExpressionStatus?
 
-    /// Explicit local provisioning overrides the optional bundled demo profile.
+    /// The newest taught or provisioned local profile overrides the optional bundle.
     /// An invalid replacement is diagnosed rather than silently using another person's profile.
-    static func load(localURL: URL, bundledURL: URL?) -> Self {
-        let local = FileManager.default.fileExists(atPath: localURL.path)
-        guard var url = local ? localURL : bundledURL else { return Self(failure: .noProfile) }
+    static func load(localURL: URL, taughtURL: URL? = nil, bundledURL: URL?) -> Self {
+        let latestLocal = [localURL, taughtURL].compactMap { $0 }
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
+            .max { a, b in
+                // Read fresh attributes: URL resource values may cache a pre-save date.
+                let aDate = (try? FileManager.default.attributesOfItem(atPath: a.path))?[.modificationDate] as? Date
+                let bDate = (try? FileManager.default.attributesOfItem(atPath: b.path))?[.modificationDate] as? Date
+                return (aDate ?? .distantPast) < (bDate ?? .distantPast)
+            }
+        guard var url = latestLocal ?? bundledURL else { return Self(failure: .noProfile) }
         do {
             let profile = try TaughtExpressionStore.read(url)
-            if local {
+            if latestLocal != nil {
                 var values = URLResourceValues(); values.isExcludedFromBackup = true
                 try url.setResourceValues(values)
             }
@@ -70,6 +77,11 @@ struct GooseExpressionTracker {
     private let setupFailure: GooseExpressionStatus?
     private(set) var snapshot: GooseExpressionSnapshot
     private(set) var history = GooseExpressionHistory()
+
+    var title: String {
+        if let setupFailure { return setupFailure.rawValue }
+        return runtime.result.title
+    }
 
     init(source: GooseExpressionProfile, modelAvailable: Bool) {
         runtime = TaughtExpressionRuntime(profile: source.profile)

@@ -124,6 +124,7 @@ test('stale, future, out-of-order and previous-generation events cannot resurrec
   state = reduce(state, { type: 'expression', event: expression('fear') });
   assert.equal(reduce(state, { type: 'expire-expression', observedAtMS: now }), state);
   for (const action of [{ type: 'pause' }, { type: 'open-sheet', sheet: 'menu' }, { type: 'retry' },
+    { type: 'recognition-mode', mode: 'spelling' },
     { type: 'framing', captureId: 1, framing: 'hands-missing' }] as const) {
     const cleared = reduce(state, action);
     assert.equal(conversationEmotion(cleared), 'neutral');

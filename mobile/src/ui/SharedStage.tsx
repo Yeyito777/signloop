@@ -148,7 +148,7 @@ export function SharedStageLayer() {
     height: height - home.value * (homeViewport.value.top + Math.max(0, height - homeViewport.value.bottom)),
   }));
   const contents = useAnimatedStyle(() => ({ top: -home.value * homeViewport.value.top }));
-  if (!presentation || pathname === '/settings') return null;
+  if (!presentation || (pathname !== '/' && pathname !== '/conversation')) return null;
   const { Renderer } = presentation;
   return <Animated.View pointerEvents="none" style={[styles.clip, clip]} accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
     <Animated.View style={[styles.contents, { height }, contents]}>

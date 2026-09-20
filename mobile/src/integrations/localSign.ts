@@ -2,6 +2,11 @@ import type { TranslationEvent } from './contracts.ts';
 import type { SignPredictionEvent } from '../../modules/signloop-camera/events.ts';
 import { isEmotion } from '../../../goose/src/emotion.ts';
 
+export const nameLetters = ['A', 'U', 'R', 'E', 'L', 'I', 'O'];
+export function freshObservation(observedAtMS: number, now = Date.now()) {
+  return Number.isFinite(observedAtMS) && now-observedAtMS >= -100 && now-observedAtMS <= 1000;
+}
+
 /** Exact presentation vocabulary shared with BasicSignScore.presentationVocabulary. */
 export const signText = {
   HELLO: 'Hello.', MY: 'My', NAME: 'Name', TODAY: 'Today', WE: 'We', SHOW: 'Show',

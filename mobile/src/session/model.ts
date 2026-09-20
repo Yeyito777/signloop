@@ -3,7 +3,7 @@ import type { ExpressionEvent } from '../../modules/signloop-camera/events';
 import { expressionFromCamera, EXPRESSION_FRESH_MS } from '../integrations/expression.ts';
 import { isEmotion } from '../../../goose/src/emotion.ts';
 
-export type Sheet = 'transcript' | 'correction' | 'menu' | 'end' | 'demo' | null;
+export type Sheet = 'transcript' | 'correction' | 'menu' | 'end' | 'demo' | 'detector' | null;
 export type Phase = 'framing' | 'listening' | 'signing' | 'thinking' | 'speaking' | 'uncertain' | 'offline' | 'voice-error';
 export type Phrase = { id: string; text: string; original?: string; emotion: Emotion; status: 'caption' | 'playing' | 'played' | 'interrupted' | 'failed' };
 export type Speech = { id: number; phraseId: string; text: string; emotion: Emotion; started: boolean };
@@ -23,10 +23,13 @@ export type Session = {
   speech: Speech | null;
   speechQueue: string[];
   expression: ExpressionEvent | null;
+  recognitionMode: 'signs' | 'spelling';
+  spellingDraft: string;
 };
 
 export const initialSession = (): Session => ({
   captureId: 1, speechId: 0, framing: 'finding', phase: 'framing', expression: null,
+  recognitionMode: 'signs', spellingDraft: '',
   paused: false, sheet: null, muted: false, draft: '', candidate: null, signPreview: null, reviewedAttempt: null, phrases: [], speech: null, speechQueue: [],
 });
 
@@ -40,6 +43,9 @@ export type Action =
   | { type: 'correct'; text: string }
   | { type: 'speech-ended'; id: number; failed?: boolean }
   | { type: 'speech-started'; id: number }
+  | { type: 'recognition-mode'; mode: 'signs' | 'spelling' }
+  | { type: 'add-letter'; letter: string }
+  | { type: 'delete-letter' | 'clear-spelling' | 'confirm-spelling' }
   | { type: 'confirm-candidate' | 'reject-candidate' | 'expire-candidate'; attemptId: number }
   | { type: 'select-candidate'; attemptId: number; label: string }
   | { type: 'demo-framing'; framing: Framing }
@@ -66,6 +72,7 @@ function speak(state: Session, phrase: Phrase): Session {
 function translate(state: Session, event: TranslationEvent): Session {
   switch (event.type) {
     case 'candidate': {
+      if (state.recognitionMode !== 'signs') return state;
       if (!Number.isSafeInteger(event.attemptId) || event.attemptId <= 0
         || event.attemptId <= (state.reviewedAttempt ?? 0)
         || (state.candidate && (event.attemptId < state.candidate.attemptId
@@ -111,6 +118,19 @@ export function sessionReducer(state: Session, action: Action): Session {
       return state.expression?.observedAtMS === action.observedAtMS
         && Date.now() - action.observedAtMS >= EXPRESSION_FRESH_MS
         ? { ...state, expression: { ...state.expression, status: 'stale', emotion: 'neutral' } } : state;
+    case 'recognition-mode':
+      if (!canCapture(state)) return state;
+      return { ...stopSpeech(state), recognitionMode: action.mode, expression: null, captureId: state.captureId + 1,
+        candidate: null, signPreview: null, reviewedAttempt: null, draft: '', framing: 'finding', phase: 'framing' };
+    case 'add-letter':
+      return state.recognitionMode === 'spelling' && canCapture(state) && /^[AURELIO]$/.test(action.letter) && state.spellingDraft.length < 40
+        ? { ...state, spellingDraft: state.spellingDraft + action.letter } : state;
+    case 'delete-letter': return { ...state, spellingDraft: state.spellingDraft.slice(0, -1) };
+    case 'clear-spelling': return { ...state, spellingDraft: '' };
+    case 'confirm-spelling':
+      if (!canCapture(state) || state.recognitionMode !== 'spelling' || !/^[AURELIO]{1,40}$/.test(state.spellingDraft)) return state;
+      return translate({ ...state, spellingDraft: '' }, { type: 'accepted',
+        id: `spelled-${state.captureId}-${state.phrases.length}`, text: state.spellingDraft, emotion: 'neutral' });
     case 'select-candidate': {
       if (!state.candidate || state.candidate.attemptId !== action.attemptId
         || !canCapture(state) || state.framing !== 'ready' || state.candidate.expiresAtMS <= Date.now()) return state;

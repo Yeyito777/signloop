@@ -10,6 +10,7 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "ios": {
+      "buildNumber": "21",
       "supportsTablet": false,
       "bundleIdentifier": "com.signloop.mobile",
       "infoPlist": {

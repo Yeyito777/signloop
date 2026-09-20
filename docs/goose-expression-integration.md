@@ -34,6 +34,11 @@ authenticated backend; the provider receives text with delivery directions.
 
 ## Find the real profile
 
+You can also teach, check, and save a profile directly in the Expo app through
+Conversation menu → Expression lab. Resume the conversation
+after returning to load it. The lab's checked profile and a provisioned profile
+use the same schema; the newest local file takes precedence over the bundle.
+
 The standalone scanner's source saves the checked profile inside its app:
 
 ```text
@@ -77,8 +82,9 @@ npm run camera:expressions -- /absolute/path/DemoExpressionProfile.json DEVICE_I
 ```
 
 This validates and copies it into `com.signloop.mobile/Documents/DemoExpressionProfile.json`.
-Pause/resume to reload. A valid local file overrides the optional bundle profile.
-An invalid replacement is reported instead of silently using another profile.
+Pause/resume to reload. The newest file from provisioning or the in-app lab
+overrides the optional bundle profile. An invalid replacement is reported instead
+of silently using another profile.
 Missing or invalid profiles keep delivery neutral and show setup guidance;
 hand/body recognition and captions remain available. The private sign reference
 bank still needs its separate `camera:references` provisioning step.

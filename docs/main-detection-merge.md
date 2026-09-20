@@ -1,5 +1,9 @@
 # Main / detection integration — build 19
 
+Historical merge report. **Expo build 21 supersedes the adapter boundary below**:
+the consumer app now runs the shared temporal/spelling engines.
+See [the actual Expo integration](expo-detection.md).
+
 Integration base: `main` at `09273eb`; detection source: `yeyito` at
 `8e9bac5`. This is a true merge retaining both histories, not replacement of
 main with the standalone prototype.
