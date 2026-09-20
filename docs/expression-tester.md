@@ -6,7 +6,7 @@ saved brow/eye/mouth measurements and stays fixed during normal use.
 
 ## On the training phone
 
-1. Install the **Signloop** scheme through Xcode. Build 15's Expression lab says
+1. Install the **HonkAndTell** scheme through Xcode. Build 20's Expression lab says
    **Teach my expressions**; it no longer uses activation sliders as its primary
    recognizer. Merging source does not automatically reinstall a cable-built app.
 2. Tap the smile icon, then **Teach my expressions**.
@@ -20,17 +20,41 @@ saved brow/eye/mouth measurements and stays fixed during normal use.
 4. Repeat all six once more for checks. These fresh takes test the learned
    examples; they do not alter them. If signals overlap or a take is inconsistent,
    the lab explains what to retake. Neutral changes require a new full setup.
+   The checklist shows each expression's captured takes, whether its check has
+   passed, and any failure reason with a direct retake button. **12/18** means
+   all teaching captures are saved, with no fresh checks passed yet. If teaching
+   is blocked, **Needs attention** names the expression(s) to retake; otherwise,
+   continue with **Start check 1 of 6** for relaxed face. Checks that have not run are
+   explicitly marked as pending rather than failed.
+   The pinned next-step panel names each check in order: relaxed face, joy,
+   anger, fear, sadness, disgust. Repeat the expression from teaching, use the
+   one-second preparation time, hold for two seconds, then relax before the
+   next check. The panel stays visible when scrolling and offers the next capture,
+   retry, camera recovery, retake, or save action.
 5. Tap **Use this profile for the demo**. The complete checked profile saves
    atomically and becomes active immediately. It loads automatically after the
    app restarts. Closing the lab keeps recognition running on the camera screen.
-6. Tap **Export demo profile**, save the JSON through Files, and transfer that
-   export to the Mac building the demo. **Import demo profile** can install the
+6. Open **Export** in the toolbar, choose **Export saved demo profile**, save the
+   JSON through Files, and transfer it to the Mac building the demo.
+   **Import profile or setup progress** can install the
    same checked profile on another training phone without teaching it again.
+
+The **Export** menu is available throughout setup, even before the first take,
+after a failure, and during capture. **Export setup progress** saves completed
+numeric takes, passed checks, and failure reasons to `ExpressionSetupProgress.json`.
+It interrupts any unfinished take; that take must be retried. Import this file
+to resume the next unfinished step, with a fresh tracked face and the original
+camera/angle. This progress file does not replace the active demo profile or
+pass the demo bundler's checked-profile validation.
+
+After all checks pass, **Export checked demo profile** exports the new profile
+even before activating it. If an older profile is installed while teaching a
+replacement, **Export saved demo profile** remains available for that older profile.
 
 Setup is never launched automatically. Retraining requires explicitly starting a
 replacement in the lab. Cancellation, interruption or a failed save preserves
-the installed profile. An unfinished teaching session is temporary and is not
-restored after closing the lab/app.
+the installed profile. An unfinished teaching session is temporary; export setup
+progress before closing the lab/app, then import it to resume later.
 
 Build 15 keeps the sensitive brow matching and uses a jaw drop instead of eye
 widening for fear. It can recognize a softer version of the same taught pattern
@@ -88,7 +112,7 @@ The **Demo** configuration:
 - Continues to classify against that profile on every fresh frame, including
   after restart or reinstall. Live camera frames never update it.
 
-The ordinary Signloop training build loads its explicitly saved local profile.
+The ordinary HonkAndTell training build loads its explicitly saved local profile.
 Export/import and teaching controls stay in Expression lab. No images or video
 are stored. The export contains numeric feature summaries, variation, camera/view
 reference, a profile ID/date and validation summaries. The app never uploads it;
@@ -166,7 +190,8 @@ two poses, setup reports that limitation instead of installing overlapping label
 
 Fresh repeat checks must match the expected label on at least 80% of observations,
 include a continuous 300 ms match, and match at their median. Only then can the
-six-label profile be installed/exported. Runtime also requires a continuous
+six-label profile be installed or exported as a checked demo profile. Setup
+progress can be exported before these checks pass. Runtime also requires a continuous
 300 ms match for expression activation. A relaxed-face match clears immediately.
 Missing/stale signals, a wrong camera, a substantial view-angle change and unseen
 patterns abstain. No threshold sliders or online adaptation alter this profile.
@@ -190,7 +215,8 @@ on smiling, rejection of smiling fear takes, biased resting jaw signals, and
 build-14 profile compatibility.
 
 Simulator UI checks cover lab-only setup, disabled capture without a face,
-export requiring a complete profile, cancellation/relaunch, and a dedicated
+progress export before and during teaching, pinned next-step/export controls
+at large text sizes, cancellation/relaunch, and a dedicated
 HonkAndTellDemo check for a loaded bundle with no teaching entry point. Any synthetic
 profile used by those checks is only a temporary disposable-simulator fixture.
 

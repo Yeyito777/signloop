@@ -45,6 +45,137 @@ struct TaughtExpressionTests {
         expect(teacher.completedSteps == 18 && teacher.candidate != nil, "one full setup produces a checked profile")
         return teacher.candidate!
     }
+    static func progressChecks() {
+        var teacher = ExpressionTeacher(), time = 0
+        expect(TaughtExpressionLabel.allCases.allSatisfy { teacher.status(for: $0) == .needsExamples },
+               "new setup shows all six expressions as incomplete, not failed")
+        for label in TaughtExpressionLabel.allCases {
+            for _ in 0..<2 { take(&teacher, label: label, time: &time) }
+        }
+        expect(teacher.teachingTakeCount == 12 && teacher.validation.isEmpty && teacher.attentionLabels.isEmpty,
+               "12 of 18 means twelve captures and zero checks, with no invented failures")
+        expect(TaughtExpressionLabel.allCases.allSatisfy { teacher.status(for: $0) == .checkPending },
+               "captured expressions clearly say their check has not run")
+        take(&teacher, label: .joy, time: &time) // The requested check is relaxed face.
+        expect(teacher.attentionLabels == [.neutral] && teacher.status(for: .neutral) == .checkFailed,
+               "failed relaxed-face check identifies only that expression")
+        expect(teacher.failures[.neutral]?.reason.contains("joy") == true && teacher.status(for: .joy) == .checkPending,
+               "failed check names its competing expression without marking that untested expression failed")
+        teacher.interrupt()
+        expect(teacher.status(for: .neutral) == .checkFailed,
+               "failure remains visible when live tracking is interrupted")
+        take(&teacher, label: .neutral, time: &time)
+        expect(teacher.completedSteps == 13 && teacher.status(for: .neutral) == .passed && teacher.failures[.neutral] == nil,
+               "successful retry clears the failure and marks just that check passed")
+        for label in TaughtExpressionLabel.allCases where label != .neutral { take(&teacher, label: label, time: &time) }
+        expect(TaughtExpressionLabel.allCases.allSatisfy { teacher.status(for: $0) == .passed },
+               "completed profile displays six passed checks")
+        teacher.retake(.anger)
+        expect(teacher.status(for: .anger) == .needsExamples && teacher.status(for: .joy) == .checksBlocked && teacher.validation.isEmpty,
+               "retake cannot leave stale passed check badges on the other expressions")
+
+        // Reproduce the 12/18 dead end: fear captures contain no jaw drop.
+        var blocked = ExpressionTeacher(); time = 0
+        for label in TaughtExpressionLabel.allCases {
+            for _ in 0..<2 { take(&blocked, label: label == .fear ? .neutral : label, time: &time) }
+        }
+        expect(blocked.completedSteps == 12 && blocked.model == nil && blocked.nextStep == nil,
+               "bad teaching examples reproduce the reported twelve-take stall")
+        expect(blocked.attentionLabels == [.fear] && blocked.status(for: .fear) == .needsRetake,
+               "the blocking jaw-drop error is attached to fear")
+        expect(blocked.status(for: .joy) == .checksBlocked && blocked.failures[.joy] == nil,
+               "other captures are waiting for a fix, not incorrectly marked as failed checks")
+        blocked.observe(timestampMS: time+100, hasFace: false, observation: nil)
+        expect(blocked.failures[.fear]?.reason.contains("jaw") == true,
+               "blocking expression and reason survive unrelated tracking updates")
+        let smile = blocked.examples[.joy]
+        blocked.retake(.fear)
+        expect(blocked.examples[.joy] == smile && blocked.attentionLabels.isEmpty && blocked.teachingTakeCount == 10,
+               "targeted retake preserves the other expressions and clears obsolete diagnostics")
+        for _ in 0..<2 { take(&blocked, label: .fear, time: &time) }
+        expect(blocked.model != nil && blocked.nextStep?.isValidation == true && blocked.status(for: .fear) == .checkPending,
+               "repairing the flagged expression unblocks the fresh checks")
+
+        var overlap = ExpressionTeacher(); time = 0
+        for label in TaughtExpressionLabel.allCases {
+            for _ in 0..<2 { take(&overlap, label: label == .disgust ? .joy : label, time: &time) }
+        }
+        expect(Set(overlap.attentionLabels) == Set([.joy, .disgust]),
+               "overlapping teaching examples identify both expressions in the conflict")
+        expect(overlap.status(for: .joy) == .needsRetake && overlap.status(for: .disgust) == .needsRetake,
+               "both conflicting rows offer a teaching retake")
+        expect(overlap.status(for: .fear) == .checksBlocked && overlap.validation.isEmpty,
+               "a training conflict cannot pretend that validation ran")
+    }
+    static func setupTransferChecks() throws {
+        let emptyData = try ExpressionTeacher().exportSetup()
+        expect(ExpressionTeacher.isSetupExport(emptyData), "empty setup can be exported with an explicit progress format")
+        var restored = try ExpressionTeacher.restoreSetup(emptyData)
+        expect(restored.completedSteps == 0 && restored.nextStep?.label == .neutral,
+               "empty progress imports at the first teaching take")
+        rejects("progress cannot masquerade as a checked demo profile") { _ = try TaughtExpressionStore.decode(emptyData) }
+
+        var teacher = ExpressionTeacher(), time = 0
+        take(&teacher, label: .neutral, time: &time)
+        teacher.startCapture()
+        let partial = try teacher.exportSetup()
+        restored = try ExpressionTeacher.restoreSetup(partial)
+        expect(teacher.capture != nil && restored.capture == nil && !restored.readyForCapture,
+               "export snapshots completed work without exporting or resuming an in-flight capture")
+        expect(restored.examples == teacher.examples && restored.nextStep?.take == 2,
+               "partial progress keeps completed examples and resumes the next required take")
+        expect(!String(decoding: partial, as: UTF8.self).contains("observations"), "setup exports contain no live frame history")
+        restored.startCapture()
+        expect(restored.capture == nil, "import requires a fresh tracked face before capture")
+        var rear = sample(.neutral); rear.camera = "back"
+        restored.observe(timestampMS: time+100, hasFace: true, observation: rear)
+        expect(!restored.readyForCapture && restored.readinessInstruction.contains("Switch back"),
+               "restored setup explains the camera reference required to continue")
+
+        teacher = ExpressionTeacher(); time = 0
+        for label in TaughtExpressionLabel.allCases { for _ in 0..<2 { take(&teacher, label: label, time: &time) } }
+        for (index, label) in TaughtExpressionLabel.allCases.enumerated() {
+            restored = try ExpressionTeacher.restoreSetup(teacher.exportSetup())
+            expect(restored.nextStep?.title == "Check \(index+1) of 6: \(label.title)",
+                   "each of the final six checks has a named, numbered next step")
+            expect(restored.nextStep?.instruction == label.checkInstruction && restored.nextStep!.timingInstruction.contains("2 seconds"),
+                   "each repeat check explains its expression and timing")
+            expect(restored.validation == teacher.validation && restored.examples == teacher.examples,
+                   "exports preserve completed checks without changing training")
+            take(&teacher, label: label, time: &time)
+        }
+        restored = try ExpressionTeacher.restoreSetup(teacher.exportSetup())
+        expect(restored.candidate != nil && restored.completedSteps == 18,
+               "completed progress restores a checked candidate ready to save")
+        let checkedData = try TaughtExpressionStore.encode(restored.candidate!)
+        expect(!ExpressionTeacher.isSetupExport(checkedData), "checked profile exports stay compatible with the demo bundler")
+
+        var broken = ExpressionTeacher(); time = 0
+        for label in TaughtExpressionLabel.allCases { for _ in 0..<2 { take(&broken, label: label == .fear ? .neutral : label, time: &time) } }
+        restored = try ExpressionTeacher.restoreSetup(broken.exportSetup())
+        expect(restored.completedSteps == 12 && restored.attentionLabels == [.fear] && restored.model == nil,
+               "blocked teaching exports and imports with its actionable failure intact")
+        broken.retake(.fear)
+        for _ in 0..<2 { take(&broken, label: .fear, time: &time) }
+        take(&broken, label: .joy, time: &time) // Fails the relaxed-face check.
+        restored = try ExpressionTeacher.restoreSetup(broken.exportSetup())
+        expect(restored.status(for: .neutral) == .checkFailed && restored.failures[.neutral]?.reason == broken.failures[.neutral]?.reason,
+               "failed check can be exported and resumed with its explanation")
+
+        var corrupt = try JSONDecoder().decode(ExpressionTeacher.SetupExport.self, from: partial)
+        corrupt.examples[.neutral] = Array(repeating: corrupt.examples[.neutral]![0], count: 3)
+        rejects("oversized take arrays are rejected") { _ = try ExpressionTeacher.restoreSetup(JSONEncoder().encode(corrupt)) }
+        corrupt = try JSONDecoder().decode(ExpressionTeacher.SetupExport.self, from: partial)
+        corrupt.validation[.joy] = teacher.validation[.joy]
+        rejects("a partial draft cannot claim passed checks without the trained model") { _ = try ExpressionTeacher.restoreSetup(JSONEncoder().encode(corrupt)) }
+        corrupt = try JSONDecoder().decode(ExpressionTeacher.SetupExport.self, from: partial)
+        corrupt.failures[.joy] = ExpressionTeacher.Failure(status: .passed, reason: "fake pass")
+        rejects("status text cannot forge a passed check") { _ = try ExpressionTeacher.restoreSetup(JSONEncoder().encode(corrupt)) }
+        corrupt = try JSONDecoder().decode(ExpressionTeacher.SetupExport.self, from: partial)
+        corrupt.measurementVersion = "unknown-version"
+        rejects("unsupported draft measurements are rejected") { _ = try ExpressionTeacher.restoreSetup(JSONEncoder().encode(corrupt)) }
+        rejects("oversized setup files are rejected") { _ = try ExpressionTeacher.restoreSetup(Data(repeating: 0, count: 262_145)) }
+    }
     static func sensitiveMovementChecks(_ profile: TaughtExpressionProfile) throws {
         let model = try profile.validatedModel()
         let neutral = ExpressionCue.allCases.map { sample(.neutral).values[$0]! }
@@ -94,6 +225,8 @@ struct TaughtExpressionTests {
         expect(draft?.fraction == nil && draft?.change != nil, "unfinished teaching shows a raw delta without inventing a percentage")
     }
     static func main() throws {
+        progressChecks()
+        try setupTransferChecks()
         let profile = taught(), model = try profile.validatedModel()
         try sensitiveMovementChecks(profile)
         for label in TaughtExpressionLabel.allCases {
@@ -147,9 +280,13 @@ struct TaughtExpressionTests {
         expect(teacher.capture?.observations.isEmpty == true, "preparation frames are excluded")
         teacher.observe(timestampMS: 1000, hasFace: false, observation: nil)
         expect(teacher.capture == nil && teacher.completedSteps == 0, "lost face aborts unfinished take")
+        expect(teacher.status(for: .neutral) == .retryCapture && teacher.attentionLabels == [.neutral],
+               "interrupted capture shows exactly which take needs retrying")
         time = 1100
         take(&teacher, label: .neutral, time: &time)
         expect(teacher.completedSteps == 1, "first complete take retained")
+        expect(teacher.failures[.neutral] == nil && teacher.status(for: .neutral) == .needsExamples,
+               "successful capture clears interruption while showing the remaining teaching take")
         teacher.startCapture()
         teacher.observe(timestampMS: time+1000, hasFace: true, observation: sample(.neutral))
         expect(teacher.capture == nil && teacher.completedSteps == 1, "capture gap keeps completed takes only")
