@@ -44,8 +44,55 @@ struct TaughtExpressionTests {
         expect(teacher.completedSteps == 18 && teacher.candidate != nil, "one full setup produces a checked profile")
         return teacher.candidate!
     }
+    static func sensitiveMovementChecks(_ profile: TaughtExpressionProfile) throws {
+        let model = try profile.validatedModel()
+        let neutral = ExpressionCue.allCases.map { sample(.neutral).values[$0]! }
+        for label in [TaughtExpressionLabel.anger, .fear] {
+            let target = ExpressionCue.allCases.map { sample(label).values[$0]! }
+            for strength in [0.4, 0.65, 1.3] {
+                let vector = zip(neutral,target).map { $0+($1-$0)*strength }
+                expect(model.match(vector).label == label, "\(label): recognizes \(strength) of the taught pattern")
+            }
+            let reversed = zip(neutral,target).map { $0-($1-$0)*0.65 }
+            expect(model.match(reversed).label != label, "\(label): opposite movement cannot trigger the label")
+        }
+        // Raised resting brows, small eyes, and a much larger sad-brow motion.
+        // These small repeatable changes were overwhelmed by the old global range.
+        var examples = profile.examples
+        for label in [TaughtExpressionLabel.anger, .fear] {
+            var target = neutral
+            target[label == .anger ? 1 : 2] += label == .anger ? 0.01 : 0.006
+            examples[label] = (0..<2).map { _ in ExpressionExample(center: target, spread: [0,0.0002,0.0001,0,0], sampleCount: 21) }
+        }
+        examples[.neutral] = (0..<2).map { _ in ExpressionExample(center: neutral, spread: [0,0.0002,0.0001,0,0], sampleCount: 21) }
+        let subtle = try TaughtExpressionModel(examples: examples)
+        for label in [TaughtExpressionLabel.anger, .fear] {
+            let target = examples[label]![0].center
+            for strength in [0.4,0.75,1.0,1.3] {
+                let vector = zip(neutral,target).map { $0+($1-$0)*strength }
+                expect(subtle.match(vector).label == label, "\(label): small geometric change survives at \(strength) strength")
+            }
+        }
+        for delta in [-0.0008, 0, 0.0008] {
+            var resting = neutral; resting[1] += delta; resting[2] += delta
+            expect(subtle.match(resting).label == .neutral, "neutral tracking jitter never becomes a sensitive expression")
+        }
+        var mixed = neutral; mixed[1] += 0.006; mixed[2] += 0.0036
+        expect(subtle.match(mixed).label == nil, "mixed brow and eye motions can abstain instead of forcing a label")
+        for label in [TaughtExpressionLabel.joy, .sadness, .disgust] {
+            expect(subtle.match(examples[label]![0].center).label == label, "\(label): preserved while brow/eye sensitivity changes")
+        }
+        var measured = sample(.neutral); measured.values[.anger]! += 0.005
+        let reading = ExpressionMovementReading.make(cue: .anger, observation: measured, examples: examples)
+        expect(abs(reading!.fraction!-0.5) < 0.000001, "0.005 brow change displays as half of a personal 0.01 taught range")
+        expect(ExpressionMovementReading.make(cue: .anger, observation: nil, examples: examples) == nil,
+               "movement readout never invents a value without a face")
+        let draft = ExpressionMovementReading.make(cue: .fear, observation: sample(.fear), examples: [.neutral: examples[.neutral]!])
+        expect(draft?.fraction == nil && draft?.change != nil, "unfinished teaching shows a raw delta without inventing a percentage")
+    }
     static func main() throws {
         let profile = taught(), model = try profile.validatedModel()
+        try sensitiveMovementChecks(profile)
         for label in TaughtExpressionLabel.allCases {
             let vector = ExpressionCue.allCases.map { sample(label,delta: 0.003).values[$0]! }
             expect(model.match(vector).label == label, "\(label): fresh measurements match the taught pattern")
@@ -150,6 +197,28 @@ struct TaughtExpressionTests {
         let data = try TaughtExpressionStore.encode(profile)
         let decoded = try TaughtExpressionStore.decode(data)
         expect(decoded == profile, "export/import is lossless")
+        var old = profile; old.matchingVersion = nil
+        let oldData = try JSONEncoder().encode(old)
+        let migrated = try TaughtExpressionStore.decode(oldData)
+        let migratedModel = try migrated.validatedModel()
+        expect(migrated.matchingVersion == nil && migratedModel.sensitiveGeometry,
+               "build-12 export without a matching version automatically uses sensitivity when its checks still pass")
+        // A valid earlier small sad expression falls inside the new neutral
+        // noise buffer. Retain that profile with its original classifier.
+        var oldSad = ExpressionCue.allCases.map { sample(.neutral).values[$0]! }; oldSad[3] += 0.02
+        let oldExample = ExpressionExample(center: oldSad, spread: [0,0,0,0,0], sampleCount: 21)
+        old.examples[.sadness] = [oldExample, oldExample]
+        old.validation[.sadness] = ExpressionValidation(example: oldExample, accepted: 21, total: 21, longestHoldMS: 2000)
+        let retained = try TaughtExpressionStore.decode(JSONEncoder().encode(old))
+        let retainedModel = try retained.validatedModel()
+        expect(!retainedModel.sensitiveGeometry,
+               "valid earlier profile keeps original matching if sensitive revalidation fails")
+        var oldRuntime = TaughtExpressionRuntime(profile: retained)
+        oldRuntime.observe(timestampMS: 0, hasFace: true,
+                           observation: ExpressionObservation(values: Dictionary(uniqueKeysWithValues: zip(ExpressionCue.allCases,oldSad)),
+                               pose: sample(.neutral).pose, camera: "front"))
+        expect(oldRuntime.needsSensitivityRetake && oldRuntime.result == .holding(.sadness),
+               "older profile remains active and requests a sensitivity retake instead of disappearing")
         try data.write(to: bundled)
         var replacement = profile; replacement.id = UUID().uuidString
         try store.save(replacement)
@@ -171,6 +240,8 @@ struct TaughtExpressionTests {
         rejects("unknown profile schema rejected") { _ = try TaughtExpressionStore.decode(JSONEncoder().encode(corrupt)) }
         corrupt = profile; corrupt.measurementVersion = "other-model"
         rejects("incompatible feature units rejected") { _ = try corrupt.validatedModel() }
+        corrupt = profile; corrupt.matchingVersion = 99
+        rejects("unknown matching version rejected") { _ = try corrupt.validatedModel() }
         corrupt = profile; corrupt.validation[.joy]!.accepted = 0
         rejects("failed repeat validation rejected") { _ = try corrupt.validatedModel() }
         corrupt = profile; corrupt.validation[.fear]!.longestHoldMS = 100

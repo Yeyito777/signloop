@@ -40,9 +40,10 @@ struct ExpressionTesterView: View {
                             .font(.subheadline).foregroundStyle(.secondary)
                     }.card()
                     if teacher != nil { teaching } else { profile }
+                    movementFeedback
                     Text("These are labels for the expressions you teach, not a reading of your feelings or ASL meaning. Images and video are never saved or uploaded. The profile contains only numeric examples and check results.")
                         .font(.footnote).foregroundStyle(.secondary)
-                    Text("Expression lab · taught profiles v1 · build \(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—")")
+                    Text("Expression lab · sensitive brows & eyes · build \(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—")")
                         .font(.caption2).foregroundStyle(.secondary).accessibilityIdentifier("expression-build")
                 }.padding(20)
             }
@@ -108,6 +109,10 @@ struct ExpressionTesterView: View {
                     .font(.subheadline).foregroundStyle(.secondary)
                 Text("It loads automatically, including after you close the app. Export it to use the same face profile in a demo build with no setup screens.")
                     .font(.subheadline)
+                if runtime.needsSensitivityRetake {
+                    Text("Your earlier profile is still active. Teach a replacement using comfortable, steady expressions to enable the more sensitive brow and eye matching.")
+                        .font(.subheadline).foregroundStyle(accent)
+                }
             } else {
                 Text("Teach your relaxed face and five expressions. Two takes each, then six repeat checks. Your saved profile becomes the recognizer's fixed reference.")
                     .font(.subheadline)
@@ -164,6 +169,39 @@ struct ExpressionTesterView: View {
                 Text("Your installed profile is kept until all checks pass and you save this replacement.")
                     .font(.caption).foregroundStyle(.secondary)
             }
+        }.card()
+    }
+
+    private var movementFeedback: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Your brow & eye movement").font(.headline)
+            Text("Measured against your relaxed face. 100% means the movement in your taught example, not confidence or a required score.")
+                .font(.caption).foregroundStyle(.secondary)
+            ForEach([ExpressionCue.anger, .fear]) { cue in
+                let reading = ExpressionMovementReading.make(cue: cue, observation: runtime.observation,
+                    examples: teacher?.examples ?? runtime.profile?.examples ?? [:])
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack {
+                        Text(cue == .anger ? "Brow lowering" : "Eye opening")
+                        Spacer()
+                        if let fraction = reading?.fraction {
+                            Text("\(Int(max(-9.99, min(9.99, fraction))*100))% of taught change").monospacedDigit()
+                        }
+                    }.font(.subheadline)
+                    if let reading {
+                        if let fraction = reading.fraction {
+                            ProgressView(value: max(0, min(1, fraction)))
+                        }
+                        Text("Change from relaxed: \(reading.change, specifier: "%+.4f")\(reading.fraction == nil ? " · Capture this expression to set its range." : "")")
+                            .font(.caption).foregroundStyle(.secondary)
+                    } else {
+                        Text(runtime.observation == nil ? "Waiting for a tracked face." : "Capture your relaxed face first.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }.accessibilityIdentifier("expression-movement-\(cue.rawValue)")
+            }
+            Text("Small numbers can be meaningful. Brow and eye matches also use the rest of your taught expression and ignore movement within your relaxed-face variation.")
+                .font(.caption).foregroundStyle(.secondary)
         }.card()
     }
 }

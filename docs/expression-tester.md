@@ -6,7 +6,7 @@ saved brow/eye/mouth measurements and stays fixed during normal use.
 
 ## On the training phone
 
-1. Install the **Signloop** scheme through Xcode. Build 12's Expression lab says
+1. Install the **Signloop** scheme through Xcode. Build 13's Expression lab says
    **Teach my expressions**; it no longer uses activation sliders as its primary
    recognizer. Merging source does not automatically reinstall a cable-built app.
 2. Tap the smile icon, then **Teach my expressions**.
@@ -27,6 +27,19 @@ Setup is never launched automatically. Retraining requires explicitly starting a
 replacement in the lab. Cancellation, interruption or a failed save preserves
 the installed profile. An unfinished teaching session is temporary and is not
 restored after closing the lab/app.
+
+Build 13 makes brow/eye matching more sensitive by default. It can recognize a
+softer version of the same taught pattern, so use comfortable movements when
+teaching; exaggerated poses are unnecessary. The lab's **Your brow & eye
+movement** readout shows change from your relaxed face and percentage of your
+own taught change. A raw ratio such as 0.01 can be meaningful; neither it nor
+the percentage is a probability. 100% is the captured example, not a required
+activation score. Before teaching that expression, only the raw delta appears.
+
+Saved build-12 profiles are preserved. They use the more sensitive matcher if
+their saved checks pass it. Otherwise, the original matcher stays active and
+the lab explains that teaching a replacement enables the sensitivity update.
+New exports include `matchingVersion: 2`; measurement units are unchanged.
 
 This is one person's fixed expression reference. It is not face identification
 and does not automatically choose or adapt to other people. These labels describe
@@ -84,12 +97,19 @@ half-range). A take needs at least 12 fresh observations, is capped at 120, and
 rejects substantial head movement. Camera changes, missing tracking and gaps over
 400 ms abort unfinished takes. A one-second preparation interval is excluded.
 
-`TaughtExpressionModel` scales dimensions by learned across-expression range,
-measured variation and small measurement floors. It compares the entire vector
+`TaughtExpressionModel` scales mouth/brow-slope dimensions by learned range and
+variation. For brow height and eye opening, it uses the smallest between-label
+difference above measured variation and small geometry noise floors. Thus a
+large movement in another expression cannot drown out a repeatable small brow
+drop or eye widening. It compares the entire vector
 with both examples of all six labels. It rejects near-identical classes,
 inconsistent repeated examples and excessive within-take variation. A match must
 fall inside a bounded radius relative to the nearest competing expression and
-have a clear margin. Unknown/intermediate movements can abstain; the model does
+have a clear margin. Anger/fear also compare against the learned direction from
+neutral to the taught example at 30–150% strength, with a bounded perpendicular
+tolerance. A buffer based on relaxed-face variation suppresses jitter. This is
+fixed interpolation of the saved examples; live frames never change the model.
+Unknown/intermediate movements can abstain; the model does
 not force every frame into an emotion.
 
 This replaces the previous one-cue-per-emotion classifier in the app. A taught
@@ -112,6 +132,9 @@ movement in smile/disgust, personal neutral, unknown poses, holds/freshness,
 training versus independent checks, conflicting captures, persistence, import
 validation, failed saves and bundled-profile precedence. Existing geometry and
 native core checks also run. Optional private Core ML fixtures remain separate.
+Sensitivity regressions include a 0.01 brow drop, 0.006 eye-opening change,
+softer/stronger patterns, reversed/mixed movements, neutral jitter, personal
+movement readouts and preservation of valid older profiles.
 
 Simulator UI checks cover lab-only setup, disabled capture without a face,
 export requiring a complete profile, cancellation/relaunch, and a dedicated
