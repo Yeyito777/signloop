@@ -63,6 +63,17 @@ export function performanceText(text: string, emotion: GooseEmotion = 'neutral')
   return tags ? `${tags} ${text}` : text;
 }
 
+export function buildBackendSpeechRequest(text: string, origin: string, token: string, emotion: GooseEmotion = 'neutral') {
+  return {
+    url: `${origin}/v1/speech`,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ text: prepareSpeechText(text), emotion }),
+  };
+}
+
 export function buildSpeechRequest(text: string, voiceId: string, apiKey: string, emotion: GooseEmotion = 'neutral') {
   const performed = performanceText(text, emotion);
   return {
@@ -168,6 +179,14 @@ export function messageForSpeechError(status?: number, detail?: { status?: strin
   return 'Could not reach ElevenLabs. Check the network connection.';
 }
 
+export function messageForBackendSpeechError(status?: number): string {
+  if (status === 401) return 'The backend access token was rejected.';
+  if (status === 503) return 'Voice is not configured on the backend.';
+  if (status === 429) return 'The backend asked us to wait a moment. Try again shortly.';
+  if (status) return 'Mr. Goose could not speak that line.';
+  return 'Could not reach the local voice backend. Is it running on port 8787?';
+}
+
 export type SpokenClip = {
   buffer: ArrayBuffer;
   alignment?: SpeechAlignment;
@@ -260,6 +279,7 @@ async function forEachStreamObject(response: Response, signal: AbortSignal | und
 /** Turns English text into an MP3 buffer plus word timings. Used if the stream path cannot run. */
 export async function speakEnglish(text: string, signal?: AbortSignal, emotion: GooseEmotion = 'neutral'): Promise<SpokenClip> {
   if (!voiceConfig.voiceConfigured) throw new VoiceError(voiceConfig.setupMessage);
+  if (voiceConfig.backendConfigured) return speakEnglishViaBackend(text, signal, emotion);
   const request = buildSpeechRequest(prepareSpeechText(text), voiceConfig.voiceId, voiceConfig.apiKey, emotion);
   let response: Response;
   try {
@@ -273,6 +293,21 @@ export async function speakEnglish(text: string, signal?: AbortSignal, emotion: 
     if (fallback) return { buffer: fallback };
     throw new VoiceError(messageForSpeechError(response.status, await readErrorDetail(response)));
   }
+  const body = await response.json() as { audio_base64?: string; alignment?: SpeechAlignment; normalized_alignment?: SpeechAlignment };
+  if (!body.audio_base64) throw new VoiceError('Mr. Goose could not speak that line.');
+  return { buffer: bytesFromBase64(body.audio_base64), alignment: alignmentFromBody(body) };
+}
+
+async function speakEnglishViaBackend(text: string, signal: AbortSignal | undefined, emotion: GooseEmotion): Promise<SpokenClip> {
+  const request = buildBackendSpeechRequest(text, voiceConfig.backendUrl, voiceConfig.backendToken, emotion);
+  let response: Response;
+  try {
+    response = await fetch(request.url, { method: 'POST', headers: request.headers, body: request.body, signal, redirect: 'error' });
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    throw new VoiceError(messageForBackendSpeechError());
+  }
+  if (!response.ok) throw new VoiceError(messageForBackendSpeechError(response.status));
   const body = await response.json() as { audio_base64?: string; alignment?: SpeechAlignment; normalized_alignment?: SpeechAlignment };
   if (!body.audio_base64) throw new VoiceError('Mr. Goose could not speak that line.');
   return { buffer: bytesFromBase64(body.audio_base64), alignment: alignmentFromBody(body) };
