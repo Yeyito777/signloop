@@ -1,4 +1,8 @@
 name: Signloop
+configs:
+  Debug: debug
+  Release: release
+  Demo: release
 options:
   bundleIdPrefix: com.yeyito
   deploymentTarget:
@@ -10,7 +14,8 @@ settings:
     CODE_SIGN_STYLE: Automatic
     PRODUCT_BUNDLE_IDENTIFIER: com.yeyito.signloop
     MARKETING_VERSION: "0.1.0"
-    CURRENT_PROJECT_VERSION: "11"
+    CURRENT_PROJECT_VERSION: "12"
+    EXPRESSION_TRAINING_ENABLED: "YES"
     ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     OTHER_LDFLAGS:
       - $(inherited)
@@ -18,6 +23,10 @@ settings:
       - -lc++
     "OTHER_LDFLAGS[sdk=iphoneos*]": $(inherited) -force_load "$(PROJECT_DIR)/Vendor/MediaPipeTasksCommon/frameworks/graph_libraries/libMediaPipeTasksCommon_device_graph.a"
     "OTHER_LDFLAGS[sdk=iphonesimulator*]": $(inherited) -force_load "$(PROJECT_DIR)/Vendor/MediaPipeTasksCommon/frameworks/graph_libraries/libMediaPipeTasksCommon_simulator_graph.a"
+  configs:
+    Demo:
+      EXPRESSION_TRAINING_ENABLED: "NO"
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) SIGNLOOP_DEMO
 targets:
   Signloop:
     type: application
@@ -31,13 +40,30 @@ targets:
       - path: Signloop
         excludes:
           - RemoteRecognition.swift
+          - Resources/DemoExpressionProfile.json
       - path: Vendor/TensorFlowLiteSwift
+    preBuildScripts:
+      - name: Validate bundled demo expression profile
+        basedOnDependencyAnalysis: false
+        script: |
+          if [ "$EXPRESSION_TRAINING_ENABLED" = "NO" ]; then
+            bash "$PROJECT_DIR/scripts/check-expression-profile.sh"
+          fi
+    postBuildScripts:
+      - name: Embed fixed demo expression profile
+        basedOnDependencyAnalysis: false
+        script: |
+          if [ "$EXPRESSION_TRAINING_ENABLED" = "NO" ]; then
+            mkdir -p "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH"
+            cp "$PROJECT_DIR/Signloop/Resources/DemoExpressionProfile.json" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/DemoExpressionProfile.json"
+          fi
     info:
       path: Signloop/Info.plist
       properties:
         CFBundleDisplayName: Signloop
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        ExpressionTrainingEnabled: $(EXPRESSION_TRAINING_ENABLED)
         NSCameraUsageDescription: Signloop tracks your hands, upper body and facial movements on your iPhone. No images or video are uploaded or saved.
         UILaunchScreen: {}
         UIRequiresFullScreen: true
@@ -83,5 +109,17 @@ schemes:
       targets:
         Signloop: all
     test:
+      targets:
+        - SignloopUITests
+  SignloopDemo:
+    build:
+      targets:
+        Signloop: all
+    run:
+      config: Demo
+    archive:
+      config: Demo
+    test:
+      config: Demo
       targets:
         - SignloopUITests

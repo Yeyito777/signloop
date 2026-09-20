@@ -105,83 +105,76 @@ final class SingleScreenUITests: XCTestCase {
         app.buttons["Done"].tap()
     }
 
-    func testExpressionLabAbstainsWithoutFaceAndCannotCalibrate() {
-        XCTAssertTrue(app.buttons["expression-lab"].waitForExistence(timeout: 10))
-        app.buttons["expression-lab"].tap()
-        let result = app.staticTexts["expression-result"]
-        XCTAssertTrue(result.waitForExistence(timeout: 5))
-        XCTAssertEqual(result.label, "No face")
-        let screenshot = XCTAttachment(screenshot: app.screenshot())
-        screenshot.name = "Expression lab — no face"
-        screenshot.lifetime = .keepAlways
-        add(screenshot)
-        let baseline = app.buttons["expression-baseline"]
-        for _ in 0..<4 {
-            if baseline.isHittable { break }
+    private func reveal(_ element: XCUIElement) {
+        for _ in 0..<8 {
+            if element.isHittable && element.frame.minY > 110 && element.frame.maxY < app.frame.maxY - 40 { break }
             app.scrollViews.firstMatch.swipeUp()
         }
-        XCTAssertTrue(baseline.exists)
-        XCTAssertFalse(baseline.isEnabled)
-        XCTAssertFalse(app.staticTexts["Joy preset"].exists)
+    }
+
+    func testExpressionLabCannotTeachWithoutFace() {
+        XCTAssertTrue(app.buttons["expression-lab"].waitForExistence(timeout: 10))
+        app.buttons["expression-lab"].tap()
+        XCTAssertEqual(app.staticTexts["expression-result"].label, "No face")
+        let teach = app.buttons["expression-teach"]
+        reveal(teach)
+        teach.tap()
+        let step = app.staticTexts["expression-teaching-step"]
+        XCTAssertTrue(step.waitForExistence(timeout: 5))
+        XCTAssertTrue(step.label.contains("relaxed face"))
+        let capture = app.buttons["expression-capture"]
+        reveal(capture)
+        XCTAssertTrue(capture.exists)
+        XCTAssertFalse(capture.isEnabled)
+        XCTAssertFalse(app.buttons["expression-save-profile"].exists)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Expression teaching — relaxed-face take"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
         app.buttons["Done"].tap()
     }
 
-    func testExpressionThresholdsAreAdjustableAndPersistAcrossRelaunch() {
+    func testExpressionSetupStaysInLabAndRequiresCompleteProfileForExport() {
         XCTAssertTrue(app.buttons["expression-lab"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["expression-teach"].exists)
         app.buttons["expression-lab"].tap()
-        let slider = app.sliders["expression-threshold-joy"]
-        for _ in 0..<6 {
-            // SwiftUI can report a partially clipped slider as hittable. Its
-            // whole track must be visible for XCTest's drag to reach the thumb.
-            if slider.isHittable && slider.frame.maxY < app.frame.maxY - 80 { break }
-            app.scrollViews.firstMatch.swipeUp()
-        }
-        XCTAssertTrue(slider.isHittable)
-        let before = slider.value as? String
-        slider.adjust(toNormalizedSliderPosition: 0.8)
-        let changed = XCTNSPredicateExpectation(
-            predicate: NSPredicate { _, _ in slider.value as? String != before }, object: nil)
-        XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 5), .completed,
-                       "Dragging the visible slider must change its threshold")
-        let value = slider.value as? String
-        XCTAssertNotNil(value)
-        XCTAssertNotEqual(value, before)
-        let screenshot = XCTAttachment(screenshot: app.screenshot())
-        screenshot.name = "Expression lab — cue thresholds"
-        screenshot.lifetime = .keepAlways
-        add(screenshot)
-        app.buttons["Done"].tap()
-        app.buttons["expression-lab"].tap()
-        for _ in 0..<6 {
-            if slider.isHittable && slider.frame.maxY < app.frame.maxY - 80 { break }
-            app.scrollViews.firstMatch.swipeUp()
-        }
-        XCTAssertEqual(slider.value as? String, value)
+        let export = app.buttons["expression-export"]
+        reveal(export)
+        XCTAssertTrue(export.exists)
+        XCTAssertFalse(export.isEnabled)
+        let teach = app.buttons["expression-teach"]
+        // Return to the beginning so the teaching button is fully on screen.
+        app.scrollViews.firstMatch.swipeDown()
+        reveal(teach)
+        teach.tap()
+        let cancel = app.buttons["expression-cancel-teaching"]
+        reveal(cancel)
+        cancel.tap()
+        XCTAssertFalse(app.buttons["expression-capture"].exists)
         app.buttons["Done"].tap()
         app.terminate()
         app.launch()
         XCTAssertTrue(app.buttons["expression-lab"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["expression-capture"].exists)
         app.buttons["expression-lab"].tap()
-        for _ in 0..<6 {
-            if slider.isHittable && slider.frame.maxY < app.frame.maxY - 80 { break }
-            app.scrollViews.firstMatch.swipeUp()
-        }
-        XCTAssertEqual(slider.value as? String, value)
-        let reset = app.buttons["expression-reset"]
-        for _ in 0..<12 {
-            if reset.isHittable && reset.frame.maxY < app.frame.maxY - 40 { break }
-            app.scrollViews.firstMatch.swipeUp()
-        }
-        reset.tap()
+        XCTAssertTrue(app.buttons["expression-teach"].exists)
+        XCTAssertFalse(app.buttons["expression-capture"].exists)
+        app.buttons["Done"].tap()
+    }
+
+    func testDemoBuildUsesBundledProfileWithoutTeachingEntry() throws {
+        #if SIGNLOOP_DEMO
+        XCTAssertTrue(app.buttons["camera-settings"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["expression-lab"].exists)
+        XCTAssertFalse(app.buttons["expression-teach"].exists)
+        XCTAssertTrue(app.staticTexts["live-expression-preset"].exists)
         app.terminate()
         app.launch()
-        app.buttons["expression-lab"].tap()
-        for _ in 0..<12 {
-            if slider.isHittable && slider.frame.maxY < app.frame.maxY - 80 { break }
-            app.scrollViews.firstMatch.swipeUp()
-        }
-        XCTAssertEqual(slider.value as? String, "0.15")
-        app.buttons["Done"].tap()
+        XCTAssertTrue(app.staticTexts["live-expression-preset"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["expression-lab"].exists)
+        #else
+        throw XCTSkip("Run this check with SignloopDemo and an explicit synthetic simulator fixture.")
+        #endif
     }
 
     func testLargeTextKeepsCoreControlsReachable() {

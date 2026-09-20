@@ -50,8 +50,9 @@ prototype are not secret; use the consumer app's backend path for shared builds.
 
 ## Standalone native scanner: offline skeleton
 
-The standalone native build uses `SkeletonCameraTracker` and is **tracking only**:
-camera → MediaPipe hand, upper-body and face landmarkers → one synchronized, inspectable skeleton. No sign guesses,
+The standalone native build uses `SkeletonCameraTracker` for synchronized
+MediaPipe hand, upper-body and face tracking, plus an optional taught expression
+profile for the demo. No sign guesses,
 backend, API key, transcription, recording or uploads.
 
 - Up to two hands, 21 points each.
@@ -66,13 +67,15 @@ Coordinates share the camera image plane, not a calibrated 3D coordinate system.
 See [architecture, probe schema and testing](docs/multimodal-skeleton.md).
 
 Tap the smiling-face button for [Expression lab](docs/expression-tester.md):
-five live facial-cue bars, a saved personal relaxed-face baseline, optional cue
-ranges and adjustable thresholds that default to the most sensitive setting.
+teach your relaxed face and five expressions once, check them against fresh
+repetitions, then save/export a fixed personal demo profile. Recognition continues
+on the camera screen after the lab closes. The **SignloopDemo** scheme bundles
+the checked profile and hides teaching from the demo experience.
 The experimental presets do not infer emotion or ASL meaning.
 
 This replaces the standalone camera's earlier ILY/five-sign research display;
 old recognition experiments remain below for reference and are not called by the new camera UI.
-No private sign-model assets are needed. Installing build 11 replaces the previous
+No private sign-model assets are needed. Installing build 12 replaces the previous
 app UI; installation is a separate explicit step.
 
 ## Previous recognition research (not active in the tracking UI)
