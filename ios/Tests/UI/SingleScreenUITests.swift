@@ -120,6 +120,15 @@ final class SingleScreenUITests: XCTestCase {
         }
     }
 
+    private func waitForExportToFinish() {
+        // A success message from an earlier export can still exist underneath
+        // the Files sheet. Wait for the current write to close the picker.
+        let pickerClosed = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "exists == false"),
+            object: app.textFields["DOCPicker.filenameTextField"])
+        XCTAssertEqual(XCTWaiter.wait(for: [pickerClosed], timeout: 30), .completed)
+    }
+
     func testExpressionLabCannotTeachWithoutFace() {
         XCTAssertTrue(app.buttons["expression-lab"].waitForExistence(timeout: 10))
         app.buttons["expression-lab"].tap()
@@ -185,6 +194,7 @@ final class SingleScreenUITests: XCTestCase {
         let saveExport = app.buttons["Save"].firstMatch
         XCTAssertTrue(saveExport.waitForExistence(timeout: 10))
         saveExport.tap()
+        waitForExportToFinish()
         let transferMessage = app.staticTexts["expression-transfer-message"]
         XCTAssertTrue(transferMessage.waitForExistence(timeout: 10))
         XCTAssertTrue(transferMessage.label.contains("Setup progress exported"))
@@ -203,6 +213,7 @@ final class SingleScreenUITests: XCTestCase {
         // simulator. The system may ask to replace the first progress file.
         let replace = app.buttons["Replace"].firstMatch
         if replace.waitForExistence(timeout: 3) { replace.tap() }
+        waitForExportToFinish()
         XCTAssertTrue(transferMessage.waitForExistence(timeout: 10))
         XCTAssertTrue(transferMessage.label.contains("Setup progress exported"))
         let cancel = app.buttons["expression-cancel-teaching"]
