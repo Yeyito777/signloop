@@ -7,14 +7,14 @@ import subprocess
 from .basic_signs import LABELS
 
 
-def summarize(rows):
+def summarize(rows, labels=LABELS):
     good = total = covered = 0
     accuracy_sum = 0.0
     by_label = {}
     unknown_guesses = 0
     for row in rows:
         predictions = [e["label"] for e in row["events"] if e.get("label")]
-        if row["label"] not in LABELS:
+        if row["label"] not in labels:
             unknown_guesses += bool(predictions)
             continue
         total += 1
@@ -56,7 +56,7 @@ def main():
             raw_path = args.out/f"val-{window}-{weight}.json"
             bank_path.write_text(json.dumps(bank, separators=(",", ":")))
             subprocess.run([str(args.replay), str(bank_path), str(args.validation), str(raw_path)], check=True)
-            report = summarize(json.loads(raw_path.read_text()))
+            report = summarize(json.loads(raw_path.read_text()), base["labels"])
             candidates.append(dict(window=window, weight=weight, report=report,
                                    bank=str(bank_path), raw=str(raw_path)))
     winner = max(candidates, key=lambda x: (x["report"]["majority_correct"],

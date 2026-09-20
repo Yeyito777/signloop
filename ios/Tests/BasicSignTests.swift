@@ -70,6 +70,12 @@ import Foundation
         let roundTrip = try JSONDecoder().decode(BasicReferenceBank.self, from: JSONEncoder().encode(packed))
         let packedMatcher = try BasicSignMatcher(bank: roundTrip)
         check(packedMatcher.candidate(frames).distance == candidate.distance, "Packed parity")
+        let expandedLabels = labels + (16..<32).map { "SYNTHETIC_\($0)" }
+        let expanded = BasicReferenceBank(version: 2, labels: expandedLabels, maxDistance: 0,
+                                         minMargin: 1, references: refs)
+        let expandedMatcher = try BasicSignMatcher(bank: expanded)
+        check(expandedMatcher.candidate(frames).scores.count == 32, "32-label bank supported without changing geometry")
+        check(expandedMatcher.candidate(frames).distance == candidate.distance, "Expanding vocabulary alone does not change old distances")
         let transformed = frames.map { f in
             func transform(_ p: SkeletonPoint) -> SkeletonPoint {
                 // Change aspect, image translation and scale together.

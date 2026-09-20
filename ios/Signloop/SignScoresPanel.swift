@@ -48,7 +48,7 @@ struct SignScoresPanel: View {
                     }
                 }.padding(.bottom, 4)
             }.accessibilityIdentifier("sign-scores-list")
-            Text("— needs usable movement · scroll for all 16")
+            Text("— needs usable movement · scroll for all \(scores.count)")
                 .font(.caption2).foregroundStyle(.white.opacity(0.85))
         }
         .padding(.horizontal, 12).padding(.bottom, 10).padding(.top, 4)

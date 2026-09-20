@@ -1,5 +1,8 @@
 # Small temporal coordinates → sign corpus
 
+The separate [32-word presentation subset](demo32-and-spelling.md) reuses these
+coordinates without modifying this frozen 16-word corpus.
+
 This is the small-data alternative to downloading the full 46 GB ASL Citizen
 video archive. **No full archive is downloaded.** The script only makes bounded
 HTTP range requests for the ZIP index/metadata and selected videos.

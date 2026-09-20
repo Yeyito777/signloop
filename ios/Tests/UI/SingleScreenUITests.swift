@@ -138,8 +138,12 @@ final class SingleScreenUITests: XCTestCase {
         let hello = app.descendants(matching: .any)["score-HELLO"].firstMatch
         XCTAssertTrue(hello.exists)
         XCTAssertEqual(hello.value as? String, "No current score")
-        list.swipeUp()
-        XCTAssertTrue(app.descendants(matching: .any)["score-YOU"].firstMatch.exists)
+        let last = app.descendants(matching: .any)["score-CAMERA"].firstMatch
+        for _ in 0..<8 {
+            if last.exists && last.isHittable { break }
+            list.swipeUp()
+        }
+        XCTAssertTrue(last.exists)
         app.terminate()
         app.launch()
         XCTAssertTrue(app.buttons["hide-sign-scores"].waitForExistence(timeout: 5))
@@ -164,5 +168,49 @@ final class SingleScreenUITests: XCTestCase {
         app.buttons["camera-settings"].tap()
         actualSwitch("Show all sign scores").tap()
         app.buttons["Done"].tap()
+    }
+
+    func testSpellingModeNeedsConfirmationAndMarksMotionLettersManual() {
+        app.segmentedControls["recognition-mode"].buttons["Spell name"].tap()
+        XCTAssertTrue(app.staticTexts["spelling-draft"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["current-sign"].label, "Watching…")
+        XCTAssertFalse(app.buttons["add-letter"].isEnabled)
+        app.buttons["manual-spelling"].tap()
+        app.buttons["J (manual)"].tap()
+        XCTAssertEqual(app.staticTexts["spelling-draft"].label, "J")
+        app.buttons["manual-spelling"].tap()
+        app.buttons["Z (manual)"].tap()
+        XCTAssertEqual(app.staticTexts["spelling-draft"].label, "JZ")
+        app.buttons["delete-letter"].tap()
+        XCTAssertEqual(app.staticTexts["spelling-draft"].label, "J")
+        app.segmentedControls["recognition-mode"].buttons["Signs"].tap()
+        XCTAssertFalse(app.staticTexts["spelling-draft"].exists)
+        XCTAssertEqual(app.staticTexts["current-sign"].label, "Tracking")
+        app.segmentedControls["recognition-mode"].buttons["Spell name"].tap()
+        XCTAssertEqual(app.staticTexts["spelling-draft"].label, "J")
+    }
+
+    func testSpellingIsNotSavedAcrossLaunches() {
+        app.segmentedControls["recognition-mode"].buttons["Spell name"].tap()
+        app.buttons["manual-spelling"].tap()
+        app.buttons["J (manual)"].tap()
+        app.terminate(); app.launch()
+        app.segmentedControls["recognition-mode"].buttons["Spell name"].tap()
+        XCTAssertEqual(app.staticTexts["spelling-draft"].label, "Spelling…")
+    }
+
+    func testSpellingLargeTextKeepsControlsReachable() {
+        app.terminate()
+        app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL"]
+        app.launch()
+        app.segmentedControls["recognition-mode"].buttons["Spell name"].tap()
+        XCTAssertTrue(app.buttons["camera-settings"].isHittable)
+        XCTAssertTrue(app.buttons["pause-resume"].isHittable)
+        XCTAssertTrue(app.buttons["manual-spelling"].isHittable)
+        XCTAssertTrue(app.buttons["delete-letter"].isHittable)
+        XCTAssertFalse(app.staticTexts["recognition-status"].label.contains("unavailable"))
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.lifetime = .keepAlways
+        add(screenshot) // simulator-only class guard; never capture a phone.
     }
 }

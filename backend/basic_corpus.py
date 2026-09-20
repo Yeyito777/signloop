@@ -98,7 +98,7 @@ def summary(folder):
         p[row["split"]+"_with_6_hand_frames"] += int(a["hand_valid"].any(axis=1).sum() >= 6)
         p[row["split"]+"_with_6_body_hand_frames"] += int(
             np.sum(a["hand_valid"].any(axis=1) & a["pose_valid"][:, [11, 12]].all(axis=1)) >= 6)
-    return {"validated": True, "labels": list(LABELS), "counts": dict(counts),
+    return {"validated": True, "labels": json.loads((Path(folder)/"plan.json").read_text())["labels"], "counts": dict(counts),
             "signers": {k: len(v) for k, v in signers.items()},
             "coordinate_bytes": sum(p.stat().st_size for p in (Path(folder)/"coordinates").glob("*.npz")),
             "per_label": dict(per_label),

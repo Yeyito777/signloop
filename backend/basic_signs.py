@@ -21,6 +21,9 @@ from .research_citizen import METADATA
 
 LABELS = ("HELLO", "YES", "NO", "PLEASE", "THANKYOU", "HELP", "WATER", "MORE",
           "FINISH", "GOOD", "BAD", "NAME", "MY", "SORRY", "STOP", "YOU")
+DEMO_LABELS = LABELS + ("ILOVEYOU", "WE", "OUR", "NICE", "MEET", "TODAY", "PROJECT",
+                       "TECHNOLOGY", "COMPUTER", "PHONE", "SIGNLANGUAGE", "UNDERSTAND",
+                       "LEARN", "SHOW", "MAKE", "CAMERA")
 LIMITS = {"train": 6, "val": 2, "test": 3}
 FACE_IDS = (1, 4, 10, 13, 14, 33, 61, 70, 105, 133, 152, 159, 263, 291, 300, 334, 362, 386)
 MODELS = {
@@ -59,7 +62,7 @@ class BudgetReader(RangeReader):
                 time.sleep(2**attempt) # bounded network backoff, not a model/task polling loop
 
 
-def select(splits):
+def select(splits, labels=LABELS):
     participants = {s: {r["Participant ID"] for r in rows} for s, rows in splits.items()}
     for a, b in itertools.combinations(participants, 2):
         if participants[a] & participants[b]:
@@ -67,7 +70,7 @@ def select(splits):
     samples = []
     for split, count in LIMITS.items():
         rows = sorted(splits[split], key=lambda r: digest(r["Video file"].encode()))
-        for label in LABELS:
+        for label in labels:
             seen = set()
             selected = []
             for row in rows:
@@ -84,7 +87,7 @@ def select(splits):
         if split != "train":
             seen = set()
             for row in rows:
-                if row["Gloss"] in LABELS or row["Gloss"] in seen:
+                if row["Gloss"] in labels or row["Gloss"] in seen:
                     continue
                 seen.add(row["Gloss"])
                 samples.append(sample(row, split, "UNKNOWN"))
@@ -104,24 +107,25 @@ def sample(row, split, label):
             "member": "ASL_Citizen/videos/"+filename}
 
 
-def plan(archive, etag):
+def plan(archive, etag, labels=LABELS):
     splits = {}
     for split, expected in METADATA.items():
         text = archive.read(f"ASL_Citizen/splits/{split}.csv").decode("utf-8-sig")
         if digest(text.encode()) != expected:
             raise ValueError("Official metadata changed.")
         splits[split] = list(csv.DictReader(io.StringIO(text)))
-    samples = select(splits)
+    samples = select(splits, labels)
     for row in samples:
         info = archive.getinfo(row["member"])
         if not 0 < info.file_size <= 20_000_000:
             raise ValueError("Oversized clip; no silent omission.")
         row.update(zip_crc32=info.CRC, compressed_bytes=info.compress_size, video_bytes=info.file_size)
     total = sum(s["compressed_bytes"] for s in samples)
-    if total > 110_000_000:
-        raise ValueError("Planned clips exceed 110 MB budget; review selection before downloading.")
+    limit = 220_000_000 if tuple(labels) == DEMO_LABELS else 110_000_000
+    if total > limit:
+        raise ValueError("Planned clips exceed vocabulary-specific budget; review before downloading.")
     return {"version": 1, "source": URL, "license": LICENSE, "source_etag": etag,
-            "labels": LABELS, "per_label": LIMITS, "samples": samples,
+            "labels": labels, "per_label": LIMITS, "samples": samples,
             "clip_compressed_bytes": total, "models": MODELS, "mediapipe": "0.10.21",
             "sampling": "full clip, 15 Hz nearest source-frame cadence; no gesture trim",
             "coordinates": "unmirrored source image normalized x/y; model-local z; width/height retained",
@@ -248,12 +252,42 @@ def extraction(video, models):
     return result, stats
 
 
+def reused_coordinates(folder, row, planned):
+    """Reuse an exactly bound sample, never relabel or silently mix trackers."""
+    import numpy as np
+    from .basic_corpus import validate_arrays
+    path = folder/"plan.json"
+    old = json.loads(path.read_text())
+    binding = digest(path.read_bytes())
+    report = json.loads((folder/"report.json").read_text())
+    if not report["complete"] or report["plan_sha256"] != binding:
+        raise ValueError("Coordinate source is incomplete or unbound.")
+    for key in ("source", "source_etag", "models", "mediapipe", "sampling", "coordinates", "face_ids"):
+        if old[key] != planned[key]:
+            raise ValueError("Coordinate source pipeline differs.")
+    original = next((s for s in old["samples"] if s["id"] == row["id"]), None)
+    if original is None:
+        return None
+    if original != row:
+        # A formerly unsupported sign becoming supported must be re-evaluated
+        # deliberately, not silently reassigned through this reuse path.
+        return None
+    with np.load(folder/"coordinates"/(row["id"]+".npz"), allow_pickle=False) as stored:
+        arrays = {k: stored[k] for k in stored.files}
+    if str(arrays["plan_sha256"]) != binding:
+        raise ValueError("Coordinate source binding mismatch.")
+    validate_arrays(arrays)
+    return arrays
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("plan", "extract"))
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--models", type=Path, default=Path("ios/Signloop/Resources"))
     parser.add_argument("--cache", type=Path, nargs="*", default=[])
+    parser.add_argument("--vocabulary", choices=("basic16", "demo32"), default="basic16")
+    parser.add_argument("--coordinate-cache", type=Path)
     parser.add_argument("--accept-research-license", action="store_true")
     args = parser.parse_args()
     if not args.accept_research_license or ".runtime" not in args.out.resolve().parts:
@@ -262,7 +296,8 @@ def main():
     args.out.chmod(0o700)
     reader = BudgetReader()
     with zipfile.ZipFile(reader) as archive:
-        planned = plan(archive, reader.etag)
+        labels = DEMO_LABELS if args.vocabulary == "demo32" else LABELS
+        planned = plan(archive, reader.etag, labels)
         planned = json.loads(json.dumps(planned))
         plan_path = args.out/"plan.json"
         if plan_path.exists() and json.loads(plan_path.read_text()) != planned:
@@ -270,7 +305,7 @@ def main():
         if not plan_path.exists():
             plan_path.write_text(json.dumps(planned, indent=2))
         (args.out/"use.txt").write_bytes(archive.read("ASL_Citizen/use.txt"))
-        print("PLAN", len(planned["samples"]), "clips;", len(LABELS), "signs;",
+        print("PLAN", len(planned["samples"]), "clips;", len(labels), "signs;",
               round(planned["clip_compressed_bytes"]/1e6, 2), "MB maximum selected video payload", flush=True)
         if args.action == "plan":
             print("Range bytes downloaded (metadata/index only):", reader.bytes_read)
@@ -285,6 +320,13 @@ def main():
         output.mkdir(exist_ok=True)
         for i, sample in enumerate(planned["samples"]):
             target = output/(sample["id"]+".npz")
+            if not target.exists() and args.coordinate_cache:
+                reused = reused_coordinates(args.coordinate_cache, sample, planned)
+                if reused is not None:
+                    reused["plan_sha256"] = np.array(plan_sha)
+                    temporary = target.with_suffix(".partial.npz")
+                    np.savez_compressed(temporary, **reused)
+                    temporary.replace(target)
             if target.exists():
                 with np.load(target, allow_pickle=False) as data:
                     if str(data["plan_sha256"]) != plan_sha:
@@ -311,7 +353,7 @@ def main():
             records.append({k: sample[k] for k in ("id", "label", "split", "signer")} | stats)
             print(f"{i+1}/{len(planned['samples'])} {sample['split']} {sample['label']} {stats['frames']} frames", flush=True)
             report = {"complete": len(records) == len(planned["samples"]), "plan_sha256": plan_sha,
-                      "clips": len(records), "labels": LABELS, "counts": dict(Counter(r["split"] for r in records)),
+                      "clips": len(records), "labels": labels, "counts": dict(Counter(r["split"] for r in records)),
                       "coordinate_bytes": sum(p.stat().st_size for p in output.glob("*.npz") if ".partial." not in p.name),
                       "this_run_range_bytes": reader.bytes_read, "rows": records}
             (args.out/"report.json").write_text(json.dumps(report, indent=2))

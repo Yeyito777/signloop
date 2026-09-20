@@ -37,6 +37,22 @@ class BasicSignsTests(unittest.TestCase):
         expected = data.select(splits)
         self.assertEqual(expected, data.select({s: list(reversed(r)) for s, r in splits.items()}))
 
+    def test_demo32_retains_original_training_and_adds_human_examples(self):
+        splits = self.splits()
+        for split, count in data.LIMITS.items():
+            for label in data.DEMO_LABELS[len(data.LABELS):]:
+                for i in range(count+1):
+                    splits[split].append({"Participant ID": split+str(i), "Gloss": label,
+                                         "Video file": f"{split}-{label}-{i}.mp4"})
+        old = data.select(splits)
+        new = data.select(splits, data.DEMO_LABELS)
+        self.assertEqual(len(new), 372)
+        self.assertEqual(len(data.DEMO_LABELS), 32)
+        self.assertIn("ILOVEYOU", data.DEMO_LABELS)
+        self.assertEqual([x for x in old if x["split"] == "train"],
+                         [x for x in new if x["split"] == "train" and x["label"] in data.LABELS])
+        self.assertEqual(sum(x["label"] == "ILOVEYOU" for x in new), 11)
+
     def test_no_signer_leakage_or_silent_missing_sign(self):
         splits = self.splits()
         splits["test"][0]["Participant ID"] = splits["train"][0]["Participant ID"]

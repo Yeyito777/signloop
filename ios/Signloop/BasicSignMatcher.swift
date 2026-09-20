@@ -23,10 +23,10 @@ struct BasicReferenceBank: Codable {
 
     func validate() throws {
         guard (version == 2 || (version == 1 && references.allSatisfy { $0.features == nil })),
-              (400...2400).contains(windowMS ?? 1800), labels.count == 16, Set(labels).count == 16,
+              (400...2400).contains(windowMS ?? 1800), [16, 32].contains(labels.count), Set(labels).count == labels.count,
               (ruleWeight ?? 0.2).isFinite, (0...1).contains(ruleWeight ?? 0.2),
               (4...6).contains(queryFrames ?? 4),
-              references.count <= 128, !references.isEmpty,
+              references.count <= 256, !references.isEmpty,
               maxDistance.isFinite, (0...1).contains(maxDistance),
               minMargin.isFinite, (0...1).contains(minMargin),
               Set(references.map(\.id)).count == references.count,
@@ -51,7 +51,10 @@ struct BasicCandidate: Codable {
 /// a high score can still be rejected because competing signs look similar.
 struct BasicSignScore: Codable, Identifiable {
     static let vocabulary = ["HELLO", "YES", "NO", "PLEASE", "THANKYOU", "HELP", "WATER", "MORE",
-                             "FINISH", "GOOD", "BAD", "NAME", "MY", "SORRY", "STOP", "YOU"]
+                             "FINISH", "GOOD", "BAD", "NAME", "MY", "SORRY", "STOP", "YOU",
+                             "ILOVEYOU", "WE", "OUR", "NICE", "MEET", "TODAY", "PROJECT",
+                             "TECHNOLOGY", "COMPUTER", "PHONE", "SIGNLANGUAGE", "UNDERSTAND",
+                             "LEARN", "SHOW", "MAKE", "CAMERA"]
     let label: String
     let distance: Float?
     var id: String { label }
@@ -334,6 +337,7 @@ final class BasicSignMatcher {
     static func anatomicalPenalty(label: String, sequence: [BasicFeature]) -> Float {
         let expected: [Bool?]
         switch label {
+        case "ILOVEYOU": expected = [true, false, false, true]
         case "YOU": expected = [true, false, false, false]
         case "WATER": expected = [true, true, true, false]
         case "NAME": expected = [true, true, false, false]

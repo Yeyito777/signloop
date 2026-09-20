@@ -10,7 +10,11 @@ private enum CameraTheme {
 struct ContentView: View {
     @StateObject private var tracker = SkeletonCameraTracker()
     @StateObject private var recognition = BasicLiveRecognition()
+    @StateObject private var alphabet = AlphabetRecognition()
+    @State private var spelling = false
+    @State private var draft = SpellingDraft()
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var paused = false
     @State private var showSettings = false
     @State private var showProbe = false
@@ -53,7 +57,7 @@ struct ContentView: View {
             }
             // UI respects header/controls safe areas; only the camera itself
             // extends behind them. Keep the close button clear of the notch.
-            if showAllSignScores {
+            if showAllSignScores && !spelling {
                 GeometryReader { geometry in
                     VStack {
                         SignScoresPanel(scores: recognition.scores, isPresented: $showAllSignScores)
@@ -68,10 +72,15 @@ struct ContentView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) { controls }
         .background(.black).foregroundStyle(.white).tint(CameraTheme.primary)
         .onAppear {
-            tracker.onSkeletonFrame = { recognition.receive($0) }
-            tracker.onSkeletonReset = { recognition.reset() }
+            connectRecognition()
+            tracker.onSkeletonReset = { recognition.reset(); alphabet.reset() }
             recognition.load()
+            alphabet.load()
             tracker.start()
+        }
+        .onChange(of: spelling) { _, _ in
+            recognition.reset(); alphabet.reset()
+            connectRecognition()
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active && !paused { tracker.start() } else { tracker.pause() }
@@ -80,12 +89,19 @@ struct ContentView: View {
         .onDisappear { tracker.pause() }
         .sheet(isPresented: $showSettings) {
             CameraSettings(tracker: tracker, recognition: recognition, showTrackingStats: $showTrackingStats,
-                           showAllSignScores: $showAllSignScores)
+                           showAllSignScores: $showAllSignScores, alphabet: alphabet)
                 .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showProbe) {
             SkeletonInspector(tracker: tracker, probe: $probe)
                 .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+        }
+    }
+
+    private func connectRecognition() {
+        let useLetters = spelling
+        tracker.onSkeletonFrame = { frame in
+            if useLetters { alphabet.receive(frame) } else { recognition.receive(frame) }
         }
     }
 
@@ -104,7 +120,7 @@ struct ContentView: View {
                 }.accessibilityLabel("Settings").accessibilityIdentifier("camera-settings")
             }
             if showTrackingStats {
-                Text("\(tracker.fps) FPS · \(tracker.latencyMS) ms tracking · \(recognition.matchMS) ms match")
+                Text("\(tracker.fps) FPS · \(tracker.latencyMS) ms tracking · \(spelling ? alphabet.matchMS : recognition.matchMS) ms match")
                     .font(.system(.caption, design: .monospaced))
                     .padding(10).background(.ultraThinMaterial, in: Capsule())
             }
@@ -114,14 +130,54 @@ struct ContentView: View {
     private var controls: some View {
         VStack(spacing: 12) {
             VStack(spacing: 8) {
-                Text(paused ? "Paused" : recognition.ready ? "Best guess" : "Live skeleton").font(.title3.weight(.semibold))
+                Picker("Recognition mode", selection: $spelling) {
+                    Text("Signs").tag(false)
+                    Text("Spell name").tag(true)
+                }.pickerStyle(.segmented).accessibilityIdentifier("recognition-mode")
+                Text(paused ? "Paused" : spelling ? "Letter guess" : recognition.ready ? "Best guess" : "Live skeleton").font(.title3.weight(.semibold))
                     .accessibilityIdentifier("tracking-title")
                 if !paused {
-                    Text(recognition.sign.map(BasicLiveRecognition.display) ?? (recognition.ready ? "Watching…" : "Tracking"))
+                    Text(spelling ? alphabet.letter ?? "Watching…" :
+                            recognition.sign.map(BasicLiveRecognition.display) ?? (recognition.ready ? "Watching…" : "Tracking"))
                         .font(.title.weight(.bold)).accessibilityIdentifier("current-sign")
-                    Text(recognition.detail).font(.caption).multilineTextAlignment(.center)
+                    Text(spelling && dynamicTypeSize.isAccessibilitySize && alphabet.ready
+                         ? (alphabet.letter == nil ? "Hold one hand" : "Check, then Add")
+                         : spelling ? alphabet.detail : recognition.detail).font(.caption).multilineTextAlignment(.center)
                         .accessibilityIdentifier("recognition-status")
                 }
+                if spelling {
+                    Text(draft.text.isEmpty ? "Spelling…" : draft.text)
+                        .font(.headline.monospaced()).lineLimit(2)
+                        .accessibilityIdentifier("spelling-draft")
+                    HStack(spacing: 12) {
+                        Button {
+                            if let letter = alphabet.letter { draft.append(letter) }
+                        } label: {
+                            if dynamicTypeSize.isAccessibilitySize {
+                                Image(systemName: "plus").frame(minWidth: 44, minHeight: 44)
+                            } else {
+                                Text("Add \(alphabet.letter ?? "letter")").frame(minHeight: 44)
+                            }
+                        }.accessibilityLabel("Add \(alphabet.letter ?? "letter")")
+                            .disabled(paused || alphabet.letter == nil)
+                            .accessibilityIdentifier("add-letter")
+                        Button { draft.backspace() } label: { Image(systemName: "delete.left").frame(minWidth: 44,minHeight: 44) }
+                            .accessibilityLabel("Delete last letter").accessibilityIdentifier("delete-letter")
+                        Menu {
+                            Button("J (manual)") { draft.append("J") }
+                            Button("Z (manual)") { draft.append("Z") }
+                            Button("Space") { draft.append(" ") }
+                            Button("Clear spelling", role: .destructive) { draft.clear() }
+                        } label: {
+                            Image(systemName: "keyboard").frame(minWidth: 44,minHeight: 44)
+                        }.accessibilityLabel("Manual letters and clear").accessibilityIdentifier("manual-spelling")
+                    }.buttonStyle(.bordered).controlSize(.regular)
+                    Text(dynamicTypeSize.isAccessibilitySize ? "J/Z: manual" :
+                            "24 static letters · J/Z manual · nothing added automatically")
+                        .font(.caption2).multilineTextAlignment(.center)
+                        .accessibilityIdentifier("analysis-mode")
+                }
+                if !spelling {
                 HStack(spacing: 14) {
                     trackingBadge("Hands \(tracker.skeleton?.hands.count ?? 0)/2",
                                   active: !(tracker.skeleton?.hands.isEmpty ?? true))
@@ -130,9 +186,10 @@ struct ContentView: View {
                 }.font(.caption.weight(.semibold))
                 Text(paused ? "Camera and tracking paused" : tracker.status)
                     .font(.caption).multilineTextAlignment(.center).accessibilityIdentifier("tracking-status")
-                Text("Offline · 16-sign research preview · tap a point to inspect")
+                Text("Offline · \(recognition.labels.count)-sign research preview · tap a point to inspect")
                     .font(.caption2).foregroundStyle(.white.opacity(0.75))
                     .accessibilityIdentifier("analysis-mode")
+                }
             }.frame(maxWidth: .infinity).padding(14)
                 .background(CameraTheme.surface.opacity(0.94), in: RoundedRectangle(cornerRadius: 24))
             HStack(spacing: 12) {
@@ -165,6 +222,7 @@ private struct CameraSettings: View {
     @ObservedObject var recognition: BasicLiveRecognition
     @Binding var showTrackingStats: Bool
     @Binding var showAllSignScores: Bool
+    @ObservedObject var alphabet: AlphabetRecognition
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         NavigationStack {
@@ -175,7 +233,7 @@ private struct CameraSettings: View {
                     Text("Shows similarity for every candidate, including rejected matches. Not calibrated probabilities; scores do not add to 100%. Higher means closer, not necessarily correct.")
                         .font(.footnote)
                     Toggle("Track face (slower)", isOn: $tracker.trackFace)
-                    Text("Hands and shoulders/chest stay tracked. Face is optional and off by default for this 16-sign matcher.")
+                    Text("Hands and shoulders/chest stay tracked. Face is optional and off by default for word matching.")
                         .font(.footnote)
                     Toggle("Show hand joints", isOn: $tracker.showJoints)
                     Toggle("Show upper-body pose", isOn: $tracker.showPose)
@@ -185,6 +243,12 @@ private struct CameraSettings: View {
                     Text("Cyan: body. Yellow: face. Mint/orange: hands matched to left/right pose wrists. White: unassigned hand. Dashed lines are approximate wrist associations.")
                         .font(.footnote)
                 }
+                Section("Fingerspelling") {
+                    Text("Choose Spell name on the camera. Show one hand, hold a letter, then tap Add after checking it. Letters never compete with words. A–Z are available for composing, but J and Z require manual entry: this model recognizes only 24 static letters.")
+                    Toggle("Mirror letter input", isOn: $alphabet.mirrorInput)
+                    Text("Off matches the source collection scripts’ unmirrored coordinates. Try the other setting if signing-hand orientation differs. Names stay in memory only; no server, autocorrect or saved transcript.")
+                    Text("Alphabet data/features: Siruyy/realtime-asl-recognizer · MIT · © 2026 Neria. Signloop-trained model; experimental, not verified for a fresh signer.")
+                }.font(.footnote)
                 Section("On-device tracking") {
                     LabeledContent("Hand points", value: "\(tracker.skeleton?.hands.reduce(0) { $0 + $1.points.count } ?? 0) / 42")
                     LabeledContent("Upper-body points", value: "\(tracker.skeleton?.pose.filter(\.usable).count ?? 0) / 25")

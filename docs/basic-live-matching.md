@@ -1,5 +1,8 @@
 # Private offline 16-label matching experiment
 
+For the subsequent 32-word expansion and static-letter mode, see
+[build 15](demo32-and-spelling.md). The results below describe the 16-label bank.
+
 ## Build 14: best guesses, geometric rules and shared temporal evidence
 
 The standalone scanner now shows **Best guess** whenever usable temporal evidence

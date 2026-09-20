@@ -130,6 +130,11 @@ final class BasicLiveRecognition: ObservableObject {
     }
 
     static func display(_ label: String) -> String {
-        label == "THANKYOU" ? "Thank you" : label.capitalized
+        switch label {
+        case "THANKYOU": return "Thank you"
+        case "ILOVEYOU": return "I love you"
+        case "SIGNLANGUAGE": return "Sign language"
+        default: return label.capitalized
+        }
     }
 }

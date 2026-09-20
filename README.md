@@ -55,6 +55,12 @@ camera → MediaPipe hand and upper-body landmarkers (face optional) → one syn
 inspectable skeleton → optional **private 16-label temporal matching**.
 No backend, API key, transcription, recording or uploads.
 
+Build 15 adds a 32-word research vocabulary for introductions and presenting the
+project, including **I love you**, plus a separate **Spell name** mode.
+Fingerspelling recognizes 24 static letters; **J/Z are explicitly manual**.
+Verify and tap Add to compose a name—nothing is auto-transcribed or saved.
+See [vocabulary, spelling and evaluation limitations](docs/demo32-and-spelling.md).
+
 Build 14 shows the **best current guess**, explicitly uncertain, rather than
 hiding it behind Unknown. It adds hand-local 3D geometry, soft finger-shape
 rules and a shared temporal window with wrist/palm motion features. Face tracking

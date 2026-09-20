@@ -6,7 +6,7 @@ import math
 from pathlib import Path
 import subprocess
 from .basic_corpus import samples
-from .basic_signs import LABELS
+from .basic_signs import LABELS, DEMO_LABELS
 
 
 def frames(a):
@@ -36,7 +36,10 @@ def export(folder, out):
     out.mkdir(parents=True, exist_ok=True)
     records = [dict(id=r["id"], label=r["label"], split=r["split"], signer=r["signer"],
                     frames=frames(a)) for r, a in samples(folder)]
-    bank = dict(version=2, labels=list(LABELS), maxDistance=0.0, minMargin=1.0,
+    vocabulary = json.loads((Path(folder)/"plan.json").read_text())["labels"]
+    if vocabulary not in (list(LABELS), list(DEMO_LABELS)):
+        raise ValueError("Unsupported vocabulary")
+    bank = dict(version=2, labels=vocabulary, maxDistance=0.0, minMargin=1.0,
                 references=[r for r in records if r["split"] == "train"])
     (out/"basic-references.json").write_text(json.dumps(bank, separators=(",", ":"), allow_nan=False))
     for split in ("val", "test"):
@@ -60,12 +63,12 @@ def accepted_events(row, distance, margin):
     return displayed
 
 
-def metrics(rows, distance, margin):
+def metrics(rows, distance, margin, labels=LABELS):
     good = wrong = false = supported = unknown = 0
     per_label = {}
     for row in rows:
         shown = accepted_events(row, distance, margin)
-        if row["label"] in LABELS:
+        if row["label"] in labels:
             supported += 1
             good += row["label"] in shown
             wrong += bool(shown - {row["label"]})
@@ -84,16 +87,16 @@ def calibrate(raw, bank):
     rows = json.loads(raw.read_text())
     if not rows or any(r["split"] != "val" for r in rows):
         raise ValueError("Only validation may select rejection thresholds")
+    b = json.loads(bank.read_text())
     options = []
     for distance in (0.08, .12, .18, .25, .35, .5, .7, 1.0):
         for margin in (0.02, .05, .10, .15, .20, .30):
-            m = metrics(rows, distance, margin)
+            m = metrics(rows, distance, margin, b["labels"])
             # Small validation cohort: zero unsupported displays and at most
             # one wrong supported clip. Fail closed if no useful policy exists.
             if m["false_display"] == 0 and m["wrong"] <= 1:
                 options.append((m["correct"], -m["wrong"], -distance, margin, m))
     winner = max(options, key=lambda x: x[:4]) if options else (0, 0, 0, 1, {})
-    b = json.loads(bank.read_text())
     b["maxDistance"], b["minMargin"] = -winner[2], winner[3]
     bank.write_text(json.dumps(b, separators=(",", ":"), allow_nan=False))
     report = dict(maxDistance=b["maxDistance"], minMargin=b["minMargin"],
@@ -110,7 +113,9 @@ def validate_deployment(bank_path, corpus):
     if not report["complete"] or report["plan_sha256"] != hashlib.sha256(plan_path.read_bytes()).hexdigest():
         raise ValueError("Incomplete/unbound source corpus")
     training = {r["id"]: r for r in plan["samples"] if r["split"] == "train"}
-    if b["version"] != 2 or set(b["labels"]) != set(LABELS) or not 1 <= len(b["references"]) <= 128:
+    labels = plan.get("labels", list(LABELS))
+    if (b["version"] != 2 or labels not in (list(LABELS), list(DEMO_LABELS))
+            or b["labels"] != labels or not 1 <= len(b["references"]) <= 256):
         raise ValueError("Unexpected reference schema/vocabulary")
     if len({r["id"] for r in b["references"]}) != len(b["references"]):
         raise ValueError("Duplicate references")
@@ -146,7 +151,7 @@ def main():
     elif args.action == "report":
         b = json.loads(bank.read_text())
         print(json.dumps(metrics(json.loads(args.raw.read_text()), b["maxDistance"],
-                                 b["minMargin"]), indent=2))
+                                 b["minMargin"], b["labels"]), indent=2))
     else:
         if not args.device or not args.corpus or not args.accept_research_license:
             p.error("Private research provisioning requires --device, --corpus and --accept-research-license")
