@@ -28,3 +28,6 @@ __pycache__/
 .runtime/
 # Trained SignEngine packages are provisioned per build after a provenance check
 ios/Signloop/Resources/SignEngine/
+
+# Locally exported personal expression profile, provisioned for demo builds
+ios/Signloop/Resources/DemoExpressionProfile.json

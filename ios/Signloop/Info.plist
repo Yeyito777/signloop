@@ -20,6 +20,8 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ExpressionTrainingEnabled</key>
+	<string>$(EXPRESSION_TRAINING_ENABLED)</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Signloop tracks your hands, upper body and facial movements on your iPhone. No images or video are uploaded or saved.</string>
 	<key>UIApplicationSceneManifest</key>

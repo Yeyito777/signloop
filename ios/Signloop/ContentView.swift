@@ -6,7 +6,7 @@ private enum CameraTheme {
     static let surface = Color(red: 0.09, green: 0.11, blue: 0.09)
 }
 
-/// Tracking only. No sign classifier, transcription, backend or file export.
+/// Camera tracking and frozen taught-expression inference. Teaching is optional lab tooling.
 struct ContentView: View {
     @StateObject private var tracker = SkeletonCameraTracker()
     @Environment(\.scenePhase) private var scenePhase
@@ -14,7 +14,7 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var showProbe = false
     @State private var showExpressions = false
-    @State private var expressionEngine = ExpressionCueEngine(profile: ExpressionProfileStore.load())
+    @State private var expressionRuntime = TaughtExpressionRuntime(profile: TaughtExpressionStore.standard.load())
     @State private var probe = SkeletonProbe()
     @AppStorage("showTrackingStats") private var showTrackingStats = false
     private let clock = Timer.publish(every: 0.25, on: .main, in: .common).autoconnect()
@@ -57,12 +57,15 @@ struct ContentView: View {
         .background(.black).foregroundStyle(.white).tint(CameraTheme.primary)
         .onAppear { tracker.start() }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active && !paused { tracker.start() } else { tracker.pause() }
+            if phase == .active && !paused { tracker.start() } else { tracker.pause(); expressionRuntime.resetTracking() }
         }
         .onReceive(clock) { _ in tracker.expireLocalResult() }
-        .onChange(of: expressionEngine.profile) { _, profile in
-            ExpressionProfileStore.save(profile)
+        .onReceive(tracker.$skeleton) { frame in
+            guard let frame, !paused else { expressionRuntime.resetTracking(); return }
+            expressionRuntime.observe(timestampMS: frame.timestampMS, hasFace: frame.hasFace,
+                                      observation: ExpressionObservation.from(frame))
         }
+        .onChange(of: paused) { _, value in if value { expressionRuntime.resetTracking() } }
         .onDisappear { tracker.pause() }
         .sheet(isPresented: $showSettings) {
             CameraSettings(tracker: tracker, showTrackingStats: $showTrackingStats)
@@ -73,7 +76,7 @@ struct ContentView: View {
                 .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showExpressions) {
-            ExpressionTesterView(tracker: tracker, engine: $expressionEngine, paused: $paused)
+            ExpressionTesterView(tracker: tracker, runtime: $expressionRuntime, paused: $paused)
                 .presentationDetents([.large]).presentationDragIndicator(.visible)
         }
     }
@@ -83,10 +86,12 @@ struct ContentView: View {
             HStack {
                 Text("signloop").font(.title2.weight(.semibold))
                 Spacer()
-                Button { showExpressions = true } label: {
-                    Image(systemName: "face.smiling").frame(width: 48, height: 48)
-                        .background(.ultraThinMaterial, in: Circle())
-                }.accessibilityLabel("Expression lab").accessibilityIdentifier("expression-lab")
+                if TaughtExpressionStore.trainingEnabled {
+                    Button { showExpressions = true } label: {
+                        Image(systemName: "face.smiling").frame(width: 48, height: 48)
+                            .background(.ultraThinMaterial, in: Circle())
+                    }.accessibilityLabel("Expression lab").accessibilityIdentifier("expression-lab")
+                }
                 Button { showProbe = true } label: {
                     Image(systemName: "scope").frame(width: 48, height: 48)
                         .background(.ultraThinMaterial, in: Circle())
@@ -115,6 +120,10 @@ struct ContentView: View {
                     trackingBadge("Body", active: tracker.skeleton?.hasPose ?? false)
                     trackingBadge("Face", active: tracker.skeleton?.hasFace ?? false)
                 }.font(.caption.weight(.semibold))
+                if expressionRuntime.profile != nil {
+                    Text(expressionRuntime.result.title).font(.subheadline.weight(.semibold))
+                        .foregroundStyle(CameraTheme.primary).accessibilityIdentifier("live-expression-preset")
+                }
                 Text(paused ? "Camera and tracking paused" : tracker.status)
                     .font(.caption).multilineTextAlignment(.center).accessibilityIdentifier("tracking-status")
                 Text("Offline tracking only · tap a point to inspect")
@@ -174,8 +183,8 @@ private struct CameraSettings: View {
                 }
                 Section("What this build does") {
                     Text("Tracks up to two hands, one upper body and one face. Stand alone with your head, hands and hips in view. Hidden or uncertain points are not drawn.")
-                    Text("Facial blendshapes describe movement. Expression lab maps five cues to experimental presets; it does not infer emotion or ASL meaning. There is no sign recognition or transcription in this build.")
-                    Text("Offline only: no images or video are recorded or sent to a server. A rolling two-second landmark buffer lives only in memory and clears on pause, camera switch or stale capture. Expression lab saves only your numeric calibration and sensitivity settings on this phone; reset them in the lab to delete them.")
+                    Text("A taught demo profile compares facial measurements with your saved examples; it does not infer feelings or ASL meaning. There is no sign recognition or transcription in this build.")
+                    Text("Offline only: no images or video are recorded or sent to a server. A rolling two-second landmark buffer lives only in memory and clears on pause, camera switch or stale capture. Expression lab saves numeric calibration examples and check results on this phone. Export shares only that numeric profile. Camera observations never retrain the saved profile.")
                         .accessibilityIdentifier("offline-privacy")
                 }.font(.footnote)
             }.navigationTitle("Settings").navigationBarTitleDisplayMode(.inline)

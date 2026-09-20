@@ -15,5 +15,7 @@ swiftc -parse-as-library Signloop/Skeleton.swift Tests/SkeletonTests.swift -o "$
 "$binary"
 swiftc -parse-as-library Signloop/Skeleton.swift Signloop/ExpressionMeasurements.swift Signloop/ExpressionCues.swift Tests/ExpressionCueTests.swift -o "$binary"
 "$binary"
+swiftc -parse-as-library Signloop/Skeleton.swift Signloop/ExpressionMeasurements.swift Signloop/ExpressionCues.swift Signloop/TaughtExpressionProfile.swift Signloop/ExpressionTeacher.swift Tests/TaughtExpressionTests.swift -o "$binary"
+"$binary"
 swiftc -parse-as-library Signloop/Recognition.swift Signloop/SignEngineFeatures.swift Signloop/SignSegmenter.swift Signloop/SignEngine.swift Tests/SignEngineParity.swift -o "$binary"
 "$binary" Tests/Fixtures/sign_engine_golden.json
