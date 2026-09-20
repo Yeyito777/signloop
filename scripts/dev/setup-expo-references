@@ -1,0 +1,32 @@
+#!/bin/bash
+set -euo pipefail
+root=$(cd "$(dirname "$0")/../.." && pwd)
+cd "$root"
+case " $* " in
+  *" --accept-research-license "*) ;;
+  *) echo "Read https://www.microsoft.com/en-us/research/project/asl-citizen/dataset-license/"
+     echo "Noncommercial research only. No redistribution, including derived coordinates."
+     echo "Usage: bash scripts/dev/setup-expo-references --accept-research-license [--device IPHONE_ID] [--plan-only]"
+     exit 2 ;;
+esac
+umask 077
+command -v swiftc >/dev/null || { echo "Install Xcode command-line tools first."; exit 1; }
+python312=$(command -v python3.12 || true)
+if [ -z "$python312" ]; then
+  for candidate in /opt/homebrew/opt/python@3.12/bin/python3.12 /usr/local/opt/python@3.12/bin/python3.12; do
+    [ -x "$candidate" ] && python312=$candidate && break
+  done
+fi
+if [ ! -x .runtime/reference-venv/bin/python ]; then
+  [ -n "$python312" ] || { echo "Install Python 3.12 first (e.g. brew install python@3.12)."; exit 1; }
+  mkdir -p .runtime
+  "$python312" -m venv .runtime/reference-venv
+fi
+py=.runtime/reference-venv/bin/python
+if [ ! -f .runtime/reference-venv/.dependencies-ready ]; then
+  "$py" -m pip install 'mediapipe==0.10.21' 'numpy==1.26.4' 'opencv-python-headless==4.11.0.86'
+  touch .runtime/reference-venv/.dependencies-ready
+fi
+bash ios/scripts/fetch-skeleton-models.sh
+echo "Generating your own private reference bank. This may take tens of minutes; interrupted extraction resumes."
+exec "$py" -m backend.setup_expo_references "$@"

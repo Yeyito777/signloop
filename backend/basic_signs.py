@@ -24,6 +24,8 @@ LABELS = ("HELLO", "YES", "NO", "PLEASE", "THANKYOU", "HELP", "WATER", "MORE",
 DEMO_LABELS = LABELS + ("ILOVEYOU", "WE", "OUR", "NICE", "MEET", "TODAY", "PROJECT",
                        "TECHNOLOGY", "COMPUTER", "PHONE", "SIGNLANGUAGE", "UNDERSTAND",
                        "LEARN", "SHOW", "MAKE", "CAMERA")
+PRESENTATION_LABELS = ("HELLO", "MY", "NAME", "TODAY", "WE", "SHOW", "PHONE",
+                       "PLEASE", "SORRY", "THANKYOU", "ILOVEYOU")
 LIMITS = {"train": 6, "val": 2, "test": 3}
 FACE_IDS = (1, 4, 10, 13, 14, 33, 61, 70, 105, 133, 152, 159, 263, 291, 300, 334, 362, 386)
 MODELS = {
@@ -286,7 +288,7 @@ def main():
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--models", type=Path, default=Path("ios/Signloop/Resources"))
     parser.add_argument("--cache", type=Path, nargs="*", default=[])
-    parser.add_argument("--vocabulary", choices=("basic16", "demo32"), default="basic16")
+    parser.add_argument("--vocabulary", choices=("basic16", "demo32", "presentation11"), default="basic16")
     parser.add_argument("--coordinate-cache", type=Path)
     parser.add_argument("--accept-research-license", action="store_true")
     args = parser.parse_args()
@@ -296,7 +298,7 @@ def main():
     args.out.chmod(0o700)
     reader = BudgetReader()
     with zipfile.ZipFile(reader) as archive:
-        labels = DEMO_LABELS if args.vocabulary == "demo32" else LABELS
+        labels = {"demo32": DEMO_LABELS, "presentation11": PRESENTATION_LABELS, "basic16": LABELS}[args.vocabulary]
         planned = plan(archive, reader.etag, labels)
         planned = json.loads(json.dumps(planned))
         plan_path = args.out/"plan.json"
