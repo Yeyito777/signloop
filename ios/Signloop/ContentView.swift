@@ -92,7 +92,14 @@ struct ContentView: View {
             connectRecognition()
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active && !paused { tracker.start() } else { tracker.pause(); expressionRuntime.resetTracking() }
+            // Sheets and the settings form put the scene in .inactive. Pausing
+            // there stops the camera and skips the face-tracking restart.
+            if phase == .background {
+                tracker.pause()
+                expressionRuntime.resetTracking()
+            } else if phase == .active && !paused {
+                tracker.start()
+            }
         }
         .onReceive(clock) { _ in tracker.expireLocalResult() }
         .onReceive(tracker.$skeleton) { frame in
@@ -101,7 +108,6 @@ struct ContentView: View {
                                       observation: ExpressionObservation.from(frame, measurement: expressionRuntime.profile?.measurement ?? .current))
         }
         .onChange(of: paused) { _, value in if value { expressionRuntime.resetTracking() } }
-        .onDisappear { tracker.pause() }
         .sheet(isPresented: $showSettings) {
             CameraSettings(tracker: tracker, recognition: recognition, showTrackingStats: $showTrackingStats,
                            showAllSignScores: $showAllSignScores, alphabet: alphabet)
@@ -131,7 +137,11 @@ struct ContentView: View {
                     .lineLimit(1).minimumScaleFactor(0.65)
                 Spacer()
                 if TaughtExpressionStore.trainingEnabled {
-                    Button { tracker.trackFace = true; showExpressions = true } label: {
+                    Button {
+                        tracker.trackFace = true
+                        if !paused { tracker.start() }
+                        showExpressions = true
+                    } label: {
                         Image(systemName: "face.smiling").frame(width: 48, height: 48)
                             .background(.ultraThinMaterial, in: Circle())
                     }.accessibilityLabel("Expression lab").accessibilityIdentifier("expression-lab")
@@ -208,7 +218,16 @@ struct ContentView: View {
                     trackingBadge("Hands \(tracker.skeleton?.hands.count ?? 0)/2",
                                   active: !(tracker.skeleton?.hands.isEmpty ?? true))
                     trackingBadge("Body", active: tracker.skeleton?.hasPose ?? false)
-                    trackingBadge(tracker.trackFace ? "Face" : "Face off", active: tracker.skeleton?.hasFace ?? false)
+                    Button {
+                        tracker.trackFace.toggle()
+                        if tracker.trackFace && !paused { tracker.start() }
+                    } label: {
+                        trackingBadge(tracker.trackFace ? "Face" : "Face off",
+                                      active: tracker.skeleton?.hasFace ?? false)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(tracker.trackFace ? "Face tracking on" : "Face tracking off, tap to turn on")
+                    .accessibilityIdentifier("face-tracking-toggle")
                 }.font(.caption.weight(.semibold))
                 if expressionRuntime.profile != nil {
                     Text(expressionRuntime.result.title).font(.subheadline.weight(.semibold))
@@ -263,7 +282,7 @@ private struct CameraSettings: View {
                     Text("Shows the three closest matches; tap All to inspect every sign. Each distance is measured independently: lower is closer, not more certain. Adding signs does not divide existing scores. Even the closest match can be wrong.")
                         .font(.footnote)
                     Toggle("Track face (slower)", isOn: $tracker.trackFace)
-                    Text("Hands and shoulders/chest stay tracked. Face is optional and off by default for word matching.")
+                    Text("Hands and shoulders/chest stay tracked. Face is optional and off by default for word matching. You can also tap Face off on the camera screen.")
                         .font(.footnote)
                     Toggle("Show hand joints", isOn: $tracker.showJoints)
                     Toggle("Show upper-body pose", isOn: $tracker.showPose)

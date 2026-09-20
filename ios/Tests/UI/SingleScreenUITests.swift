@@ -160,6 +160,20 @@ final class SingleScreenUITests: XCTestCase {
         app.buttons["Done"].tap()
     }
 
+    func testFaceOffBadgeTurnsFaceTrackingOn() {
+        app.buttons["camera-settings"].tap()
+        let face = actualSwitch("Track face (slower)")
+        if face.value as? String == "1" { face.tap() }
+        app.buttons["Done"].tap()
+        let badge = app.buttons["face-tracking-toggle"]
+        XCTAssertTrue(badge.waitForExistence(timeout: 5))
+        badge.tap()
+        app.buttons["camera-settings"].tap()
+        XCTAssertEqual(actualSwitch("Track face (slower)").value as? String, "1")
+        actualSwitch("Track face (slower)").tap()
+        app.buttons["Done"].tap()
+    }
+
     func testExpressionLabEnablesFaceTrackingWithoutRemovingSpelling() {
         app.buttons["camera-settings"].tap()
         let face = actualSwitch("Track face (slower)")

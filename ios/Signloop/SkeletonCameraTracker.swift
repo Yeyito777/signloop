@@ -31,7 +31,13 @@ final class SkeletonCameraTracker: NSObject, ObservableObject, AVCaptureVideoDat
     @Published var trackFace = UserDefaults.standard.bool(forKey: "experimentalFaceTracking") {
         didSet {
             UserDefaults.standard.set(trackFace, forKey: "experimentalFaceTracking")
-            if wantsRunning { start() }
+            // Restart after the current SwiftUI binding update. Calling start()
+            // inline can cancel the Toggle write and leave the pipeline face-off.
+            guard wantsRunning || isRunning else { return }
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.wantsRunning || self.isRunning else { return }
+                self.start()
+            }
         }
     }
     @Published var showNumbers = UserDefaults.standard.bool(forKey: "showJointNumbers") {
