@@ -17,7 +17,9 @@ final class ExpoIntegrationUITests: XCTestCase {
         let start = app.buttons["Start conversation"]
         XCTAssertTrue(start.waitForExistence(timeout: 40))
         start.tap()
-        XCTAssertTrue(app.buttons["Spell name"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.staticTexts["Your words will appear here."].waitForExistence(timeout: 20))
+        XCTAssertFalse(app.buttons["Signs"].exists)
+        XCTAssertFalse(app.buttons["Spell name"].exists)
     }
     override func tearDownWithError() throws { app?.terminate() }
     private func reveal(_ button: XCUIElement) {
@@ -26,27 +28,6 @@ final class ExpoIntegrationUITests: XCTestCase {
             let scrolls = app.scrollViews.allElementsBoundByIndex
             if let last = scrolls.last { last.swipeUp() } else { app.swipeUp() }
         }
-    }
-    func testExpoSpellingConfirmationTranscriptAndNoAutomaticCaption() {
-        app.buttons["Spell name"].tap()
-        XCTAssertTrue(app.staticTexts["Use one hand · tap Add to keep a letter"].waitForExistence(timeout: 10),
-                      "The actual pod-bundled alphabet model must load.")
-        let manual = app.buttons["Manual letters"]
-        reveal(manual); manual.tap()
-        XCTAssertFalse(app.buttons["C"].exists)
-        XCTAssertFalse(app.buttons["P"].exists)
-        for letter in ["A", "U", "R", "E", "L", "I", "O"] {
-            let key = app.buttons[letter].firstMatch
-            reveal(key); key.tap()
-        }
-        let confirm = app.buttons["Confirm spelled name"]
-        reveal(confirm)
-        XCTAssertTrue(confirm.isEnabled)
-        confirm.tap()
-        app.buttons["Conversation menu"].tap()
-        app.buttons["View transcript"].tap()
-        XCTAssertTrue(app.staticTexts["AURELIO"].waitForExistence(timeout: 5))
-        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Expo confirmed spelling"; shot.lifetime = .keepAlways; add(shot)
     }
     func testExpoNativeModelsSettingsAndExpressionLab() {
         app.buttons["Conversation menu"].tap()

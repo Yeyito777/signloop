@@ -80,6 +80,22 @@ test('mute keeps captions and does not replay a backlog when reenabled', () => {
   assert.equal(reduce(state, { type: 'mute' }).speech, null);
 });
 
+test('enabling voice unmutes so the next completed sign speaks without a replay tap', () => {
+  const muted = reduce(ready(), { type: 'disable-voice' });
+  const silent = accept(muted);
+  assert.equal(silent.speech, null);
+  const enabled = reduce(silent, { type: 'enable-voice' });
+  assert.equal(enabled.muted, false);
+  assert.equal(enabled.speech, null);
+  const spoken = accept(enabled, 'phrase-2', 'Please.');
+  assert.equal(spoken.speech?.text, 'Please.');
+});
+
+test('replay does not cancel automatic playback of the same phrase', () => {
+  const state = accept(ready());
+  assert.equal(reduce(state, { type: 'replay' }).speech?.id, state.speech?.id);
+});
+
 test('voice failure preserves caption, and reconnect starts a new generation', () => {
   const before = accept(ready());
   const failed = reduce(before, { type: 'speech-ended', id: before.speech!.id, failed: true });

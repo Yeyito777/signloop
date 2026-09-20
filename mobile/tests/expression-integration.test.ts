@@ -1,7 +1,7 @@
 import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { emotions, type Emotion } from '../../goose/src/emotion.ts';
-import { expressionFromCamera, conversationEmotion, EXPRESSION_FRESH_MS } from '../src/integrations/expression.ts';
+import { expressionFromCamera, conversationEmotion, moodPresentation, EXPRESSION_FRESH_MS } from '../src/integrations/expression.ts';
 import { translationFromPrediction } from '../src/integrations/localSign.ts';
 import { goosePresentation } from '../src/integrations/goosePresentation.ts';
 import { initialSession, sessionReducer as reduce, type Session } from '../src/session/model.ts';
@@ -97,10 +97,35 @@ test('fresh expression changes drive the silent live goose without creating a ph
 
 test('expression loss, ambiguity and missing setup immediately neutralize the live goose', () => {
   const state = reduce(ready(), { type: 'expression', event: expression('joy') });
-  for (const status of ['no-face', 'unknown', 'ambiguous', 'holding', 'wrong-camera', 'face-forward', 'no-profile', 'profile-invalid', 'model-missing', 'unavailable'] as const) {
+  for (const status of ['no-face', 'unknown', 'ambiguous', 'wrong-camera', 'face-forward', 'no-profile', 'profile-invalid', 'model-missing', 'unavailable'] as const) {
     const next = reduce(state, { type: 'expression', event: { ...expression('joy', Date.now() + 1), status } });
     assert.equal(conversationEmotion(next), 'neutral');
   }
+});
+
+test('holding a taught face still drives the live goose and testing mood', () => {
+  const state = reduce(ready(), { type: 'expression', event: { ...expression('joy'), status: 'holding' } });
+  assert.equal(conversationEmotion(state), 'joy');
+  assert.deepEqual(moodPresentation(state), { mood: 'Joy', detail: 'Holding this expression' });
+});
+
+test('missing taught profile still reports a live mood instead of sending people to setup', () => {
+  const state = reduce(ready(), { type: 'expression', event: { ...expression('joy'), status: 'no-profile' } });
+  assert.deepEqual(moodPresentation(state), {
+    mood: 'Neutral', detail: 'Learning your rest face',
+  });
+});
+
+test('live smiles show Joy on the testing mood chip', () => {
+  const state = reduce(ready(), { type: 'expression', event: expression('joy') });
+  assert.deepEqual(moodPresentation(state), { mood: 'Joy', detail: 'Live face' });
+});
+
+test('missing blendshapes are not described as a relaxed face', () => {
+  const state = reduce(ready(), { type: 'expression', event: { ...expression('joy'), status: 'unavailable' } });
+  assert.deepEqual(moodPresentation(state), {
+    mood: 'Neutral', detail: 'Face tracking is not reading expressions',
+  });
 });
 
 test('stale, future, out-of-order and previous-generation events cannot resurrect an expression', context => {

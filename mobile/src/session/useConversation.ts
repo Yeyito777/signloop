@@ -11,9 +11,14 @@ export function useConversation(kit: IntegrationKit) {
   const [state, send] = useReducer(sessionReducer, undefined, () => ({
     ...initialSession(), muted: kit.mode !== 'demo' && !getVoiceSettings().enabled,
   }));
-  useEffect(() => subscribeVoiceSettings(() => {
-    if (kit.mode !== 'demo' && !getVoiceSettings().enabled) send({ type: 'disable-voice' });
-  }), [kit.mode]);
+  useEffect(() => {
+    const syncVoice = () => {
+      if (kit.mode === 'demo') return;
+      send({ type: getVoiceSettings().enabled ? 'enable-voice' : 'disable-voice' });
+    };
+    syncVoice();
+    return subscribeVoiceSettings(syncVoice);
+  }, [kit.mode]);
   const [demoAutoplay, setDemoAutoplay] = useState(true);
   const dispatch = useCallback((action: Action) => {
     if (kit.mode === 'demo') {
