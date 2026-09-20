@@ -57,8 +57,12 @@ final class SkeletonCameraTracker: NSObject, ObservableObject, AVCaptureVideoDat
     private var rateFrames = 0
     private var observers: [NSObjectProtocol] = []
     private let lifecycle = CaptureLifecycle()
+    private let modelBundle: Bundle
+    private let faceTrackingEnabled: Bool?
 
-    override init() {
+    init(modelBundle: Bundle = .main, faceTrackingEnabled: Bool? = nil) {
+        self.modelBundle = modelBundle
+        self.faceTrackingEnabled = faceTrackingEnabled
         super.init()
         observers.append(NotificationCenter.default.addObserver(
             forName: .AVCaptureSessionWasInterrupted, object: session, queue: .main
@@ -113,7 +117,7 @@ final class SkeletonCameraTracker: NSObject, ObservableObject, AVCaptureVideoDat
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             permissionDenied = false
-            let useFace = trackFace
+            let useFace = faceTrackingEnabled ?? trackFace
             queue.async {
                 guard self.lifecycle.accepts(token) else { return }
                 self.faceEnabledOnQueue = useFace
@@ -173,7 +177,7 @@ final class SkeletonCameraTracker: NSObject, ObservableObject, AVCaptureVideoDat
         do {
             if session.isRunning { session.stopRunning() }
             pipeline = nil
-            pipeline = try SkeletonPipeline(trackFace: faceEnabledOnQueue)
+            pipeline = try SkeletonPipeline(trackFace: faceEnabledOnQueue, modelBundle: modelBundle)
             if !configured {
                 session.beginConfiguration()
                 session.sessionPreset = .hd1280x720
@@ -292,7 +296,7 @@ final class SkeletonCameraTracker: NSObject, ObservableObject, AVCaptureVideoDat
                 self.frameSize = CGSize(width: frame.width, height: frame.height)
                 if let measuredFPS { self.fps = measuredFPS }
                 self.status = frame.hasPose && !frame.hands.isEmpty
-                    ? (self.trackFace ? "Tracking hands, body and face" : "Tracking hands and upper body · face off")
+                    ? ((self.faceTrackingEnabled ?? self.trackFace) ? "Tracking hands, body and face" : "Tracking hands and upper body · face off")
                     : "Keep your hands, shoulders and chest in view"
                 self.onSkeletonFrame?(frame)
             }

@@ -9,9 +9,9 @@ final class SkeletonPipeline {
     private let pose: PoseLandmarker
     private let face: FaceLandmarker?
 
-    init(trackFace: Bool = true) throws {
+    init(trackFace: Bool = true, modelBundle: Bundle = .main) throws {
         func model(_ name: String) throws -> String {
-            guard let path = Bundle.main.path(forResource: name, ofType: "task") else {
+            guard let path = modelBundle.path(forResource: name, ofType: "task") else {
                 throw NSError(domain: "Signloop", code: 1, userInfo: [
                     NSLocalizedDescriptionKey: "Missing \(name). Run ios/scripts/bootstrap.sh and rebuild."])
             }

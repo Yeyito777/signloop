@@ -1,7 +1,7 @@
 # Honk & Tell mobile
 
 Expo SDK 55 / React Native Playroom app with the **shared 3D goose, native Swift
-camera, offline ILY handshape preview, explicit confirmation, captions, and
+camera, offline 11-sign temporal matching, explicit confirmation, captions, and
 optional server-proxied ElevenLabs voice**. A separate sample conversation
 preserves the UI review flow; real hand detection never generates sample captions.
 The goose is expressive animation, not an ASL signing avatar.
@@ -17,8 +17,8 @@ npm ci
 npm run ios
 ```
 
-`preios` downloads Google's public Hand Landmarker and checksum-verified Gesture
-Recognizer models. CocoaPods installs MediaPipe 0.10.21. Expo generates `mobile/ios/`,
+`preios` downloads and checksum-verifies Google's public Hand Landmarker and
+lite Pose Landmarker models. CocoaPods installs MediaPipe 0.10.21. Expo generates `mobile/ios/`,
 builds a development app, opens Simulator, and starts Metro. Native folders are
 generated and ignored by Git. The camera requires iOS 17+.
 
@@ -35,11 +35,28 @@ For an existing checkout upgrading to **Honk & Tell**, run `npx expo prebuild --
 Start conversation requests camera permission on iPhone and shows a mirrored preview, native joint overlay, and hand visibility feedback. Permission denial offers Settings. Simulator and platforms without the module show an unavailable state with an explicit UI demo option.
 
 Home offers Start conversation and Voice settings. Simulator camera guidance
-links to an explicitly labelled sample preview. Live capture recognizes only the public model's ILY handshape: extend
-thumb, index, and pinky; fold the other two fingers. A tentative result is **not**
-spoken until Confirm. Unknown gestures and expired results produce no words.
-Release the handshape before repeating it. This is not validated general ASL
-translation; private five-sign research weights are not included.
+links to an explicitly labelled sample preview. The rebuilt native app runs the
+standalone recognizer's 11-word presentation vocabulary, with full-frame hand
+and shoulder tracking. Rolling guesses remain an unspoken preview. Finish a
+sign and hold briefly to see up to three uncertain choices; select the intended
+sign and **Confirm selected sign**, or choose **None of these**. Choices expire
+after ten seconds and clear on tracking loss. This is a limited research preview,
+not validated general ASL translation. Rebuild the native app for recognition
+contract version 3; a Metro reload alone cannot add segmentation.
+
+Install the working recognizer's private reference bank in the goose app's own
+storage after rebuilding; the standalone scanner's file does not transfer:
+
+```sh
+npm run camera:references -- /absolute/path/basic-references.json DEVICE_ID
+```
+
+The helper validates the actual Swift matcher and copies into
+`com.signloop.mobile/Documents/basic-references.json`. Then tap Retry recognition
+setup or pause/resume. An old installed binary, missing tracking models, and
+missing/invalid references have explicit UI states. See the
+[native recognition handoff](modules/signloop-camera/README.md) for the contract
+and phone checklist.
 
 For UI testing, `/conversation?demo=1` runs a finite sample: framing → ready → draft
 → thinking → accepted phrase → silent voice preview. “Demo · try states” opens

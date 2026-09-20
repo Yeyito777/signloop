@@ -39,6 +39,8 @@ struct SkeletonFrame: Codable {
     let timingsMS: [String: Double]
 
     var hasPose: Bool { pose.contains { [11, 12].contains($0.id) && $0.usable } }
+    /// Word features need both shoulders; one visible shoulder is only partial tracking.
+    var hasSigningPose: Bool { [11, 12].allSatisfy { id in pose.contains { $0.id == id && $0.usable } } }
     var hasFace: Bool { !face.isEmpty }
 
     func point(_ probe: SkeletonProbe) -> SkeletonPoint? {
@@ -115,9 +117,10 @@ enum SkeletonGeometry {
     static let handChains = [[0, 1, 2, 3, 4], [0, 5, 6, 7, 8], [5, 9, 10, 11, 12],
                              [9, 13, 14, 15, 16], [13, 17, 18, 19, 20], [0, 17]]
     static func project(_ point: SkeletonPoint, width: Double, height: Double,
-                        viewWidth: Double, viewHeight: Double, mirrored: Bool) -> (Double, Double) {
+                        viewWidth: Double, viewHeight: Double, mirrored: Bool,
+                        aspectFill: Bool = true) -> (Double, Double) {
         guard width > 0, height > 0, viewWidth > 0, viewHeight > 0 else { return (0, 0) }
-        let scale = max(viewWidth/width, viewHeight/height)
+        let scale = aspectFill ? max(viewWidth/width, viewHeight/height) : min(viewWidth/width, viewHeight/height)
         let x = mirrored ? 1-Double(point.x) : Double(point.x)
         return (x*width*scale-(width*scale-viewWidth)/2,
                 Double(point.y)*height*scale-(height*scale-viewHeight)/2)

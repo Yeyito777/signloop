@@ -234,6 +234,8 @@ import Foundation
         let url = folder.appendingPathComponent("synthetic-references.json")
         try JSONEncoder().encode(packed).write(to: url)
         let live = BasicLiveRecognition(referenceURL: url)
+        var events: [BasicLivePrediction] = []
+        live.onPrediction = { events.append($0) }
         live.load()
         let deadline = Date().addingTimeInterval(5)
         while !live.ready && Date() < deadline {
@@ -246,6 +248,9 @@ import Foundation
             RunLoop.current.run(until: Date().addingTimeInterval(0.02))
         }
         check(live.sign == labels[0], "Real adapter confirms synthetic identity")
+        check(events.last?.label == labels[0] && frames.contains { $0.timestampMS == events.last?.timestampMS },
+              "Bridge receives the ranking and original capture timestamp")
+        check(events.contains { $0.matched }, "Bridge exposes the stable acceptance separately from the best guess")
         check(live.scores.count == 16 && live.scores[0].similarity! > 0.999, "Real adapter publishes every label's score")
         let restrictedLive = BasicLiveRecognition(referenceURL: url, activeLabels: [labels[0], labels[3], labels[4]])
         check(restrictedLive.labels.count == 3 && restrictedLive.scores.count == 3,
@@ -271,6 +276,8 @@ import Foundation
         uncertainBank.maxDistance = 0
         try JSONEncoder().encode(uncertainBank).write(to: uncertainURL)
         let uncertain = BasicLiveRecognition(referenceURL: uncertainURL)
+        var uncertainEvents: [BasicLivePrediction] = []
+        uncertain.onPrediction = { uncertainEvents.append($0) }
         uncertain.load()
         let uncertainDeadline = Date().addingTimeInterval(5)
         while !uncertain.ready && Date() < uncertainDeadline {
@@ -282,6 +289,8 @@ import Foundation
         }
         check(uncertain.sign == labels[0] && uncertain.detail.contains("uncertain"),
               "Top candidate remains visible below confidence gate, explicitly uncertain")
+        check(uncertainEvents.last?.label == labels[0] && uncertainEvents.last?.matched == false,
+              "Bridge preserves uncertain ranking without inventing acceptance")
         var next = frames.last!
         // Codable timestamp is immutable, so form a new late frame explicitly.
         next = SkeletonFrame(timestampMS: 1000, width: next.width, height: next.height,
@@ -289,12 +298,46 @@ import Foundation
             expressions: next.expressions, timingsMS: [:])
         live.receive(next)
         live.reset() // main-thread completion cannot run before this invalidation
+        let resetEventCount = events.count
         RunLoop.current.run(until: Date().addingTimeInterval(0.1))
         check(live.sign == nil, "Late worker cannot resurrect a paused sign")
+        check(events.last?.label == nil && events.count == resetEventCount,
+              "Reset clears bridge output and suppresses late worker callbacks")
         check(live.scores.allSatisfy { $0.similarity == nil }, "Late worker cannot resurrect stale scores")
         live.receive(blank.last!)
         check(live.sign == nil, "Hand loss clears caption")
+        check(events.last?.label == nil && events.last?.timestampMS == blank.last?.timestampMS,
+              "Hand loss clears the bridge with its observation timestamp")
         check(live.scores.count == 16 && live.scores.allSatisfy { $0.similarity == nil }, "Hand loss clears all scores")
+        let partial = SkeletonFrame(timestampMS: 1100, width: next.width, height: next.height,
+            camera: next.camera, hands: next.hands, pose: next.pose.filter { $0.id != 12 },
+            face: [], expressions: [:], timingsMS: [:])
+        check(partial.hasPose && !partial.hasSigningPose, "One shoulder is partial tracking, not signing readiness")
+        live.receive(partial)
+        check(events.last?.label == nil && events.last?.timestampMS == partial.timestampMS,
+              "Missing either shoulder clears native output")
+        let returned = SkeletonFrame(timestampMS: 1167, width: next.width, height: next.height,
+            camera: next.camera, hands: next.hands, pose: next.pose,
+            face: [], expressions: [:], timingsMS: [:])
+        live.receive(returned)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        check(events.last?.label == nil, "A returning hand/body cannot reuse the preceding sign window")
+        let retryURL = folder.appendingPathComponent("initially-missing.json")
+        let retry = BasicLiveRecognition(referenceURL: retryURL)
+        func waitForLoad(_ adapter: BasicLiveRecognition) {
+            let limit = Date().addingTimeInterval(5)
+            while adapter.loading && Date() < limit {
+                RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+            }
+        }
+        retry.load(); waitForLoad(retry)
+        check(retry.loadFailure == .missing && !retry.ready, "Missing references produce a setup failure")
+        try Data("{}".utf8).write(to: retryURL)
+        retry.load(); waitForLoad(retry)
+        check(retry.loadFailure == .invalid && !retry.ready, "Invalid references differ from missing references")
+        try JSONEncoder().encode(packed).write(to: retryURL)
+        retry.load(); waitForLoad(retry)
+        check(retry.ready && retry.loadFailure == nil, "Provisioning then Retry works without reinstalling or restarting")
         print("PASS: \(assertions) basic temporal matcher invariants (synthetic, not ASL accuracy)")
     }
 }

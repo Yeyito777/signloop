@@ -22,6 +22,13 @@ export function useConversation(kit: IntegrationKit) {
   const captureActive = canCapture(state);
 
   useEffect(() => {
+    if (!state.candidate) return;
+    const { attemptId, expiresAtMS } = state.candidate;
+    const timer = setTimeout(() => dispatch({ type: 'expire-candidate', attemptId }), Math.max(0, expiresAtMS - Date.now()));
+    return () => clearTimeout(timer);
+  }, [state.candidate?.attemptId, state.candidate?.expiresAtMS, dispatch]);
+
+  useEffect(() => {
     if (!captureActive || state.framing !== 'ready' || (kit.mode === 'demo' && !demoAutoplay)) return;
     const captureId = state.captureId;
     return kit.translation.start(captureId, event => {

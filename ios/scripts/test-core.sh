@@ -19,7 +19,9 @@ swiftc -parse-as-library Signloop/Skeleton.swift Signloop/ExpressionMeasurements
 "$binary"
 swiftc -parse-as-library Signloop/Skeleton.swift Signloop/ExpressionMeasurements.swift Signloop/ExpressionCues.swift Signloop/TaughtExpressionProfile.swift Signloop/ExpressionTeacher.swift Tests/NoseScrunchTests.swift -o "$binary"
 "$binary"
-swiftc -O -parse-as-library Signloop/Skeleton.swift Signloop/BasicSignMatcher.swift Signloop/BasicLiveRecognition.swift Tests/BasicSignTests.swift -o "$binary"
+swiftc -O -parse-as-library Signloop/Recognition.swift Signloop/SignSegmenter.swift Signloop/Skeleton.swift Signloop/BasicSignMatcher.swift Signloop/BasicSignSegmentation.swift Signloop/BasicLiveRecognition.swift Tests/BasicSignTests.swift -o "$binary"
+"$binary"
+swiftc -O -parse-as-library Signloop/Recognition.swift Signloop/SignSegmenter.swift Signloop/Skeleton.swift Signloop/BasicSignMatcher.swift Signloop/BasicSignSegmentation.swift Signloop/BasicLiveRecognition.swift Tests/SegmentedSignTests.swift -o "$binary"
 "$binary"
 swiftc -parse-as-library Signloop/Recognition.swift Signloop/SignEngineFeatures.swift Signloop/SignSegmenter.swift Signloop/SignEngine.swift Tests/SignEngineParity.swift -o "$binary"
 "$binary" Tests/Fixtures/sign_engine_golden.json

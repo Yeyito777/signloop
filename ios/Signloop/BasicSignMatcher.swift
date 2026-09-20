@@ -503,7 +503,9 @@ final class BasicSignMatcher {
         return previous[b.count] / length + motion
     }
 
-    func candidate(_ frames: [SkeletonFrame]) -> BasicCandidate {
+    /// Completed segments use their entire motion; only previews use the bank's
+    /// trailing window. Existing replay callers retain the original behavior.
+    func candidate(_ frames: [SkeletonFrame], completed: Bool = false) -> BasicCandidate {
         let unavailable = BasicCandidate(scores: BasicSignScore.rows(labels: bank.labels))
         guard let end = frames.last, !end.hands.isEmpty else { return unavailable }
         var byLabel: [String: Float] = [:]
@@ -511,8 +513,8 @@ final class BasicSignMatcher {
         // not cherry-pick a short still portion while a dynamic sign is judged
         // against the complete movement.
         for duration in [bank.windowMS ?? 1800] {
-            guard let query = Self.sequence(frames.filter { $0.timestampMS >= end.timestampMS-duration },
-                                           minimum: bank.queryFrames ?? 4) else { continue }
+            let observed = completed ? frames : frames.filter { $0.timestampMS >= end.timestampMS-duration }
+            guard let query = Self.sequence(observed, minimum: completed ? 6 : bank.queryFrames ?? 4) else { continue }
             let mirror = query.map { $0.mirrored() }
             let motion = Self.trajectorySignature(query), mirroredMotion = Self.trajectorySignature(mirror)
             let allowCompactWE = Self.supportsCompactWE(query)

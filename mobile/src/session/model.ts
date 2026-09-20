@@ -1,4 +1,4 @@
-import type { Emotion, Framing, TranslationEvent } from '../integrations/contracts';
+import type { Emotion, Framing, SignCandidate, TranslationEvent } from '../integrations/contracts';
 
 export type Sheet = 'transcript' | 'correction' | 'menu' | 'end' | 'demo' | null;
 export type Phase = 'framing' | 'listening' | 'signing' | 'thinking' | 'speaking' | 'uncertain' | 'offline' | 'voice-error';
@@ -13,8 +13,9 @@ export type Session = {
   sheet: Sheet;
   muted: boolean;
   draft: string;
-  candidate: { label: string; text: string; expiresAtMS: number } | null;
-  confirmedCandidate: string | null;
+  candidate: SignCandidate | null;
+  signPreview: string | null;
+  reviewedAttempt: number | null;
   phrases: Phrase[];
   speech: Speech | null;
   speechQueue: string[];
@@ -22,7 +23,7 @@ export type Session = {
 
 export const initialSession = (): Session => ({
   captureId: 1, speechId: 0, framing: 'finding', phase: 'framing',
-  paused: false, sheet: null, muted: false, draft: '', candidate: null, confirmedCandidate: null, phrases: [], speech: null, speechQueue: [],
+  paused: false, sheet: null, muted: false, draft: '', candidate: null, signPreview: null, reviewedAttempt: null, phrases: [], speech: null, speechQueue: [],
 });
 
 export type Action =
@@ -33,7 +34,8 @@ export type Action =
   | { type: 'correct'; text: string }
   | { type: 'speech-ended'; id: number; failed?: boolean }
   | { type: 'speech-started'; id: number }
-  | { type: 'confirm-candidate' }
+  | { type: 'confirm-candidate' | 'reject-candidate' | 'expire-candidate'; attemptId: number }
+  | { type: 'select-candidate'; attemptId: number; label: string }
   | { type: 'demo-framing'; framing: Framing }
   | { type: 'demo-event'; event: TranslationEvent };
 
@@ -57,20 +59,27 @@ function speak(state: Session, phrase: Phrase): Session {
 
 function translate(state: Session, event: TranslationEvent): Session {
   switch (event.type) {
-    case 'candidate':
-      if (!event.text.trim() || event.text.length > 500 || !Number.isFinite(event.expiresAtMS)
-        || state.confirmedCandidate === event.label) return state;
-      return { ...state, candidate: { label: event.label, text: event.text.trim(), expiresAtMS: event.expiresAtMS } };
-    case 'clear-candidate': return { ...state, candidate: null, confirmedCandidate: null };
+    case 'candidate': {
+      if (!Number.isSafeInteger(event.attemptId) || event.attemptId <= 0
+        || event.attemptId <= Math.max(state.reviewedAttempt ?? 0, state.candidate?.attemptId ?? 0)
+        || !event.text.trim() || event.text.length > 500 || !Number.isFinite(event.expiresAtMS)
+        || event.expiresAtMS <= Date.now() || event.options.length < 1 || event.options.length > 3
+        || !event.options.some(option => option.label === event.label && option.text === event.text)) return state;
+      const { type: _, ...candidate } = event;
+      return { ...state, candidate, signPreview: null };
+    }
+    case 'sign-preview':
+      return state.candidate ? state : { ...state, signPreview: event.text || null };
+    case 'clear-candidate': return { ...state, candidate: null, signPreview: null };
     case 'draft': return { ...state, phase: 'signing', draft: event.text };
     case 'thinking': return { ...state, phase: 'thinking' };
-    case 'uncertain': return { ...stopSpeech(state), phase: 'uncertain', draft: '', candidate: null };
-    case 'offline': return { ...stopSpeech(state), phase: 'offline', draft: '', candidate: null, captureId: state.captureId + 1 };
+    case 'uncertain': return { ...stopSpeech(state), phase: 'uncertain', draft: '', candidate: null, signPreview: null };
+    case 'offline': return { ...stopSpeech(state), phase: 'offline', draft: '', candidate: null, signPreview: null, captureId: state.captureId + 1 };
     case 'accepted': {
       if (!event.text.trim() || state.phrases.some(p => p.id === event.id)) return state;
       const phrase: Phrase = { id: event.id, text: event.text.trim(), emotion: event.emotion, status: 'caption' };
-      const next = { ...state, draft: '', candidate: null,
-        confirmedCandidate: state.candidate?.label ?? state.confirmedCandidate, phrases: [...state.phrases, phrase] };
+      const next = { ...state, draft: '', candidate: null, signPreview: null,
+        reviewedAttempt: state.candidate?.attemptId ?? state.reviewedAttempt, phrases: [...state.phrases, phrase] };
       if (state.speech) return { ...next, speechQueue: [...state.speechQueue, phrase.id] };
       return speak(next, phrase);
     }
@@ -79,11 +88,25 @@ function translate(state: Session, event: TranslationEvent): Session {
 
 export function sessionReducer(state: Session, action: Action): Session {
   switch (action.type) {
+    case 'select-candidate': {
+      if (!state.candidate || state.candidate.attemptId !== action.attemptId
+        || !canCapture(state) || state.framing !== 'ready' || state.candidate.expiresAtMS <= Date.now()) return state;
+      const option = state.candidate.options.find(choice => choice.label === action.label);
+      return option ? { ...state, candidate: { ...state.candidate, ...option, uncertain: true } } : state;
+    }
+    case 'reject-candidate':
+    case 'expire-candidate':
+      if (!state.candidate || state.candidate.attemptId !== action.attemptId
+        || (action.type === 'expire-candidate' && state.candidate.expiresAtMS > Date.now())) return state;
+      return { ...state, candidate: null, signPreview: null, reviewedAttempt: action.attemptId };
     case 'confirm-candidate':
-      if (!state.candidate || !canCapture(state) || state.framing !== 'ready') return state;
-      if (state.candidate.expiresAtMS < Date.now()) return { ...state, candidate: null };
-      return translate({ ...state, candidate: null, confirmedCandidate: state.candidate.label }, { type: 'accepted',
-        id: `confirmed-${state.captureId}-${state.phrases.length}`,
+      if (!state.candidate || state.candidate.attemptId !== action.attemptId
+        || !canCapture(state) || state.framing !== 'ready') return state;
+      if (state.candidate.expiresAtMS <= Date.now()) {
+        return { ...state, candidate: null, signPreview: null, reviewedAttempt: action.attemptId };
+      }
+      return translate({ ...state, candidate: null, signPreview: null, reviewedAttempt: action.attemptId }, { type: 'accepted',
+        id: `confirmed-${state.captureId}-${action.attemptId}`,
         text: state.candidate.text, emotion: 'neutral' });
     case 'speech-started':
       return state.speech?.id === action.id
@@ -94,7 +117,8 @@ export function sessionReducer(state: Session, action: Action): Session {
       // A lost frame invalidates in-flight recognition. Existing accepted speech can finish.
       return { ...state, framing: action.framing,
         candidate: action.framing === 'ready' ? state.candidate : null,
-        confirmedCandidate: action.framing === 'ready' ? state.confirmedCandidate : null,
+        signPreview: action.framing === 'ready' ? state.signPreview : null,
+        reviewedAttempt: action.framing === 'ready' ? state.reviewedAttempt : null,
         captureId: state.captureId + (state.framing === 'ready' && action.framing !== 'ready' ? 1 : 0),
         draft: action.framing === 'ready' ? state.draft : '',
         phase: state.phase === 'speaking' ? state.phase : action.framing === 'ready' ? 'listening' : 'framing' };
@@ -102,15 +126,15 @@ export function sessionReducer(state: Session, action: Action): Session {
       if (!canCapture(state) || state.framing !== 'ready' || action.captureId !== state.captureId) return state;
       return translate(state, action.event);
     case 'pause':
-      return { ...stopSpeech(state), paused: true, draft: '', candidate: null, confirmedCandidate: null, captureId: state.captureId + 1,
+      return { ...stopSpeech(state), paused: true, draft: '', candidate: null, signPreview: null, reviewedAttempt: null, captureId: state.captureId + 1,
         phase: state.phase === 'offline' ? 'offline' : 'listening' };
     case 'resume':
-      return { ...state, paused: false, framing: 'finding', phase: 'framing', draft: '', candidate: null, confirmedCandidate: null, captureId: state.captureId + 1 };
+      return { ...state, paused: false, framing: 'finding', phase: 'framing', draft: '', candidate: null, signPreview: null, reviewedAttempt: null, captureId: state.captureId + 1 };
     case 'open-sheet':
-      return { ...stopSpeech(state), sheet: action.sheet, draft: '', candidate: null, confirmedCandidate: null, captureId: state.captureId + 1,
+      return { ...stopSpeech(state), sheet: action.sheet, draft: '', candidate: null, signPreview: null, reviewedAttempt: null, captureId: state.captureId + 1,
         phase: state.phase === 'offline' ? 'offline' : 'listening' };
     case 'close-sheet':
-      return { ...state, sheet: null, candidate: null, confirmedCandidate: null, framing: 'finding', phase: state.phase === 'offline' ? 'offline' : 'framing', captureId: state.captureId + 1 };
+      return { ...state, sheet: null, candidate: null, signPreview: null, reviewedAttempt: null, framing: 'finding', phase: state.phase === 'offline' ? 'offline' : 'framing', captureId: state.captureId + 1 };
     case 'mute':
       return { ...stopSpeech(state), muted: !state.muted, phase: state.phase === 'speaking' ? 'listening' : state.phase };
     case 'disable-voice':
@@ -137,10 +161,10 @@ export function sessionReducer(state: Session, action: Action): Session {
     }
     case 'sign-again':
     case 'retry':
-      return { ...stopSpeech(state), sheet: null, paused: false, framing: 'finding', phase: 'framing', draft: '', candidate: null, confirmedCandidate: null, captureId: state.captureId + 1 };
+      return { ...stopSpeech(state), sheet: null, paused: false, framing: 'finding', phase: 'framing', draft: '', candidate: null, signPreview: null, reviewedAttempt: null, captureId: state.captureId + 1 };
     case 'demo-framing':
       return { ...stopSpeech(state), sheet: null, paused: false, framing: action.framing,
-        phase: action.framing === 'ready' ? 'listening' : 'framing', captureId: state.captureId + 1, draft: '' };
+        phase: action.framing === 'ready' ? 'listening' : 'framing', captureId: state.captureId + 1, draft: '', candidate: null, signPreview: null, reviewedAttempt: null };
     case 'demo-event':
       return translate({ ...state, sheet: null, paused: false, framing: 'ready', captureId: state.captureId + 1 }, action.event);
   }
