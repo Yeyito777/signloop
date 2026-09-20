@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import json
 import math
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -11,7 +12,9 @@ import urllib.request
 from .service import ServiceError
 
 ELEVENLABS_URL = "https://api.elevenlabs.io/v1/text-to-speech/"
-MODEL_ID = "eleven_v3"
+# Flash is the low-latency model. Conversation waits for the whole clip before
+# the goose speaks; v3 audio tags are not worth that extra round-trip.
+MODEL_ID = "eleven_flash_v2_5"
 OUTPUT_FORMAT = "mp3_44100_128"
 MAX_TEXT_CHARACTERS = 500
 MAX_AUDIO_BYTES = 8 * 1024 * 1024
@@ -123,10 +126,25 @@ class ElevenLabsVoice:
         self.api_key = api_key
         self.voice_id = voice_id
         self.timeout = timeout
+        self._cache = {}
+        self._cache_lock = threading.Lock()
 
     def speak(self, text: object, emotion: object = "neutral") -> dict:
         text, emotion = validate_speech_input(text, emotion)
-        tags = " ".join(f"[{tag}]" for tag in EMOTION_TAGS[emotion])
+        key = (text, emotion)
+        with self._cache_lock:
+            cached = self._cache.get(key)
+        if cached is not None:
+            return dict(cached)
+        result = self._synthesize(text, emotion)
+        with self._cache_lock:
+            if key not in self._cache and len(self._cache) >= 24:
+                self._cache.pop(next(iter(self._cache)))
+            self._cache[key] = result
+        return dict(result)
+
+    def _synthesize(self, text: str, emotion: str) -> dict:
+        tags = " ".join(f"[{tag}]" for tag in EMOTION_TAGS[emotion]) if MODEL_ID.startswith("eleven_v3") else ""
         payload = {
             "text": f"{tags} {text}" if tags else text,
             "model_id": MODEL_ID,

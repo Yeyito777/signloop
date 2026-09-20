@@ -6,9 +6,8 @@ export function captionPresentation(state: Session, mode: IntegrationKit['mode']
   const phrase = state.phrases.at(-1);
   const composing = state.phase === 'signing' || state.phase === 'thinking';
   const draft = !phrase && composing ? state.draft : '';
-  const preview = !phrase && !draft ? state.signPreview?.text ?? '' : '';
+  const preview = !draft ? state.signPreview?.text ?? '' : '';
   const text = phrase?.text ?? (draft || preview || 'Your words will appear here.');
-  const label = phrase ? mode === 'demo' ? 'Sample caption' : 'English' : draft ? 'Draft · not spoken' : preview ? 'Reading…' : 'English';
   let delivery = '';
   if (phrase) {
     if (state.paused) delivery = 'Paused';
@@ -21,6 +20,12 @@ export function captionPresentation(state: Session, mode: IntegrationKit['mode']
     else if (phrase.status === 'interrupted') delivery = 'Playback stopped';
     else delivery = 'Caption ready';
   }
+  const preparing = delivery === 'Preparing voice…';
+  const label = draft ? 'Draft · not spoken'
+    : preview && !phrase ? 'Reading…'
+    : preparing ? 'Preparing voice…'
+    : phrase ? mode === 'demo' ? 'Sample caption' : 'English'
+    : 'English';
   let activity = '';
   if (state.phase === 'signing') activity = phrase ? 'Reading your next phrase…' : 'Reading your signs…';
   if (state.phase === 'thinking') activity = phrase ? 'Translating your next phrase…' : 'Translating…';
@@ -28,5 +33,5 @@ export function captionPresentation(state: Session, mode: IntegrationKit['mode']
   const notice = state.phase === 'uncertain' ? 'That phrase wasn’t clear. Nothing new was spoken.'
     : state.phase === 'offline' ? 'Connection lost. Your completed phrases are still here.'
     : state.phase === 'voice-error' ? 'Voice couldn’t play. Your caption is still here.' : '';
-  return { phrase, text, label, delivery, activity, notice, draft: !!draft };
+  return { phrase, text, preview, label, delivery, activity, notice, draft: !!draft };
 }

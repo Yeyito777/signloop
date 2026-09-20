@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type Dispatch } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import Animated from 'react-native-reanimated';
 import type { IntegrationKit } from '../integrations/contracts';
 import { Button, Copy, Icon, IconButton } from '../ui/primitives';
@@ -12,7 +13,7 @@ export function CaptionPanel({ state, mode, dispatch }: {
   state: Session; mode: IntegrationKit['mode']; dispatch: Dispatch<Action>;
 }) {
   const { enter } = useMotion();
-  const { phrase, text, label, delivery, notice, draft } = captionPresentation(state, mode);
+  const { phrase, text, preview, label, delivery, notice, draft } = captionPresentation(state, mode);
   const lastPhrase = useRef(phrase);
   const scroll = useRef<ScrollView>(null);
   const [corrected, setCorrected] = useState(false);
@@ -23,13 +24,18 @@ export function CaptionPanel({ state, mode, dispatch }: {
     const previous = lastPhrase.current;
     lastPhrase.current = phrase;
     if (previous?.id !== phrase?.id || previous?.text !== phrase?.text) scroll.current?.scrollTo({ y: 0, animated: false });
+    if (phrase && previous?.id !== phrase.id) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    }
     const changed = !!phrase && previous?.id === phrase.id && previous.text !== phrase.text;
     setCorrected(changed);
     if (!changed) return;
     const timer = setTimeout(() => setCorrected(false), 2200);
     return () => clearTimeout(timer);
   }, [phrase?.id, phrase?.text]);
-  const status = corrected ? `Correction saved${delivery ? ` · ${delivery}` : ''}` : delivery;
+  const status = corrected ? `Correction saved${delivery ? ` · ${delivery}` : ''}`
+    : delivery && delivery !== label ? delivery : '';
+  const liveGuess = !!preview && !!phrase;
   return <View style={styles.bubble}>
     <View style={styles.labelRow}>
       <View style={styles.labels}>
@@ -46,6 +52,10 @@ export function CaptionPanel({ state, mode, dispatch }: {
       </View>}
     </View>
     <ScrollView ref={scroll} style={styles.textScroll} contentContainerStyle={styles.textContent} showsVerticalScrollIndicator keyboardShouldPersistTaps="handled">
+      {liveGuess && <Animated.View key={`preview-${state.signPreview?.attemptId}`} entering={enter} style={styles.preview}>
+        <Copy role="label" style={styles.muted}>Reading…</Copy>
+        <Copy role="captionLarge" selectable accessibilityLiveRegion="polite" style={styles.muted}>{preview}</Copy>
+      </Animated.View>}
       <Animated.View key={draft ? 'draft' : phrase?.id ?? state.signPreview?.attemptId ?? 'empty'} entering={enter}>
         <Copy role={phrase || draft ? 'featuredCaption' : 'captionLarge'} selectable accessibilityLiveRegion={draft ? 'none' : 'polite'}
           style={!phrase && !draft && !state.signPreview ? styles.empty : !phrase && !draft ? styles.muted : undefined}>{text}</Copy>
@@ -66,6 +76,7 @@ const styles = StyleSheet.create({
   textScroll: { flex: 1 },
   textContent: { paddingBottom: 4, gap: 8 },
   empty: { color: tokens.color.muted },
+  preview: { gap: 2, paddingBottom: 6 },
   notice: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingTop: 8 },
   noticeText: { flex: 1 },
   tools: { flexDirection: 'row', alignItems: 'center', gap: 2 },
