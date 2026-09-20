@@ -6,11 +6,13 @@ saved brow/eye/mouth measurements and stays fixed during normal use.
 
 ## On the training phone
 
-1. Install the **Signloop** scheme through Xcode. Build 13's Expression lab says
+1. Install the **Signloop** scheme through Xcode. Build 14's Expression lab says
    **Teach my expressions**; it no longer uses activation sliders as its primary
    recognizer. Merging source does not automatically reinstall a cable-built app.
 2. Tap the smile icon, then **Teach my expressions**.
 3. Capture your relaxed face, joy, anger, fear, sadness and disgust **twice each**.
+   For disgust, **scrunch your nose as if something smells bad**, with your mouth
+   relaxed and your head steady. Upper-lip raising is no longer its measurement.
    Each button starts a one-second preparation interval and two-second capture.
    Use comfortable, repeatable expressions and keep the camera/head angle steady.
 4. Repeat all six once more for checks. These fresh takes test the learned
@@ -28,18 +30,28 @@ replacement in the lab. Cancellation, interruption or a failed save preserves
 the installed profile. An unfinished teaching session is temporary and is not
 restored after closing the lab/app.
 
-Build 13 makes brow/eye matching more sensitive by default. It can recognize a
+Build 14 retains the more sensitive brow/eye matching introduced in build 13. It can recognize a
 softer version of the same taught pattern, so use comfortable movements when
-teaching; exaggerated poses are unnecessary. The lab's **Your brow & eye
-movement** readout shows change from your relaxed face and percentage of your
+teaching; exaggerated poses are unnecessary. The lab's **Your facial
+movement** readout shows brow, eye and nose change from your relaxed face and percentage of your
 own taught change. A raw ratio such as 0.01 can be meaningful; neither it nor
 the percentage is a probability. 100% is the captured example, not a required
 activation score. Before teaching that expression, only the raw delta appears.
 
-Saved build-12 profiles are preserved. They use the more sensitive matcher if
+Saved build-12/13 profiles are preserved with their original upper-lip measurement.
+The lab explicitly offers **Teach a nose-scrunch profile**. Complete one replacement
+setup for all six labels: their missing nose measurements cannot be reconstructed
+from the saved lip values. Until the replacement is saved, the old profile keeps
+running; cancellation and failed saves keep it intact. Nose readouts during
+teaching use the new capture stream, never the old profile's lip values.
+
+Build-12 profiles use the more sensitive brow/eye matcher if
 their saved checks pass it. Otherwise, the original matcher stays active and
 the lab explains that teaching a replacement enables the sensitivity update.
-New exports include `matchingVersion: 2`; measurement units are unchanged.
+New nose exports include `matchingVersion: 2` and measurement version
+`face-geometry-nose-v2`. Old `face-geometry-mouth-v1` exports remain readable and
+are always matched against their original measurements. Re-export the new nose
+profile before bundling it into a demo; an old export still uses the old cue.
 
 This is one person's fixed expression reference. It is not face identification
 and does not automatically choose or adapt to other people. These labels describe
@@ -88,8 +100,13 @@ and camera coordinates rather than interpreting the JSON as emotion probabilitie
 
 `ExpressionMeasurements.swift` measures five dimensions from the synchronized
 face result: smile, brow height, eye opening, inner-versus-outer brow slope and
-upper-lip lift. Eye/brow ratios use aspect-correct image geometry. Missing signals
-are never replaced with invented measurements.
+nose compression. Nose compression is the signed projected distance from the
+nasal wings (landmarks 98/327) to the nose root (168), normalized by the eye-corner
+span. As the wings move up toward the root, this negative ratio increases.
+This is a geometric proxy for the scrunch, not a detector of wrinkle texture.
+Eye/brow/nose ratios use aspect-correct image geometry and compensate for roll
+and scale. Missing landmarks abstain; neither upper-lip coefficients nor the
+reported unreliable `noseSneer` coefficients substitute for nose geometry.
 
 `ExpressionTeacher.swift` temporarily collects two separate captures per label.
 Each stores a median vector and robust within-take variation (90th–10th percentile
@@ -98,7 +115,7 @@ rejects substantial head movement. Camera changes, missing tracking and gaps ove
 400 ms abort unfinished takes. A one-second preparation interval is excluded.
 
 `TaughtExpressionModel` scales mouth/brow-slope dimensions by learned range and
-variation. For brow height and eye opening, it uses the smallest between-label
+variation. For brow height, eye opening and nose compression, it uses the smallest between-label
 difference above measured variation and small geometry noise floors. Thus a
 large movement in another expression cannot drown out a repeatable small brow
 drop or eye widening. It compares the entire vector
@@ -112,9 +129,12 @@ fixed interpolation of the saved examples; live frames never change the model.
 Unknown/intermediate movements can abstain; the model does
 not force every frame into an emotion.
 
-This replaces the previous one-cue-per-emotion classifier in the app. A taught
-smile may include upper-lip lift and eye narrowing; those become part of its
-pattern rather than independently triggering disgust. The existing detector is
+This replaces the previous one-cue-per-emotion classifier in the app. Upper-lip
+movement alone does not affect any new-profile measurement. Smiles can also
+move the nose, so the complete taught pattern still distinguishes the labels.
+Both disgust takes must show positive nose compression beyond the captured noise;
+an unresponsive nose signal produces a retake message. Runtime also requires nose
+movement beyond relaxed-face variation before matching disgust. The existing detector is
 not retrained and no cloud model is used. If its measurements cannot distinguish
 two poses, setup reports that limitation instead of installing overlapping labels.
 
@@ -127,14 +147,17 @@ patterns abstain. No threshold sliders or online adaptation alter this profile.
 
 ## Validation and limits
 
-`bash ios/scripts/test-core.sh` covers full-pattern matching, same upper-lip
-movement in smile/disgust, personal neutral, unknown poses, holds/freshness,
+`bash ios/scripts/test-core.sh` covers full-pattern matching, nose movement shared
+by smile/disgust, personal neutral, unknown poses, holds/freshness,
 training versus independent checks, conflicting captures, persistence, import
 validation, failed saves and bundled-profile precedence. Existing geometry and
 native core checks also run. Optional private Core ML fixtures remain separate.
 Sensitivity regressions include a 0.01 brow drop, 0.006 eye-opening change,
 softer/stronger patterns, reversed/mixed movements, neutral jitter, personal
 movement readouts and preservation of valid older profiles.
+Nose tests cover landmark-to-teaching-to-runtime behavior, lip-only movement,
+missing landmarks, flat/absent nose-sneer coefficients, geometric transforms,
+flat-nose teaching rejection, profile units and export/import.
 
 Simulator UI checks cover lab-only setup, disabled capture without a face,
 export requiring a complete profile, cancellation/relaunch, and a dedicated
@@ -151,5 +174,6 @@ the teaching setup. Record unexpected matches and missed expressions manually.
 
 - [MediaPipe Face Landmarker](https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker)
 - [MediaPipe eye/brow landmark topology](https://github.com/google-ai-edge/mediapipe/blob/master/mediapipe/python/solutions/face_mesh_connections.py)
+- [MediaPipe canonical face landmark coordinates](https://github.com/google-ai-edge/mediapipe/blob/master/mediapipe/modules/face_geometry/data/canonical_face_model.obj)
 - [Reported coefficient limitations](https://github.com/google-ai-edge/mediapipe/issues/5329)
 - [ASL facial grammar](https://pmc.ncbi.nlm.nih.gov/articles/PMC2632943/)
