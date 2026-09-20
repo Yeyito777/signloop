@@ -113,7 +113,7 @@ camera-permission button; its text now uses the dark on-primary color. These tes
 physical phones so XCTest attachments cannot record a real camera feed.
 
 ```sh
-xcodebuild -project ios/Signloop.xcodeproj -scheme Signloop \
+xcodebuild -project ios/HonkAndTell.xcodeproj -scheme HonkAndTell \
   -destination 'platform=iOS Simulator,id=YOUR_DISPOSABLE_SIMULATOR_UUID' \
   -derivedDataPath .runtime/ui-build CODE_SIGNING_ALLOWED=NO test
 ```

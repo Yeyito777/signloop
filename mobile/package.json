@@ -1,5 +1,5 @@
 {
-  "name": "signloop-mobile",
+  "name": "honk-and-tell-mobile",
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {

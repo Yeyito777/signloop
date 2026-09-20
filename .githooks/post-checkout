@@ -15,6 +15,6 @@ if command -v xcodegen >/dev/null &&
      -f "$ROOT/ios/Signloop/Resources/face_landmarker.task" &&
      -f "$ROOT/ios/Signloop/Resources/hand_landmarker.task" ]]; then
   (cd "$ROOT/ios" && xcodegen generate) ||
-    printf 'Signloop: regenerate manually with bash ios/scripts/bootstrap.sh\n' >&2
+    printf 'Honk & Tell: regenerate manually with bash ios/scripts/bootstrap.sh\n' >&2
 fi
 exit 0

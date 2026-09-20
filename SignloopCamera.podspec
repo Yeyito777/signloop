@@ -2,10 +2,10 @@
 Pod::Spec.new do |s|
   s.name = 'SignloopCamera'
   s.version = '1.0.0'
-  s.summary = 'Signloop on-device camera and MediaPipe preview for Expo'
+  s.summary = 'Honk & Tell on-device camera and MediaPipe preview for Expo'
   s.homepage = 'https://github.com/Yeyito777/signloop'
   s.license = { :type => 'Proprietary' }
-  s.author = 'Signloop team'
+  s.author = 'Honk & Tell team'
   s.source = { :git => 'https://github.com/Yeyito777/signloop.git' }
   s.platform = :ios, '17.0'
   s.swift_version = '5.9'

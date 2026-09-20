@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct SignloopApp: App {
+struct HonkAndTellApp: App {
     var body: some Scene {
         WindowGroup {
             #if DEBUG

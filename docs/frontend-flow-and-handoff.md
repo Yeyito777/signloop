@@ -1,4 +1,4 @@
-# Signloop frontend handoff
+# Honk & Tell frontend handoff
 
 Sunny · September 19, 2026 · `sunny`
 

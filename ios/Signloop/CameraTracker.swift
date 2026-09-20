@@ -194,7 +194,7 @@ final class CameraTracker: NSObject, ObservableObject, AVCaptureVideoDataOutputS
                                      normalizedHands: frames.map { $0.hands.map(\.normalized) })
                 let encoder = JSONEncoder()
                 encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-                let url = FileManager.default.temporaryDirectory.appendingPathComponent("signloop-landmarks.json")
+                let url = FileManager.default.temporaryDirectory.appendingPathComponent("honk-and-tell-landmarks.json")
                 try encoder.encode(payload).write(to: url, options: .atomic)
                 DispatchQueue.main.async { self.snapshotURL = url }
             } catch { self.report(error) }

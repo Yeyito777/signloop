@@ -10,7 +10,7 @@ struct NativePretrainedBenchmark: View {
     @State private var status = "Running native model parity…"
     var body: some View {
         VStack(spacing: 20) {
-            Text("Signloop · model research benchmark").font(.headline)
+            Text("Honk & Tell · model research benchmark").font(.headline)
             Text(status).font(.system(.footnote, design: .monospaced))
             Text("No live camera or uploads. This screen is not a sign-recognition demo.")
                 .font(.footnote).foregroundStyle(.secondary)

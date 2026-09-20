@@ -27,16 +27,16 @@ test('speech text is trimmed', () => {
 });
 
 test('speech request uses timestamps, the key header, and eleven v3', () => {
-  const request = buildSpeechRequest('Hi from SignLoop.', 'goose-voice-id', 'test-key');
+  const request = buildSpeechRequest('Hi from Honk & Tell.', 'goose-voice-id', 'test-key');
   assert.equal(ELEVENLABS_MODEL_ID, 'eleven_v3');
   assert.equal(request.url, `https://api.elevenlabs.io/v1/text-to-speech/goose-voice-id/with-timestamps?output_format=${ELEVENLABS_OUTPUT_FORMAT}`);
   assert.equal(request.headers['xi-api-key'], 'test-key');
   assert.equal(request.headers['Content-Type'], 'application/json');
   assert.equal(request.headers.Accept, 'application/json');
   assert.deepEqual(JSON.parse(request.body), {
-    text: performanceText('Hi from SignLoop.', 'joy'),
+    text: performanceText('Hi from Honk & Tell.', 'joy'),
     model_id: ELEVENLABS_MODEL_ID,
-    seed: seedForSpeechText('Hi from SignLoop.', 'joy'),
+    seed: seedForSpeechText('Hi from Honk & Tell.', 'joy'),
     voice_settings: emotionVoice.joy,
   });
 });
@@ -55,8 +55,8 @@ test('captions stay on the raw English while TTS gets audio tags', () => {
 });
 
 test('the same line and emotion always uses the same speech seed', () => {
-  assert.equal(seedForSpeechText('Hello from SignLoop.', 'joy'), seedForSpeechText('Hello from SignLoop.', 'joy'));
-  assert.notEqual(seedForSpeechText('Hello from SignLoop.', 'joy'), seedForSpeechText('Hello from SignLoop.', 'sadness'));
+  assert.equal(seedForSpeechText('Hello from Honk & Tell.', 'joy'), seedForSpeechText('Hello from Honk & Tell.', 'joy'));
+  assert.notEqual(seedForSpeechText('Hello from Honk & Tell.', 'joy'), seedForSpeechText('Hello from Honk & Tell.', 'sadness'));
 });
 
 test('each emotion sends different voice settings and tagged text', () => {

@@ -1,4 +1,4 @@
-# Signloop — Playroom design system
+# Honk & Tell — Playroom design system
 
 Approved visual foundation, v0.1 · Sunny · September 19, 2026.
 
@@ -108,7 +108,7 @@ Icons use a 24 × 24 viewBox, rounded caps and joins, a 1.75-unit outline, and `
 
 The geometry registry contains `path` and `circle` elements. An app adapter can map these to its SVG renderer; no SVG runtime or rendering library is imposed here. `$surface` in the settings icon means the background directly beneath the icon; standalone SVG exports default it to paper.
 
-Give icon-only controls an action label such as “Pause camera and speech.” Treat the icon itself as decorative when the parent control already supplies its accessible name. These are original UI assets from the Signloop studies, not final branding or a goose asset pack.
+Give icon-only controls an action label such as “Pause camera and speech.” Treat the icon itself as decorative when the parent control already supplies its accessible name. These are original UI assets from the Honk & Tell studies, not final branding or a goose asset pack.
 
 ## Motion and the future 3D goose
 

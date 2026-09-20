@@ -6,7 +6,7 @@ SIGNLOOP_CHECKOUT="$(git -C "$WORKTREE_SCRIPT_DIR" rev-parse --show-toplevel)"
 SIGNLOOP_COMMON_GIT="$(git -C "$SIGNLOOP_CHECKOUT" rev-parse --path-format=absolute --git-common-dir)"
 SIGNLOOP_ROOT="$(cd "$SIGNLOOP_COMMON_GIT/.." && pwd -P)"
 
-worktree_die() { printf 'signloop: %s\n' "$*" >&2; exit 1; }
+worktree_die() { printf 'honk-and-tell: %s\n' "$*" >&2; exit 1; }
 
 # Deliberately support conventional, non-bare repositories only.
 [[ -d "$SIGNLOOP_ROOT/.git" ]] || worktree_die "Expected a main checkout with a .git directory."

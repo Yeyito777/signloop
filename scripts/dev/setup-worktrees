@@ -7,4 +7,4 @@ CURRENT="$(git -C "$SIGNLOOP_ROOT" config --get core.hooksPath || true)"
 [[ -z "$CURRENT" || "$CURRENT" == .githooks ]] ||
   worktree_die "Existing core.hooksPath=$CURRENT; integrate .githooks/post-checkout manually."
 git -C "$SIGNLOOP_ROOT" config --local core.hooksPath .githooks
-printf 'Enabled Signloop checkout hooks locally (.githooks).\n'
+printf 'Enabled Honk & Tell checkout hooks locally (.githooks).\n'

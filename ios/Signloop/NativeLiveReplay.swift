@@ -8,7 +8,7 @@ struct NativeLiveReplay: View {
     @State private var status = "Replaying offline pipeline…"
     var body: some View {
         VStack(spacing: 20) {
-            Text("Signloop · offline pipeline test")
+            Text("Honk & Tell · offline pipeline test")
             Text(status).font(.footnote)
             Text("Prerecorded local research. Not live-camera validation.").font(.caption)
         }.padding().task {

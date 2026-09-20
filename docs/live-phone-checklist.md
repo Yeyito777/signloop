@@ -6,7 +6,7 @@ actual results. No video, audio, images or landmarks need to be recorded.
 
 ## Prerequisites
 
-- Unlock **Yeyito**, open Signloop and allow camera access.
+- Unlock **Yeyito**, open Honk & Tell and allow camera access.
 - The mode must say **“Offline research preview · 5 signs + ILY”**. If it says
   ILY only, the private model did not load; report that instead of testing five
   words against the fallback.

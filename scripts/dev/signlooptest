@@ -11,6 +11,8 @@ case "$INPUT" in
   *) TARGET="$(resolve_worktree_dir "$INPUT")" ;;
 esac
 require_registered_worktree "$TARGET"
+# Read the target checkout name so older worktrees remain usable after the rebrand.
+PROJECT_NAME="$(sed -n 's/^name: //p' "$TARGET/ios/project.yml")"
 case "${2:-core}" in
   core)
     # No camera, provisioning, network, or API credentials needed.
@@ -26,13 +28,13 @@ case "${2:-core}" in
     ;;
   build)
     bootstrap_worktree "$TARGET"
-    (cd "$TARGET/ios" && xcodebuild -project Signloop.xcodeproj -scheme Signloop \
+    (cd "$TARGET/ios" && xcodebuild -project "$PROJECT_NAME.xcodeproj" -scheme "$PROJECT_NAME" \
       -configuration Debug -destination 'generic/platform=iOS' \
       -derivedDataPath "$TARGET/ios/build" CODE_SIGNING_ALLOWED=NO build)
     ;;
   open)
     bootstrap_worktree "$TARGET"
-    open "$TARGET/ios/Signloop.xcodeproj"
+    open "$TARGET/ios/$PROJECT_NAME.xcodeproj"
     ;;
   *) worktree_die "Mode must be core, backend, native, build, or open." ;;
 esac

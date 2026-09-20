@@ -1,4 +1,4 @@
-# Sanvi's goose in Signloop
+# Sanvi's goose in Honk & Tell
 
 The canonical character source is now [`goose/src/`](../../../goose/src), imported on `main` from `origin/sanvi-signloop` through `341afb4`. The duplicate character under `mobile/src/avatar/` was removed when resolving the merge. Sanvi's geometry, poses, effects, and motion stay in `goose/src/components/goose/`.
 

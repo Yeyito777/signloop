@@ -75,7 +75,7 @@ atomically placing the file at `ios/Signloop/Resources/DemoExpressionProfile.jso
 This personal file is gitignored. Keep the exported original when moving machines
 or rebuilding from a clean checkout. Regenerate the Xcode project with
 `bash ios/scripts/bootstrap.sh` when adopting this code, then open it and select
-**SignloopDemo** with your existing signing team and phone.
+**HonkAndTellDemo** with your existing signing team and phone.
 
 The **Demo** configuration:
 
@@ -191,7 +191,7 @@ build-14 profile compatibility.
 
 Simulator UI checks cover lab-only setup, disabled capture without a face,
 export requiring a complete profile, cancellation/relaunch, and a dedicated
-SignloopDemo check for a loaded bundle with no teaching entry point. Any synthetic
+HonkAndTellDemo check for a loaded bundle with no teaching entry point. Any synthetic
 profile used by those checks is only a temporary disposable-simulator fixture.
 
 These checks establish implementation behavior, not recognition accuracy on the

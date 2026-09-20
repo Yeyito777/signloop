@@ -21,7 +21,7 @@ cleanup() {
 trap cleanup EXIT
 
 "$SCRIPT_DIR/create-worktree" "$NAME"
-[[ -f "$TARGET/ios/Signloop.xcodeproj/project.pbxproj" ]]
+[[ -f "$TARGET/ios/HonkAndTell.xcodeproj/project.pbxproj" ]]
 [[ -d "$TARGET/ios/Vendor" && ! -L "$TARGET/ios/Vendor" ]]
 [[ -f "$TARGET/ios/Signloop/Resources/hand_landmarker.task" ]]
 [[ ! -L "$TARGET/ios/Signloop/Resources/hand_landmarker.task" ]]

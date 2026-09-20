@@ -173,7 +173,7 @@ final class SingleScreenUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["live-expression-preset"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.buttons["expression-lab"].exists)
         #else
-        throw XCTSkip("Run this check with SignloopDemo and an explicit synthetic simulator fixture.")
+        throw XCTSkip("Run this check with HonkAndTellDemo and an explicit synthetic simulator fixture.")
         #endif
     }
 

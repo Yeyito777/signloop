@@ -8,6 +8,7 @@ ios/Signloop/Resources/MediaPipeTasks*-LICENSE.txt
 ios/Signloop/Resources/TensorFlowLite-LICENSE.txt
 ios/build/
 ios/Signloop.xcodeproj/
+ios/HonkAndTell.xcodeproj/
 *.xcuserstate
 xcuserdata/
 .env
