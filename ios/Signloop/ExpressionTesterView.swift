@@ -192,10 +192,12 @@ struct ExpressionTesterView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(label.title).font(.subheadline.bold())
                     Text("Teaching: \(count)/2 captured").font(.caption)
-                    Label(status.rawValue, systemImage: status == .passed ? "checkmark.circle.fill" : failure != nil ? "exclamationmark.triangle" : "clock")
-                        .font(.subheadline)
+                    HStack(alignment: .firstTextBaseline) {
+                        Image(systemName: status == .passed ? "checkmark.circle.fill" : failure != nil ? "exclamationmark.triangle" : "clock")
+                            .accessibilityHidden(true)
+                        Text(status.rawValue).accessibilityIdentifier("expression-status-\(label.rawValue)")
+                    }.font(.subheadline)
                         .foregroundStyle(status == .passed ? accent : failure != nil ? .orange : .secondary)
-                        .accessibilityIdentifier("expression-status-\(label.rawValue)")
                     if let failure {
                         Text(failure.reason).font(.caption)
                             .accessibilityIdentifier("expression-issue-\(label.rawValue)")
@@ -216,7 +218,7 @@ struct ExpressionTesterView: View {
             }
             Text("Retaking an expression keeps the other teaching captures, but all six checks must be repeated. Retaking your relaxed face restarts the whole setup.")
                 .font(.caption).foregroundStyle(.secondary)
-        }.accessibilityIdentifier("expression-checklist")
+        }
     }
 
     private var movementFeedback: some View {
