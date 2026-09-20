@@ -79,7 +79,7 @@ export function GoosePreview() {
     <SafeAreaView style={styles.screen}>
       <KeyboardAvoidingView style={styles.avoid} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.heading}>
-          <View style={styles.eyebrow}><View style={styles.dot} /><Text style={styles.eyebrowText}>SIGNLOOP</Text></View>
+          <View style={styles.eyebrow}><View style={styles.dot} /><Text style={styles.eyebrowText}>HONK & TELL</Text></View>
           <Text accessibilityRole="header" style={styles.title}>Mr. Goose</Text>
         </View>
         <MrGoose animationEnabled={animationEnabled} activity={activity} emotion={emotion} lipSync={voice.lipSync} style={styles.goose} />

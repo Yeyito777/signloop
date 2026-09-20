@@ -172,7 +172,7 @@ def main():
     # the endpoint rather than preventing the rest of the backend from starting.
     speech = ElevenLabsVoice(api_key, voice_id) if api_key and voice_id else None
     server = make_server(args.host, args.port, service, values.get("SIGNLOOP_BACKEND_TOKEN", ""), speech)
-    print(f"Signloop backend: http://{args.host}:{args.port} (experimental; no payload logging)", flush=True)
+    print(f"Honk & Tell backend: http://{args.host}:{args.port} (experimental; no payload logging)", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

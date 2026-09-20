@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Signloop</string>
+	<string>Honk &amp; Tell</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -23,7 +23,7 @@
 	<key>ExpressionTrainingEnabled</key>
 	<string>$(EXPRESSION_TRAINING_ENABLED)</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Signloop tracks your hands, upper body and facial movements on your iPhone. No images or video are uploaded or saved.</string>
+	<string>Honk &amp; Tell tracks your hands, upper body and facial movements on your iPhone. No images or video are uploaded or saved.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

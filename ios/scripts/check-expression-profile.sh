@@ -3,7 +3,7 @@ set -euo pipefail
 expression_root=$(cd "$(dirname "$0")/.." && pwd)
 expression_profile=${1:-"$expression_root/Signloop/Resources/DemoExpressionProfile.json"}
 if [ ! -s "$expression_profile" ]; then
-  echo 'error: Teach and export your expression profile in Expression lab, then run ios/scripts/bundle-expression-profile.sh /path/to/DemoExpressionProfile.json before building SignloopDemo.' >&2
+  echo 'error: Teach and export your expression profile in Expression lab, then run ios/scripts/bundle-expression-profile.sh /path/to/DemoExpressionProfile.json before building HonkAndTellDemo.' >&2
   exit 1
 fi
 expression_work=$(mktemp -d -t expression-profile-validator)

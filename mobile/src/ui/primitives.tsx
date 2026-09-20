@@ -83,7 +83,7 @@ export function Button({ children, onPress, icon, variant = 'primary', disabled,
 }
 
 export function Wordmark() {
-  return <Copy role="sectionTitle" accessibilityLabel="Signloop" style={styles.wordmark}>signloop<Copy role="sectionTitle" style={{ color: tokens.color.coral }}>.</Copy></Copy>;
+  return <Copy role="sectionTitle" accessibilityLabel="Honk & Tell" style={styles.wordmark}>Honk & Tell<Copy role="sectionTitle" style={{ color: tokens.color.coral }}>.</Copy></Copy>;
 }
 
 export function Rule() { return <View style={styles.rule} />; }
@@ -102,6 +102,6 @@ const styles = StyleSheet.create({
   inverseButton: { backgroundColor: tokens.color.butter, borderColor: tokens.color.butter, borderRadius: 999 },
   shadow: { boxShadow: `0px 4px 0px ${tokens.color.ink}` },
   buttonPressed: { opacity: 0.92 },
-  wordmark: { fontSize: 27, lineHeight: 34, letterSpacing: -0.8 },
+  wordmark: { fontSize: 27, lineHeight: 34, letterSpacing: -0.8, flexShrink: 1 },
   rule: { height: 1, backgroundColor: tokens.color.line },
 });

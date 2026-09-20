@@ -7,7 +7,7 @@ and without merging its unrelated history. The original branch's nonempty API
 key should be treated as exposed and rotated if live.
 
 This directory remains a standalone **Expo 57** preview, including the newer
-streaming experiments. Signloop's `../mobile/` app intentionally uses Expo 55;
+streaming experiments. Honk & Tell's `../mobile/` app intentionally uses Expo 55;
 it now reuses the renderer and animation helpers with its own compatible
 dependencies and server-proxied voice adapter. The direct provider/streaming
 client below is not used by the consumer app. Keep the dependency trees separate.

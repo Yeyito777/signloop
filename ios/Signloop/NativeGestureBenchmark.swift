@@ -10,7 +10,7 @@ struct NativeGestureBenchmark: View {
     @State private var status = "Running on-device model benchmark…"
     var body: some View {
         VStack(spacing: 20) {
-            Text("Signloop · developer benchmark").font(.headline)
+            Text("Honk & Tell · developer benchmark").font(.headline)
             Text(status).font(.system(.footnote, design: .monospaced))
             Text("No live camera, recording or uploads. Reopen normally to use the app.")
                 .font(.footnote).foregroundStyle(.secondary)

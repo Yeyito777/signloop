@@ -1,4 +1,4 @@
-# Signloop worktree flow
+# Honk & Tell worktree flow
 
 Each task gets a branch and a checkout in `.worktrees/<name>`. The main checkout
 stays on `yeyito`; creating a worktree does not switch it or change `main`.
@@ -73,7 +73,7 @@ worktrees created by these scripts (identified by ignored local metadata).
 Build mode explicitly disables signing and never installs, launches, replaces,
 or stops an app on your phone. Xcode Run is an intentional separate step. Task
 checkouts use the same `com.yeyito.signloop` identifier by default, so deploying
-one will replace the existing Signloop app. Use a different bundle identifier
+one will replace the existing Honk & Tell app. Use a different bundle identifier
 and valid signing configuration if you need simultaneous phone installs.
 
 `post-checkout` is best-effort and offline-only: it regenerates an Xcode project

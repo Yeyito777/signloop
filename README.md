@@ -1,6 +1,11 @@
-# Signloop
+# Honk & Tell
 
 Hack the North · limited-vocabulary ASL-to-English prototype.
+
+The app is now **Honk & Tell**. The standalone Xcode project and scheme are
+`HonkAndTell`. Existing bundle IDs, saved-data keys, native module names, and
+`ios/Signloop/` source paths remain stable so installed apps and integrations keep
+working. Rebuild and install the app to update its home-screen name.
 
 ## Consumer app design system
 
@@ -69,7 +74,7 @@ See [architecture, probe schema and testing](docs/multimodal-skeleton.md).
 Tap the smiling-face button for [Expression lab](docs/expression-tester.md):
 teach your relaxed face and five expressions once, check them against fresh
 repetitions, then save/export a fixed personal demo profile. Recognition continues
-on the camera screen after the lab closes. The **SignloopDemo** scheme bundles
+on the camera screen after the lab closes. The **HonkAndTellDemo** scheme bundles
 the checked profile and hides teaching from the demo experience.
 The experimental presets do not infer emotion or ASL meaning.
 
@@ -175,7 +180,7 @@ Requires macOS, Xcode (iOS 17+ SDK), and [XcodeGen](https://github.com/yonaskolb
 brew install xcodegen
 cd ios
 bash scripts/bootstrap.sh
-open Signloop.xcodeproj
+open HonkAndTell.xcodeproj
 ```
 
 Choose your Apple development team in Signing & Capabilities, select your connected iPhone,
@@ -194,7 +199,7 @@ The app links the device/simulator graph archive explicitly, matching Google's C
 bash scripts/test-core.sh
 
 # Device build with your team
-xcodebuild -project Signloop.xcodeproj -scheme Signloop \
+xcodebuild -project HonkAndTell.xcodeproj -scheme HonkAndTell \
   -configuration Debug -destination 'generic/platform=iOS' \
   -derivedDataPath build DEVELOPMENT_TEAM=YOUR_TEAM_ID \
   -allowProvisioningUpdates build

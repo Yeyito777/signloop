@@ -1,4 +1,4 @@
-# Signloop mobile
+# Honk & Tell mobile
 
 Expo SDK 55 / React Native Playroom app with the **shared 3D goose, native Swift
 camera, offline ILY handshape preview, explicit confirmation, captions, and
@@ -24,7 +24,9 @@ generated and ignored by Git. The camera requires iOS 17+.
 
 The local Expo module compiles the shared Swift sources under root `ios/Signloop/`; it does not copy them. The standalone native app remains separately buildable. If running `expo prebuild` or `pod install` manually, run `npm run camera:assets` first. Do not prebuild the repository root.
 
-After the first build, `npm start` and then `i` reopens the installed app. To open in Xcode after generation: `open ios/Signloop.xcworkspace`. Metro must run for a Debug build. No Expo account or signing team is needed for Simulator.
+After the first build, `npm start` and then `i` reopens the installed app. To open in Xcode after generation: `open ios/*.xcworkspace`. Metro must run for a Debug build. No Expo account or signing team is needed for Simulator.
+
+For an existing checkout upgrading to **Honk & Tell**, run `npx expo prebuild --platform ios --no-install` before rebuilding to sync the display name and URL schemes into the generated native project. Then run `npm run ios -- --device` to update the phone. The bundle ID stays `com.signloop.mobile`, and existing `signloop://` links remain supported alongside `honk-and-tell://`.
 
 `postinstall` and the local Expo config plugin apply narrow path-quoting fixes to SDK 55 native scripts so a checkout named `htn 2026` builds correctly. Review/remove these patches when upgrading React Native or Expo. Generated native files are not the source of these fixes.
 
@@ -65,7 +67,7 @@ Expo's floating Tools button can overlap app controls in a development build. Dr
 
 ## Install on your iPhone
 
-For daily development, connect and trust the iPhone, enable Developer Mode, and select your Apple signing team in Xcode. From `mobile/`, run `npm run ios -- --device` and select the phone. This installs **Signloop's own development build**. Run `npm start` on the Mac and connect from the phone on the same network. A free Personal Team can be used for local testing; paid membership is needed for distribution through TestFlight.
+For daily development, connect and trust the iPhone, enable Developer Mode, and select your Apple signing team in Xcode. From `mobile/`, run `npm run ios -- --device` and select the phone. This installs **Honk & Tell's own development build**. Run `npm start` on the Mac and connect from the phone on the same network. A free Personal Team can be used for local testing; paid membership is needed for distribution through TestFlight.
 
 UI/TypeScript edits refresh through Metro. Changes to Swift, native dependencies, or native configuration require rebuilding the installed app. Expo Go cannot load the custom Swift scanner module, so the development build is the recommended workflow from the start. [Expo setup](https://docs.expo.dev/develop/development-builds/introduction/).
 

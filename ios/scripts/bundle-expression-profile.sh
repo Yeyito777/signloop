@@ -13,4 +13,4 @@ expression_staged=$(mktemp "$expression_root/Signloop/Resources/.demo-profile.XX
 trap 'rm -f "$expression_staged"' EXIT
 cp "$1" "$expression_staged"
 mv "$expression_staged" "$expression_target"
-echo 'Demo profile installed. Run the SignloopDemo scheme in the generated Xcode project. That build loads this fixed profile and has no teaching UI.'
+echo 'Demo profile installed. Run the HonkAndTellDemo scheme in the generated Xcode project. That build loads this fixed profile and has no teaching UI.'

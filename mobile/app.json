@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "Signloop",
-    "slug": "signloop",
-    "scheme": "signloop",
+    "name": "Honk & Tell",
+    "slug": "honk-and-tell",
+    "scheme": ["honk-and-tell", "signloop"],
     "version": "1.0.0",
     "experiments": {
       "tsconfigPaths": false
@@ -13,7 +13,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.signloop.mobile",
       "infoPlist": {
-        "NSCameraUsageDescription": "Signloop uses your camera to track your hands on this device. No camera images or video are saved or uploaded.",
+        "NSCameraUsageDescription": "Honk & Tell uses your camera to track your hands on this device. No camera images or video are saved or uploaded.",
         "NSLocalNetworkUsageDescription": "Connect to your own development backend for optional text-to-voice.",
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true

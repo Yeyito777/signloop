@@ -84,7 +84,8 @@ struct ContentView: View {
     private var header: some View {
         VStack(spacing: 8) {
             HStack {
-                Text("signloop").font(.title2.weight(.semibold))
+                Text("Honk & Tell").font(.title2.weight(.semibold))
+                    .lineLimit(1).minimumScaleFactor(0.65)
                 Spacer()
                 if TaughtExpressionStore.trainingEnabled {
                     Button { showExpressions = true } label: {

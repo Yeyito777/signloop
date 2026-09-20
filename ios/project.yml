@@ -1,4 +1,4 @@
-name: Signloop
+name: HonkAndTell
 configs:
   Debug: debug
   Release: release
@@ -28,7 +28,7 @@ settings:
       EXPRESSION_TRAINING_ENABLED: "NO"
       SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) SIGNLOOP_DEMO
 targets:
-  Signloop:
+  HonkAndTell:
     type: application
     platform: iOS
     settings:
@@ -60,11 +60,11 @@ targets:
     info:
       path: Signloop/Info.plist
       properties:
-        CFBundleDisplayName: Signloop
+        CFBundleDisplayName: Honk & Tell
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         ExpressionTrainingEnabled: $(EXPRESSION_TRAINING_ENABLED)
-        NSCameraUsageDescription: Signloop tracks your hands, upper body and facial movements on your iPhone. No images or video are uploaded or saved.
+        NSCameraUsageDescription: Honk & Tell tracks your hands, upper body and facial movements on your iPhone. No images or video are uploaded or saved.
         UILaunchScreen: {}
         UIRequiresFullScreen: true
         UIApplicationSceneManifest:
@@ -88,33 +88,33 @@ targets:
       - sdk: MetalKit.framework
       - sdk: QuartzCore.framework
       - sdk: Security.framework
-  SignloopUITests:
+  HonkAndTellUITests:
     type: bundle.ui-testing
     platform: iOS
     sources:
       - Tests/UI
     dependencies:
-      - target: Signloop
+      - target: HonkAndTell
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        TEST_TARGET_NAME: Signloop
+        TEST_TARGET_NAME: HonkAndTell
         PRODUCT_BUNDLE_IDENTIFIER: com.yeyito.signloop.uitests
         OTHER_LDFLAGS: ""
         "OTHER_LDFLAGS[sdk=iphoneos*]": ""
         "OTHER_LDFLAGS[sdk=iphonesimulator*]": ""
 schemes:
-  Signloop:
+  HonkAndTell:
     build:
       targets:
-        Signloop: all
+        HonkAndTell: all
     test:
       targets:
-        - SignloopUITests
-  SignloopDemo:
+        - HonkAndTellUITests
+  HonkAndTellDemo:
     build:
       targets:
-        Signloop: all
+        HonkAndTell: all
     run:
       config: Demo
     archive:
@@ -122,4 +122,4 @@ schemes:
     test:
       config: Demo
       targets:
-        - SignloopUITests
+        - HonkAndTellUITests
