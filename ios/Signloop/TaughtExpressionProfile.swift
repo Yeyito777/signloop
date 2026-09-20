@@ -402,7 +402,7 @@ struct TaughtExpressionRuntime {
         guard let label = match.label else { clear(match.alternatives.isEmpty ? .unknown : .ambiguous); return }
         if label == .neutral { clear(.neutral); return }
         if pending != label { pending = label; sinceMS = timestampMS }
-        result = Double(timestampMS)-Double(sinceMS ?? timestampMS) >= 300 ? .active(label) : .holding(label)
+        result = Double(timestampMS)-Double(sinceMS ?? timestampMS) >= 120 ? .active(label) : .holding(label)
     }
     private mutating func clear(_ state: Result) { pending = nil; sinceMS = nil; result = state }
 }

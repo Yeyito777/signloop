@@ -38,7 +38,7 @@ export type Action =
   | { type: 'expire-expression'; observedAtMS: number }
   | { type: 'framing'; framing: Framing; captureId: number }
   | { type: 'translation'; event: TranslationEvent; captureId: number }
-  | { type: 'pause' | 'resume' | 'mute' | 'disable-voice' | 'replay' | 'close-sheet' | 'sign-again' | 'retry' }
+  | { type: 'pause' | 'resume' | 'mute' | 'enable-voice' | 'disable-voice' | 'replay' | 'close-sheet' | 'sign-again' | 'retry' }
   | { type: 'open-sheet'; sheet: Exclude<Sheet, null> }
   | { type: 'correct'; text: string }
   | { type: 'speech-ended'; id: number; failed?: boolean }
@@ -162,11 +162,16 @@ export function sessionReducer(state: Session, action: Action): Session {
       return { ...state, sheet: null, signPreview: null, recognizedAttempt: null, framing: 'finding', phase: state.phase === 'offline' ? 'offline' : 'framing', expression: null, captureId: state.captureId + 1 };
     case 'mute':
       return { ...stopSpeech(state), muted: !state.muted, phase: state.phase === 'speaking' ? 'listening' : state.phase };
+    case 'enable-voice':
+      return { ...state, muted: false };
     case 'disable-voice':
       return { ...stopSpeech(state), muted: true, phase: state.phase === 'speaking' ? 'listening' : state.phase };
     case 'replay': {
       const phrase = state.phrases.at(-1);
-      return phrase && !state.paused && !state.sheet ? speak(state, phrase) : state;
+      if (!phrase || state.paused || state.sheet) return state;
+      // Don't cancel the automatic first playback if someone taps replay while it is already starting.
+      if (state.speech?.phraseId === phrase.id) return state;
+      return speak(state, phrase);
     }
     case 'speech-ended': {
       if (state.speech?.id !== action.id) return state;

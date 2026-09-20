@@ -15,9 +15,8 @@ import { Button, Copy, Icon, IconButton, Wordmark, Touch } from '../ui/primitive
 import { useMotion } from '../ui/motion';
 import { StageSlot, useConversationEntrance } from '../ui/SharedStage';
 import { tokens } from '../ui/theme';
-import { conversationEmotion } from '../integrations/expression';
+import { conversationEmotion, moodPresentation } from '../integrations/expression';
 import { useIsFocused } from '@react-navigation/native';
-import type { DetectionEvent } from '../../modules/signloop-camera';
 import type { DetectionSettings } from '../session/ConversationSheets';
 
 function isDemo(value: string | string[] | undefined) {
@@ -28,7 +27,6 @@ export default function Conversation() {
   const { demo } = useLocalSearchParams<{ demo?: string | string[] }>();
   const kit = isDemo(demo) ? demoKit : cameraKit;
   const focused = useIsFocused();
-  const [detection, setDetection] = useState<DetectionEvent | null>(null);
   const [detectionSettings, setDetectionSettings] = useState<DetectionSettings>({
     showSkeleton: true, showPose: true, trackFace: true, showScores: false,
   });
@@ -36,8 +34,8 @@ export default function Conversation() {
   useEffect(() => { if (!focused) dispatch({ type: 'pause' }); }, [focused]);
   const { reduced, enter, exit, layout, sceneLayout } = useMotion();
   const entrance = useConversationEntrance();
-  const { height, fontScale } = useWindowDimensions();
-  const [availableHeight, setAvailableHeight] = useState(height - 160);
+  const { width, height, fontScale } = useWindowDimensions();
+  const [available, setAvailable] = useState({ height: height - 160, width });
   const uncovered = useRef(liveState);
   useLayoutEffect(() => { if (!liveState.sheet) uncovered.current = liveState; }, [liveState]);
   const state = liveState.sheet ? uncovered.current : liveState;
@@ -52,18 +50,22 @@ export default function Conversation() {
   const mode: AvatarMode = paused || covered || state.framing.startsWith('camera-') ? 'idle'
     : state.speech?.started ? 'speaking' : state.speech || state.phase === 'thinking' ? 'thinking' : 'listening';
   const focus = conversationFocus(mode, reduced);
-  const regions = conversationLayout(availableHeight, fontScale, focus);
+  const regions = conversationLayout(available.height, fontScale, focus, available.width);
   const regionLayout = focus === 'speaking' ? sceneLayout : layout;
+  const mood = moodPresentation(liveState);
   return <SafeAreaView style={styles.screen}>
     <View style={styles.header} pointerEvents={covered ? 'none' : 'auto'} accessibilityElementsHidden={covered} importantForAccessibility={covered ? 'no-hide-descendants' : 'auto'}>
       <IconButton icon="back" label="End conversation" onPress={openEnd} />
       <Wordmark />
       <IconButton icon="more" label="Conversation menu" onPress={() => dispatch({ type: 'open-sheet', sheet: 'menu' })} />
     </View>
-    <View onLayout={event => setAvailableHeight(Math.max(0, event.nativeEvent.layout.height - 36))} style={styles.split} pointerEvents={covered ? 'none' : 'auto'} accessibilityElementsHidden={covered} importantForAccessibility={covered ? 'no-hide-descendants' : 'auto'}>
+    <View onLayout={event => setAvailable({
+      height: Math.max(0, event.nativeEvent.layout.height - 36),
+      width: event.nativeEvent.layout.width,
+    })} style={styles.split} pointerEvents={covered ? 'none' : 'auto'} accessibilityElementsHidden={covered} importantForAccessibility={covered ? 'no-hide-descendants' : 'auto'}>
       <Animated.View layout={regionLayout} style={[styles.camera, { height: regions.camera }, entrance.camera]}>
         <Camera active={captureActive && focused} captureId={liveState.captureId} framing={liveState.framing}
-          recognitionMode={liveState.recognitionMode} detectionSettings={detectionSettings} onDetection={setDetection}
+          recognitionMode="signs" detectionSettings={detectionSettings}
           onFraming={onFraming} onTranslation={onTranslation} onExpression={onExpression} style={StyleSheet.absoluteFill} />
         {!paused && <CameraGuidance framing={state.framing} active={captureActive} mode={kit.mode} dispatch={dispatch} demo={kit.mode === 'demo'} />}
         {paused && <Animated.View entering={enter} exiting={exit} style={styles.pauseLayer}><ScrollView contentContainerStyle={styles.pauseContent}>
@@ -76,10 +78,13 @@ export default function Conversation() {
       </Animated.View>
       <Animated.View layout={regionLayout} style={[styles.stage, { height: regions.goose, marginTop: regions.clearance }]}>
         <StageSlot owner="conversation" Renderer={kit.Avatar} mode={mode} emotion={conversationEmotion(liveState)} reducedMotion={reduced || paused || covered} style={styles.stageSlot} />
+        <View pointerEvents="none" style={styles.mood} accessibilityLabel={`Goose mood: ${mood.mood}. ${mood.detail}`}>
+          <Copy role="label">{mood.mood}</Copy>
+          <Copy role="supporting" style={styles.moodDetail}>{mood.detail}</Copy>
+        </View>
       </Animated.View>
       <Animated.View layout={regionLayout} style={[styles.captionRegion, { height: regions.caption }, entrance.caption]}>
-        <CaptionPanel state={state} mode={kit.mode} dispatch={dispatch}
-          detection={detection} showScores={detectionSettings.showScores} />
+        <CaptionPanel state={state} mode={kit.mode} dispatch={dispatch} />
       </Animated.View>
     </View>
     <ConversationSheets state={liveState} dispatch={dispatch} demo={kit.mode === 'demo'} onEnd={() => router.dismissTo('/')}
@@ -90,11 +95,13 @@ export default function Conversation() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: tokens.color.butter },
   header: { paddingHorizontal: 12, minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  split: { flex: 1, paddingHorizontal: 16, paddingBottom: 12, gap: 12 },
-  camera: { borderRadius: 28, overflow: 'hidden', backgroundColor: tokens.color.blue },
-  stage: { width: '100%', overflow: 'visible' },
+  split: { flex: 1, paddingBottom: 12, gap: 12 },
+  camera: { borderRadius: 0, overflow: 'hidden', backgroundColor: tokens.color.blue },
+  stage: { width: '100%', overflow: 'visible', paddingHorizontal: 16 },
   stageSlot: { flex: 1, width: '100%' },
-  captionRegion: { paddingHorizontal: 4 },
+  mood: { position: 'absolute', top: 0, right: 16, maxWidth: '72%', alignItems: 'flex-end', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, backgroundColor: tokens.color.paper },
+  moodDetail: { color: tokens.color.muted, textAlign: 'right' },
+  captionRegion: { paddingHorizontal: 20 },
   demoTag: { position: 'absolute', bottom: 8, left: 12, minHeight: 44, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 14, backgroundColor: tokens.color.paper },
   pauseLayer: { ...StyleSheet.absoluteFillObject, backgroundColor: '#FFFCF0ED' },
   pauseContent: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: 20, gap: 12 },

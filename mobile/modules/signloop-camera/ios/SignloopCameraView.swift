@@ -61,8 +61,7 @@ final class SignloopCameraView: ExpoView {
         clipsToBounds = true
         backgroundColor = .black
         preview.attach(session: tracker.session)
-        // Keep hands AND chest visible inside Expo's wide camera region.
-        preview.previewLayer.videoGravity = .resizeAspect
+        preview.previewLayer.videoGravity = .resizeAspectFill
         addSubview(preview)
         skeleton.fillColor = UIColor.clear.cgColor
         skeleton.strokeColor = UIColor(red: 1, green: 0.95, blue: 0.73, alpha: 1).cgColor
@@ -188,11 +187,13 @@ final class SignloopCameraView: ExpoView {
         isCapturing = true
         resetExpressions()
         recognition.load() // Allows Retry after provisioning references.
-        emitStatus("starting")
-        if restartCamera { tracker.start() }
+        if restartCamera {
+            emitStatus("starting")
+            tracker.start()
+        }
         preview.mirrored = tracker.isFront
         preview.attach(session: tracker.session)
-        preview.previewLayer.videoGravity = .resizeAspect
+        preview.previewLayer.videoGravity = .resizeAspectFill
         timer?.invalidate()
         let nextTimer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
             self?.tracker.expireLocalResult()
@@ -200,6 +201,7 @@ final class SignloopCameraView: ExpoView {
         }
         timer = nextTimer
         RunLoop.main.add(nextTimer, forMode: .common)
+        if !restartCamera { render() }
         #endif
     }
     private func stop() {
@@ -289,7 +291,7 @@ final class SignloopCameraView: ExpoView {
         }
         let path = UIBezierPath()
         if let frame {
-            let scale = min(bounds.width / CGFloat(frame.width), bounds.height / CGFloat(frame.height))
+            let scale = max(bounds.width / CGFloat(frame.width), bounds.height / CGFloat(frame.height))
             func point(_ p: SkeletonPoint) -> CGPoint {
                 CGPoint(x: (bounds.width-CGFloat(frame.width)*scale)/2 + CGFloat(tracker.isFront ? 1-p.x : p.x)*CGFloat(frame.width)*scale,
                         y: (bounds.height-CGFloat(frame.height)*scale)/2 + CGFloat(p.y)*CGFloat(frame.height)*scale)

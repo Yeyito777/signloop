@@ -3,6 +3,15 @@ import Foundation
 @main
 struct GooseExpressionTests {
     static var checks = 0
+    static func liveFrame(time: Int, smile: Float = 0.05, hasFace: Bool = true,
+                          expressions: [String: Float]? = nil) -> SkeletonFrame {
+        SkeletonFrame(timestampMS: time, width: 720, height: 1280, camera: "front",
+            hands: [], pose: [], face: hasFace ? [SkeletonPoint(id: 1, x: 0.5, y: 0.4, z: 0)] : [],
+            expressions: expressions ?? [
+                "mouthSmileLeft": smile, "mouthSmileRight": smile, "browDownLeft": 0, "browDownRight": 0,
+                "jawOpen": 0, "browInnerUp": 0.1, "noseSneerLeft": 0, "noseSneerRight": 0,
+            ], timingsMS: [:])
+    }
     static func expect(_ value: @autoclosure () -> Bool, _ message: String) {
         checks += 1; guard value() else { fatalError("FAIL: \(message)") }
     }
@@ -38,6 +47,10 @@ struct GooseExpressionTests {
         for time in stride(from: 0, through: 1000, by: 100) { history.append(time < 800 ? joy : neutral, at: time) }
         expect(history.emotion(from: 0, through: 1000) == .joy, "brief relaxation at sign completion preserves its dominant expression")
         expect(history.emotion(from: 800, through: 1000) == .neutral, "an expression outside the sign interval cannot leak in")
+        history.reset()
+        let holdingJoy = GooseExpressionSnapshot(status: .holding, emotion: .joy)
+        for time in stride(from: 0, through: 1000, by: 100) { history.append(time < 400 ? holdingJoy : joy, at: time) }
+        expect(history.emotion(from: 0, through: 1000) == .joy, "holding the taught face still counts toward the sign")
         history.reset()
         for time in stride(from: 0, through: 1000, by: 100) { history.append(time < 500 ? joy : anger, at: time) }
         expect(history.emotion(from: 0, through: 1000) == .neutral, "tied expressions abstain")
@@ -79,6 +92,25 @@ struct GooseExpressionTests {
         expect(tracker.snapshot.status == .modelMissing && tracker.snapshot.emotion == .neutral, "missing face model stays neutral")
         tracker.reset()
         expect(tracker.snapshot.status == .modelMissing, "reset preserves setup diagnostics")
+        var live = GooseExpressionTracker(source: GooseExpressionProfile.load(
+            localURL: directory.appendingPathComponent("missing.json"), bundledURL: nil), modelAvailable: true)
+        expect(live.snapshot.status == .noFace && live.snapshot.emotion == .neutral,
+            "conversation face tracking runs without Expression lab")
+        expect(!live.title.contains("profile"), "missing taught profile does not block live mood")
+        for time in stride(from: 0, through: 400, by: 40) { live.observe(Self.liveFrame(time: time, smile: 0.05)) }
+        expect(live.snapshot.status == .neutral && live.snapshot.emotion == .neutral, "a rest face stays Neutral")
+        live.observe(Self.liveFrame(time: 440, smile: 0.55))
+        expect(live.snapshot.status == .holding && live.snapshot.emotion == .joy, "a smile is Joy without a 2s rest-face capture")
+        live.observe(Self.liveFrame(time: 540, smile: 0.55))
+        expect(live.snapshot.status == .active && live.snapshot.emotion == .joy, "holding the smile becomes a live match")
+        live.observe(Self.liveFrame(time: 700, smile: 0.04))
+        expect(live.snapshot.status == .neutral, "relaxing the mouth returns to Neutral")
+        live.observe(Self.liveFrame(time: 800, smile: 0.55, hasFace: false))
+        expect(live.snapshot.status == .noFace, "looking away is no-face, not Neutral")
+        var empty = GooseExpressionTracker(source: GooseExpressionProfile.load(
+            localURL: directory.appendingPathComponent("missing.json"), bundledURL: nil), modelAvailable: true)
+        empty.observe(Self.liveFrame(time: 0, expressions: [:]))
+        expect(empty.snapshot.status == .unavailable, "landmarks without blendshapes cannot fake a mood")
         print("PASS: \(checks) goose expression integration checks")
     }
 }

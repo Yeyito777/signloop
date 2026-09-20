@@ -6,8 +6,9 @@ export function captionPresentation(state: Session, mode: IntegrationKit['mode']
   const phrase = state.phrases.at(-1);
   const composing = state.phase === 'signing' || state.phase === 'thinking';
   const draft = !phrase && composing ? state.draft : '';
-  const text = phrase?.text ?? (draft || 'Your words will appear here.');
-  const label = phrase ? mode === 'demo' ? 'Sample caption' : 'English' : draft ? 'Draft · not spoken' : 'English';
+  const preview = !phrase && !draft ? state.signPreview?.text ?? '' : '';
+  const text = phrase?.text ?? (draft || preview || 'Your words will appear here.');
+  const label = phrase ? mode === 'demo' ? 'Sample caption' : 'English' : draft ? 'Draft · not spoken' : preview ? 'Reading…' : 'English';
   let delivery = '';
   if (phrase) {
     if (state.paused) delivery = 'Paused';
