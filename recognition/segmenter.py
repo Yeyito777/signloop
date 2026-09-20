@@ -218,7 +218,7 @@ class Segmenter:
             settled = t - self.settle_start >= cfg.settle_ms
             if moving and gap_ok:
                 self.onset = self.onset if self.onset is not None else t
-                if settled:
+                if settled and t - self.onset >= cfg.onset_ms:
                     self.armed = True   # fresh movement re-arms a recognizer left unarmed by the last prediction
             else:
                 self.onset = None
