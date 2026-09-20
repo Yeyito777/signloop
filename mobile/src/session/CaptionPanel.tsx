@@ -66,7 +66,7 @@ export function CaptionPanel({ state, mode, dispatch }: { state: Session; mode: 
         <Copy role="supporting" style={styles.muted}>Keep signing with your hands and shoulders in view.</Copy>
       </View>}
       {(!state.candidate || phrase || draft) && <Animated.View key={draft ? 'draft' : phrase?.id ?? 'empty'} entering={enter}>
-        <Copy role={phrase || draft ? 'featuredCaption' : 'captionLarge'} selectable accessibilityLiveRegion={draft ? 'none' : 'polite'} style={!phrase && !draft ? styles.empty : undefined}>{text}</Copy>
+        <Copy role="caption" selectable accessibilityLiveRegion={draft ? 'none' : 'polite'} style={[styles.phrase, !phrase && !draft ? styles.empty : undefined]}>{text}</Copy>
       </Animated.View>}
       {!!notice && <Animated.View entering={enter} style={styles.notice}><Icon name="info" size={18} /><Copy role="supporting" style={styles.noticeText}>{notice}</Copy></Animated.View>}
       {!!activity && <Animated.View key={activity} entering={enter} style={styles.activity}><View style={styles.dot} /><Copy role="supporting" accessibilityLiveRegion="polite" style={styles.muted}>{activity}</Copy></Animated.View>}
@@ -87,6 +87,7 @@ const styles = StyleSheet.create({
   textScroll: { flex: 1 },
   textContent: { paddingBottom: 4, gap: 12 },
   empty: { color: tokens.color.muted },
+  phrase: { fontSize: 22, lineHeight: 26, letterSpacing: -0.2 },
   activity: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 24 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: tokens.color.ink },
   notice: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingTop: 8 },

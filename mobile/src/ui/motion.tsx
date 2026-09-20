@@ -39,5 +39,6 @@ export function useMotion() {
     enter: FadeIn.duration(motion.feedback).reduceMotion(preference),
     exit: FadeOut.duration(motion.feedback).reduceMotion(preference),
     layout: LinearTransition.duration(motion.transition).easing(motion.ease).reduceMotion(preference),
+    sceneLayout: LinearTransition.duration(motion.scene).easing(motion.ease).reduceMotion(preference),
   };
 }

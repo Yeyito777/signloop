@@ -75,7 +75,10 @@ export function CameraGuidance({ framing, active, mode, dispatch, demo }: {
     {!!guidance.hint && <Animated.View key={shown} entering={enter} exiting={exit} style={[styles.hint, { bottom: demo ? 60 : 12 }]}>
       <Copy role="supporting" style={styles.hintText}>{guidance.hint}</Copy>
       {shown === 'camera-denied' && <Button variant="plain" onPress={() => { dispatch({ type: 'pause' }); void Linking.openSettings(); }}>Open Settings</Button>}
-      {shown === 'camera-unavailable' && <Button variant="plain" onPress={() => router.replace('/conversation?demo=1')}>Try the UI demo</Button>}
+      {(shown === 'camera-unavailable' || shown === 'camera-update-required' || shown === 'camera-model-missing') && <Button variant="plain" onPress={() => {
+        router.dismissTo('/');
+        setTimeout(() => router.push('/conversation?demo=1'), 0);
+      }}>Try the UI demo</Button>}
       {shown === 'camera-error' && <Button variant="plain" icon="repeat" onPress={() => dispatch({ type: 'retry' })}>Try camera again</Button>}
       {(shown === 'recognizer-missing' || shown === 'recognizer-error') && <Button variant="plain" icon="repeat" onPress={() => dispatch({ type: 'retry' })}>Retry recognition setup</Button>}
     </Animated.View>}
