@@ -126,6 +126,9 @@ teach your relaxed face and five expressions once, check them against fresh
 repetitions, then save/export a fixed personal demo profile. Recognition continues
 on the camera screen after the lab closes. The **HonkAndTellDemo** scheme bundles
 the checked profile and hides teaching from the demo experience.
+The lab keeps its next step and capture action visible while scrolling. Export
+is always in the toolbar: save unfinished setup progress to resume later, or
+export a checked demo profile after the six guided checks pass.
 The experimental presets do not infer emotion or ASL meaning.
 
 This replaces the standalone camera's earlier ILY/five-sign research display;
