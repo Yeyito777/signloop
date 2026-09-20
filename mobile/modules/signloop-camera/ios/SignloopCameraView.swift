@@ -169,7 +169,7 @@ final class SignloopCameraView: ExpoView {
             guard let distance = score.measuredDistance else { return nil }
             return ["label": score.label, "distance": distance]
         }
-        onPrediction(["captureId": captureId, "engine": "basic-temporal-v2",
+        onPrediction(["captureId": captureId, "engine": "basic-temporal-v3",
                       "phase": prediction.phase.rawValue, "attemptId": prediction.attemptID as Any? ?? NSNull(),
                       "candidates": candidates, "label": prediction.label as Any? ?? NSNull(),
                       "matched": prediction.matched, "observedAtMS": observedAtMS])

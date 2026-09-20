@@ -16,7 +16,7 @@ const clip = { audio_base64: 'SUQz', alignment: {
 afterEach(() => setVoiceSettings({ url: '', token: '', enabled: false }));
 function ready() { return reduce(initialSession(), { type: 'framing', captureId: 1, framing: 'ready' }); }
 function candidate(attemptId = 1) {
-  return candidateFromPrediction({ engine: 'basic-temporal-v2', phase: 'completed', attemptId, candidates: [{ label: 'ILOVEYOU', distance: 0.1 }], matched: true, captureId: 1, label: 'ILOVEYOU', observedAtMS: Date.now() }, true, 1)!;
+  return candidateFromPrediction({ engine: 'basic-temporal-v3', phase: 'completed', attemptId, candidates: [{ label: 'ILOVEYOU', distance: 0.1 }], matched: true, captureId: 1, label: 'ILOVEYOU', observedAtMS: Date.now() }, true, 1)!;
 }
 
 test('native temporal prediction → confirmation → backend audio → playback, without inventing a sentence', async () => {
@@ -24,6 +24,7 @@ test('native temporal prediction → confirmation → backend audio → playback
   let state = reduce(ready(), { type: 'translation', captureId: 1, event: candidate() });
   assert.equal(state.phrases.length, 0);
   assert.equal(state.speech, null);
+  state = reduce(state, { type: 'select-candidate', attemptId: 1, label: 'ILOVEYOU' });
   state = reduce(state, { type: 'confirm-candidate', attemptId: 1 });
   assert.equal(state.phrases[0].text, 'I love you.');
   assert.equal(captionPresentation(state, 'live').delivery, 'Preparing voice…');
@@ -54,26 +55,28 @@ test('native temporal prediction → confirmation → backend audio → playback
 test('unknown, stale, future and wrong-generation observations cannot produce accepted words', () => {
   const now = Date.now();
   for (const label of ['Thumb_Up', 'I_LOVE_YOU', '', 'UNKNOWN', 'toString']) {
-    assert.deepEqual(candidateFromPrediction({ engine: 'basic-temporal-v2', phase: 'completed', attemptId: 1, candidates: [{ label: 'ILOVEYOU', distance: 0.1 }], matched: true, captureId: 1, label, observedAtMS: now }, true, 1), { type: 'clear-candidate' });
+    assert.deepEqual(candidateFromPrediction({ engine: 'basic-temporal-v3', phase: 'completed', attemptId: 1, candidates: [{ label: 'ILOVEYOU', distance: 0.1 }], matched: true, captureId: 1, label, observedAtMS: now }, true, 1), { type: 'clear-candidate' });
   }
-  assert.equal(candidateFromPrediction({ engine: 'basic-temporal-v2', phase: 'completed', attemptId: 1, candidates: [{ label: 'ILOVEYOU', distance: 0.1 }], matched: true, captureId: 0, label: 'ILOVEYOU', observedAtMS: now }, true, 1), null);
-  assert.equal(candidateFromPrediction({ engine: 'basic-temporal-v2', phase: 'completed', attemptId: 1, candidates: [{ label: 'ILOVEYOU', distance: 0.1 }], matched: true, captureId: 1, label: 'ILOVEYOU', observedAtMS: now }, false, 1), null);
+  assert.equal(candidateFromPrediction({ engine: 'basic-temporal-v3', phase: 'completed', attemptId: 1, candidates: [{ label: 'ILOVEYOU', distance: 0.1 }], matched: true, captureId: 0, label: 'ILOVEYOU', observedAtMS: now }, true, 1), null);
+  assert.equal(candidateFromPrediction({ engine: 'basic-temporal-v3', phase: 'completed', attemptId: 1, candidates: [{ label: 'ILOVEYOU', distance: 0.1 }], matched: true, captureId: 1, label: 'ILOVEYOU', observedAtMS: now }, false, 1), null);
   for (const time of [now - 2000, now + 2000, NaN]) {
-    assert.deepEqual(candidateFromPrediction({ engine: 'basic-temporal-v2', phase: 'completed', attemptId: 1, candidates: [{ label: 'ILOVEYOU', distance: 0.1 }], matched: true, captureId: 1, label: 'ILOVEYOU', observedAtMS: time }, true, 1), { type: 'clear-candidate' });
+    assert.deepEqual(candidateFromPrediction({ engine: 'basic-temporal-v3', phase: 'completed', attemptId: 1, candidates: [{ label: 'ILOVEYOU', distance: 0.1 }], matched: true, captureId: 1, label: 'ILOVEYOU', observedAtMS: time }, true, 1), { type: 'clear-candidate' });
   }
   const state = reduce(ready(), { type: 'translation', captureId: 1,
-    event: { type: 'candidate', attemptId: 1, options: [{ label: 'ILOVEYOU', text: 'I love you.' }], uncertain: true, label: 'ILOVEYOU', text: 'I love you.', expiresAtMS: now - 1 } });
+    event: { type: 'candidate', attemptId: 1, observedAtMS: now - 10000, selected: false, options: [{ label: 'ILOVEYOU', text: 'I love you.' }], uncertain: true, label: 'ILOVEYOU', text: 'I love you.', expiresAtMS: now - 1 } });
   assert.equal(reduce(state, { type: 'confirm-candidate', attemptId: 1 }).phrases.length, 0);
 });
 
 test('holding a confirmed sign does not repeat it; release permits a new explicit confirmation', () => {
   let state = reduce(ready(), { type: 'translation', captureId: 1, event: candidate() });
+  state = reduce(state, { type: 'select-candidate', attemptId: 1, label: 'ILOVEYOU' });
   state = reduce(state, { type: 'confirm-candidate', attemptId: 1 });
   state = reduce(state, { type: 'translation', captureId: 1, event: candidate() });
   assert.equal(state.candidate, null);
   assert.equal(reduce(state, { type: 'confirm-candidate', attemptId: 1 }).phrases.length, 1);
   state = reduce(state, { type: 'translation', captureId: 1, event: { type: 'clear-candidate' } });
   state = reduce(state, { type: 'translation', captureId: 1, event: candidate(2) });
+  state = reduce(state, { type: 'select-candidate', attemptId: 2, label: 'ILOVEYOU' });
   assert.equal(reduce(state, { type: 'confirm-candidate', attemptId: 2 }).phrases.length, 2);
 });
 
@@ -94,6 +97,7 @@ test('pause, sheets and framing loss invalidate unconfirmed estimates', () => {
 test('captions-only mode confirms without any voice request', () => {
   let state = { ...ready(), muted: true };
   state = reduce(state, { type: 'translation', captureId: 1, event: candidate() });
+  state = reduce(state, { type: 'select-candidate', attemptId: 1, label: 'ILOVEYOU' });
   state = reduce(state, { type: 'confirm-candidate', attemptId: 1 });
   assert.equal(state.phrases.length, 1);
   assert.equal(state.speech, null);

@@ -43,9 +43,11 @@ final class BasicLiveRecognition: ObservableObject {
     private var stability = BasicSignStability()
     private var segmentation = BasicSignSegmentation()
     private var nextAttemptID = 0
+    private var currentAttemptID: Int?
     private struct Request {
         let frames: [SkeletonFrame]
-        let attemptID: Int?
+        let attemptID: Int
+        let completed: Bool
     }
     private var pendingSegments: [Request] = []
     private let referenceURL: URL
@@ -108,6 +110,7 @@ final class BasicLiveRecognition: ObservableObject {
         lastObservedHand = nil
         stability.reset()
         segmentation.reset()
+        currentAttemptID = nil
         pendingSegments.removeAll(keepingCapacity: true)
         sign = nil
         matchMS = 0
@@ -140,22 +143,26 @@ final class BasicLiveRecognition: ObservableObject {
             onPrediction?(.cleared(at: frame.timestampMS))
             return
         }
-        if let completed = segmentation.update(frame) {
+        let completed = segmentation.update(frame)
+        if segmentation.startsAttempt || currentAttemptID == nil {
             nextAttemptID += 1
+            currentAttemptID = nextAttemptID
+        }
+        if let completed {
             // Bounded backlog; a stalled worker must never produce old captions.
             guard pendingSegments.count < 4 else {
                 reset()
                 detail = "Matching delayed · try again"
                 return
             }
-            pendingSegments.append(Request(frames: completed, attemptID: nextAttemptID))
+            pendingSegments.append(Request(frames: completed, attemptID: currentAttemptID!, completed: true))
         }
         if !pendingSegments.isEmpty {
             startNextSegment()
             return
         }
         guard !busy, frame.timestampMS-lastRequest >= 100 else { return }
-        start(Request(frames: frames, attemptID: nil))
+        start(Request(frames: frames, attemptID: currentAttemptID!, completed: false))
     }
 
     private func startNextSegment() {
@@ -170,7 +177,7 @@ final class BasicLiveRecognition: ObservableObject {
         let token = generation
         let started = ProcessInfo.processInfo.systemUptime
         worker.async {
-            let completed = request.attemptID != nil
+            let completed = request.completed
             let candidate = self.matcher?.candidate(request.frames, completed: completed) ?? BasicCandidate()
             let accepted = self.matcher?.accepted(candidate)
             DispatchQueue.main.async {

@@ -84,6 +84,25 @@ import Foundation
         let deadline = Date().addingTimeInterval(5)
         while live.loading && Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.01)) }
         check(live.ready, "Asynchronous matcher loads the synthetic reference bank")
+        for t in stride(from: 0, through: 350, by: 50) {
+            live.receive(frame(t))
+            RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+        }
+        let previews = events.filter { $0.phase == .preview && $0.label != nil }
+        check(!previews.isEmpty && previews.allSatisfy { $0.attemptID != nil && !$0.candidates.isEmpty },
+              "Usable rolling choices carry an attempt before gesture completion")
+        check(events.allSatisfy { $0.phase != .completed }, "Review availability does not wait for a completion")
+        let attempt = previews.last!.attemptID
+        for t in stride(from: 400, through: 1600, by: 50) {
+            live.receive(frame(t))
+            RunLoop.current.run(until: Date().addingTimeInterval(0.005))
+        }
+        check(events.filter { $0.phase == .completed }.map(\.attemptID) == [attempt],
+              "Rolling and completed results share an attempt identity")
+        check(events.filter { $0.label != nil }.allSatisfy { $0.attemptID == attempt },
+              "A held pose cannot reopen a confirmed or rejected attempt")
+        live.reset()
+        events = []
         // Withhold the main run loop: a preview job is still busy when this
         // gesture finishes. The complete segment must be queued, not discarded.
         for t in stride(from: 0, through: 1000, by: 50) { live.receive(frame(t)) }
@@ -103,6 +122,17 @@ import Foundation
         live.reset()
         RunLoop.current.run(until: Date().addingTimeInterval(0.3))
         check(events.allSatisfy { $0.phase == .cleared }, "Reset cancels both queued and in-flight completions")
+
+        // Slow movement used to yield only its final static hold. Preserve the
+        // observations before onset detection without lowering motion thresholds.
+        var slow = BasicSignSegmentation()
+        var slowSegments: [[SkeletonFrame]] = []
+        for t in stride(from: 0, through: 4000, by: 50) {
+            let progress = min(1, max(0, Float(t - 300) / 2100))
+            if let complete = slow.update(frame(t, x: 0.5 + 0.06 * progress)) { slowSegments.append(complete) }
+        }
+        check(!slowSegments.isEmpty && slowSegments[0].first!.timestampMS == 0,
+              "Late onset detection retains the beginning of the observed attempt")
         print("PASS: \(checks) segmented recognition checks (synthetic, not ASL accuracy)")
     }
 }

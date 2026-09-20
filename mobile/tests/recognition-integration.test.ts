@@ -8,7 +8,7 @@ import { initialSession, sessionReducer as reduce } from '../src/session/model.t
 import type { SignPredictionEvent, CameraStatus } from '../modules/signloop-camera/events.ts';
 
 const event = (label: string | null, matched = true): SignPredictionEvent => ({
-  engine: 'basic-temporal-v2', phase: 'completed', attemptId: 1,
+  engine: 'basic-temporal-v3', phase: 'completed', attemptId: 1,
   candidates: label ? [{ label, distance: 0.1 }] : [], captureId: 1, label, matched, observedAtMS: Date.now(),
 });
 const ready = () => reduce(initialSession(), { type: 'framing', framing: 'ready', captureId: 1 });
@@ -24,7 +24,8 @@ test('every label the native presentation matcher can emit reaches a confirmed c
     const suggested = reduce(ready(), { type: 'translation', captureId: 1, event: translation });
     assert.equal(suggested.phrases.length, 0);
     assert.equal(suggested.speech, null);
-    const confirmed = reduce(suggested, { type: 'confirm-candidate', attemptId: 1 });
+    const selected = reduce(suggested, { type: 'select-candidate', attemptId: 1, label });
+    const confirmed = reduce(selected, { type: 'confirm-candidate', attemptId: 1 });
     assert.equal(confirmed.phrases[0].text, signText[label as keyof typeof signText]);
     assert.equal(confirmed.speech?.text, confirmed.phrases[0].text);
   }
@@ -36,7 +37,9 @@ test('a below-threshold ranking stays explicitly uncertain and requires user con
   assert.equal(suggested.candidate?.uncertain, true);
   assert.equal(suggested.phrases.length, 0);
   assert.equal(suggested.speech, null);
-  assert.equal(reduce(suggested, { type: 'confirm-candidate', attemptId: 1 }).phrases[0].text, 'Hello.');
+  assert.equal(reduce(suggested, { type: 'confirm-candidate', attemptId: 1 }).phrases.length, 0);
+  const selected = reduce(suggested, { type: 'select-candidate', attemptId: 1, label: 'HELLO' });
+  assert.equal(reduce(selected, { type: 'confirm-candidate', attemptId: 1 }).phrases[0].text, 'Hello.');
 });
 
 test('native invalidation, malformed results, and expired observations clear suggestions', () => {
@@ -55,7 +58,8 @@ test('an old native binary is diagnosed before trying its incompatible view', ()
   assert.equal(cameraAvailability({}), 'camera-update-required');
   assert.equal(cameraAvailability({ recognitionVersion: 1 }), 'camera-update-required');
   assert.equal(cameraAvailability({ recognitionVersion: 2 }), 'camera-update-required');
-  assert.equal(cameraAvailability({ recognitionVersion: 3 }), null);
+  assert.equal(cameraAvailability({ recognitionVersion: 3 }), 'camera-update-required');
+  assert.equal(cameraAvailability({ recognitionVersion: 4 }), null);
 });
 
 test('setup failures and missing shoulders cannot leave a candidate ready to confirm', () => {
@@ -88,16 +92,15 @@ function offer(state = ready(), native = rankedEvent()) {
     event: candidateFromPrediction(native, true, state.captureId)! });
 }
 
-test('rolling guesses are visible but cannot be confirmed, even when their match passes', () => {
-  const preview = { ...rankedEvent(), phase: 'preview' as const, attemptId: null };
+test('rolling choices can be selected immediately without waiting for gesture completion', () => {
+  const preview = { ...rankedEvent(), phase: 'preview' as const };
   const state = offer(ready(), preview);
-  assert.equal(state.signPreview, 'Hello.');
-  assert.equal(state.candidate, null);
+  assert.equal(state.candidate?.options.length, 3);
+  assert.equal(state.candidate?.selected, false);
   assert.equal(reduce(state, { type: 'confirm-candidate', attemptId: 1 }).phrases.length, 0);
   assert.equal(state.speech, null);
-  const completed = offer(state);
-  assert.equal(completed.signPreview, null);
-  assert.equal(completed.candidate?.options.length, 3);
+  const selected = reduce(state, { type: 'select-candidate', attemptId: 1, label: 'THANKYOU' });
+  assert.equal(reduce(selected, { type: 'confirm-candidate', attemptId: 1 }).phrases[0].text, 'Thank you.');
 });
 
 test('selecting the second or third choice never speaks until explicit confirmation', () => {
@@ -126,9 +129,37 @@ test('None of these dismisses the entire attempt without changing captions or st
 
 test('live guesses and duplicate events cannot overwrite a choice or extend its review deadline', () => {
   const selected = reduce(offer(), { type: 'select-candidate', attemptId: 1, label: 'PLEASE' });
-  assert.equal(offer(selected, { ...event('THANKYOU'), phase: 'preview', attemptId: null }), selected);
+  assert.equal(offer(selected, { ...event('THANKYOU'), phase: 'preview', observedAtMS: Date.now() + 50 }), selected);
   assert.equal(offer(selected, { ...rankedEvent(), observedAtMS: Date.now() + 50 }), selected);
   assert.equal(reduce(selected, { type: 'select-candidate', attemptId: 1, label: 'UNKNOWN' }), selected);
+  assert.equal(offer(selected, rankedEvent(2)), selected, 'a new gesture cannot overwrite an explicit selection');
+});
+
+test('unselected choices track fresh rolling evidence; an older segment cannot replace them', () => {
+  const now = Date.now();
+  const initial = offer(ready(), { ...rankedEvent(), phase: 'preview', observedAtMS: now - 400 });
+  const updated = offer(initial, { ...event('THANKYOU'), phase: 'preview', observedAtMS: now });
+  assert.equal(updated.candidate?.label, 'THANKYOU');
+  assert.equal(updated.candidate?.attemptId, 1);
+  assert.equal(offer(updated, { ...rankedEvent(), observedAtMS: now - 200 }), updated);
+  assert.equal(offer(updated, { ...event('HELLO'), observedAtMS: now }), updated);
+});
+
+test('selection stays frozen through newer results, but tracking loss still invalidates it', () => {
+  const selected = reduce(offer(), { type: 'select-candidate', attemptId: 1, label: 'PLEASE' });
+  const updated = offer(selected, { ...rankedEvent(2), observedAtMS: Date.now() + 50 });
+  assert.equal(updated, selected);
+  const cleared = reduce(updated, { type: 'translation', captureId: 1, event: { type: 'clear-candidate' } });
+  assert.equal(cleared.candidate, null);
+  assert.equal(reduce(cleared, { type: 'confirm-candidate', attemptId: 1 }).phrases.length, 0);
+});
+
+test('review another sign explicitly starts a new capture after rejecting a held pose', () => {
+  const rejected = reduce(offer(), { type: 'reject-candidate', attemptId: 1 });
+  const restarted = reduce(rejected, { type: 'sign-again' });
+  assert.equal(restarted.captureId, rejected.captureId + 1);
+  assert.equal(restarted.reviewedAttempt, null);
+  assert.equal(restarted.phrases.length, 0);
 });
 
 test('late taps and expiry callbacks cannot act on a newer gesture', () => {
@@ -155,6 +186,16 @@ test('review lasts ten seconds, then expires without speaking or accepting a sta
   assert.equal(expired.speech, null);
   assert.equal(reduce(state, { type: 'confirm-candidate', attemptId: 1 }).phrases.length, 0);
   assert.equal(reduce(state, { type: 'select-candidate', attemptId: 1, label: 'PLEASE' }), state);
+});
+
+test('a fresh ranking arriving before the expiry callback cannot renew a selected review', context => {
+  context.mock.timers.enable({ apis: ['Date'], now: Date.now() });
+  const selected = reduce(offer(), { type: 'select-candidate', attemptId: 1, label: 'PLEASE' });
+  context.mock.timers.tick(SIGN_REVIEW_MS);
+  assert.equal(offer(selected, { ...rankedEvent(), phase: 'preview' }), selected);
+  const expired = reduce(selected, { type: 'expire-candidate', attemptId: 1 });
+  assert.equal(expired.candidate, null);
+  assert.equal(offer(expired).candidate, null);
 });
 
 test('invalid ranked lists and unsegmented legacy results cannot become confirmation choices', () => {

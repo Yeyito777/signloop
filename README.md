@@ -21,7 +21,7 @@ The Expo app lives in [`mobile/`](mobile/README.md): Home, Conversation, and loc
 transcript/correction sheets in the Playroom style. The native Expo camera module
 uses `ios/Signloop/SkeletonCameraTracker.swift` and the shared temporal matcher. The app renders
 the shared 3D goose and offers a complete
-limited flow: **offline 11-sign preview → completed-gesture choices → explicit confirmation → caption
+limited flow: **offline 11-sign choices → tap to hold a choice → explicit confirmation → caption
 → optional backend-generated goose voice**. Voice uploads require foreground-session
 consent in Settings. Provider keys stay on the backend. This is not general ASL
 translation. An explicit sample-conversation mode still uses labeled sample data
