@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  buildBackendSpeechRequest,
   buildSpeechRequest,
   buildStreamSpeechRequest,
   ELEVENLABS_MODEL_ID,
@@ -13,9 +14,11 @@ import {
   performanceText,
   seedForSpeechText,
   messageForSpeechError,
+  messageForBackendSpeechError,
   prepareSpeechText,
   VoiceError,
 } from '../src/voice/elevenlabs.ts';
+import { loopbackOrigin } from '../src/voice/config.ts';
 
 test('empty or whitespace text is rejected', () => {
   assert.throws(() => prepareSpeechText(''), VoiceError);
@@ -110,4 +113,21 @@ test('speech errors map to short user-facing messages', () => {
   assert.match(messageForSpeechError(503), /trouble/i);
   assert.match(messageForSpeechError(400), /could not speak/i);
   assert.match(messageForSpeechError(), /network/i);
+});
+
+test('backend speech stays on loopback and never sends the provider key', () => {
+  const request = buildBackendSpeechRequest('  Hello goose  ', 'http://127.0.0.1:8787', 'local-backend-token-24chars', 'joy');
+  assert.equal(request.url, 'http://127.0.0.1:8787/v1/speech');
+  assert.equal(request.headers.Authorization, 'Bearer local-backend-token-24chars');
+  assert.equal(request.headers['Content-Type'], 'application/json');
+  assert.equal(JSON.parse(request.body).text, 'Hello goose');
+  assert.equal(JSON.parse(request.body).emotion, 'joy');
+  assert.equal('xi-api-key' in request.headers, false);
+  assert.equal(loopbackOrigin('http://127.0.0.1:8787/'), 'http://127.0.0.1:8787');
+  assert.equal(loopbackOrigin('http://localhost:8787'), 'http://localhost:8787');
+  assert.equal(loopbackOrigin('https://example.com'), '');
+  assert.equal(loopbackOrigin('http://127.0.0.1:8787/v1/speech'), '');
+  assert.match(messageForBackendSpeechError(401), /backend access token/i);
+  assert.match(messageForBackendSpeechError(503), /not configured/i);
+  assert.match(messageForBackendSpeechError(), /port 8787/i);
 });

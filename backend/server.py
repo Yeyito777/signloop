@@ -7,12 +7,28 @@ import hmac
 import hashlib
 import json
 from pathlib import Path
+from urllib.parse import urlparse
 import threading
 
 from .service import Backboard, Service, ServiceError, VOCABULARY, read_env, validate_frames
 from .voice import ElevenLabsVoice, validate_speech_input
 
 MAX_BODY = 300_000
+
+
+def loopback_cors_origin(origin: str) -> str:
+    """Allow browser previews on loopback only; never echo a remote Origin."""
+    try:
+        parsed = urlparse(origin)
+    except ValueError:
+        return ""
+    if parsed.scheme not in ("http", "https") or parsed.username or parsed.password:
+        return ""
+    if parsed.hostname not in ("127.0.0.1", "localhost", "::1"):
+        return ""
+    if parsed.path not in ("", "/") or parsed.params or parsed.query or parsed.fragment:
+        return ""
+    return origin
 
 
 def make_server(host: str, port: int, service: Service | None, token: str,
@@ -35,6 +51,16 @@ def make_server(host: str, port: int, service: Service | None, token: str,
         def log_message(self, *args):
             pass  # No camera data, captions, request paths or credentials in logs.
 
+        def send_cors(self):
+            origin = loopback_cors_origin(self.headers.get("Origin", ""))
+            if not origin:
+                return
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
+            self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Max-Age", "600")
+
         def send_json(self, status: int, payload: dict):
             data = json.dumps(payload, allow_nan=False).encode()
             self.send_response(status)
@@ -42,8 +68,21 @@ def make_server(host: str, port: int, service: Service | None, token: str,
             self.send_header("Content-Length", str(len(data)))
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_cors()
             self.end_headers()
             self.wfile.write(data)
+
+        def do_OPTIONS(self):
+            origin = self.headers.get("Origin", "")
+            if origin and not loopback_cors_origin(origin):
+                self.send_response(403)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            self.send_response(204)
+            self.send_cors()
+            self.send_header("Content-Length", "0")
+            self.end_headers()
 
         def authorize(self):
             if not hmac.compare_digest(self.headers.get("Authorization", ""), "Bearer " + token):

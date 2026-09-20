@@ -280,6 +280,36 @@ class VoiceServerTests(unittest.TestCase):
         for secret in (key, voice_id, text):
             self.assertNotIn(secret, serialized)
 
+    def test_loopback_browser_preview_can_call_speech(self):
+        speech = FakeSpeech()
+        base = self.start_server(speech)
+        origin = "http://localhost:8083"
+        connection = http.client.HTTPConnection(base.removeprefix("http://"), timeout=5)
+        try:
+            connection.request("OPTIONS", "/v1/speech", headers={
+                "Origin": origin, "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "authorization,content-type"})
+            preflight = connection.getresponse()
+            self.assertEqual(preflight.status, 204)
+            self.assertEqual(preflight.getheader("Access-Control-Allow-Origin"), origin)
+            self.assertIn("authorization", (preflight.getheader("Access-Control-Allow-Headers") or "").lower())
+            preflight.read()
+            connection.request("POST", "/v1/speech", body=json.dumps({"text": "Hello"}).encode(), headers={
+                "Content-Type": "application/json", "Authorization": "Bearer " + TOKEN, "Origin": origin})
+            response = connection.getresponse()
+            body = json.loads(response.read())
+            self.assertEqual(response.status, 200)
+            self.assertEqual(response.getheader("Access-Control-Allow-Origin"), origin)
+            self.assertEqual(body, {"audio_base64": "c291bmQ="})
+        finally:
+            connection.close()
+        remote = http.client.HTTPConnection(base.removeprefix("http://"), timeout=5)
+        try:
+            remote.request("OPTIONS", "/v1/speech", headers={"Origin": "https://example.com"})
+            self.assertEqual(remote.getresponse().status, 403)
+        finally:
+            remote.close()
+
 
 if __name__ == "__main__":
     unittest.main()

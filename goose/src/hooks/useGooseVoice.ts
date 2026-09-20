@@ -133,6 +133,17 @@ export function useGooseVoice() {
     setPending(readyEnglish);
     setStatus('loading');
 
+    if (voiceConfig.backendConfigured) {
+      try {
+        await playMpeg(readyEnglish, phrase.emotion, id, abort.signal);
+      } catch (caught) {
+        if (id !== requestId.current || abort.signal.aborted) return;
+        setError(caught instanceof VoiceError ? caught.message : 'Mr. Goose could not speak that line.');
+        setStatus('error');
+      }
+      return;
+    }
+
     const playback = createPcmPlayback(ELEVENLABS_STREAM_SAMPLE_RATE, () => {
       if (id === requestId.current) {
         lipSync.current = { currentTime: () => 0 };
