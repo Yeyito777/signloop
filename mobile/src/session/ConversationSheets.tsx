@@ -88,6 +88,7 @@ export function ConversationSheets({ state, dispatch, onEnd, demo, detectionSett
       ] as [Framing, IconName, string][]).map(([framing, icon, label]) => <MenuRow key={framing} icon={icon} label={label} onPress={() => commit({ type: 'demo-framing', framing })} />)}
       {([
         ['Goose thinking', 'info', { type: 'thinking' }],
+        ['Goose speaking zoom', 'play', { type: 'accepted', id: `zoom-${state.captureId}`, text: 'I’m right here with you.', emotion: 'joy' }],
         ['Goose joy', 'play', { type: 'accepted', id: `joy-${state.captureId}`, text: 'I’m so glad you’re here!', emotion: 'joy' }],
         ['Goose sadness', 'play', { type: 'accepted', id: `sadness-${state.captureId}`, text: 'I wish we had more time together.', emotion: 'sadness' }],
         ['Goose anger', 'play', { type: 'accepted', id: `anger-${state.captureId}`, text: 'That was really frustrating.', emotion: 'anger' }],

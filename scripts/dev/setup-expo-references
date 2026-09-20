@@ -11,10 +11,16 @@ case " $* " in
 esac
 umask 077
 command -v swiftc >/dev/null || { echo "Install Xcode command-line tools first."; exit 1; }
+python312=$(command -v python3.12 || true)
+if [ -z "$python312" ]; then
+  for candidate in /opt/homebrew/opt/python@3.12/bin/python3.12 /usr/local/opt/python@3.12/bin/python3.12; do
+    [ -x "$candidate" ] && python312=$candidate && break
+  done
+fi
 if [ ! -x .runtime/reference-venv/bin/python ]; then
-  command -v python3.12 >/dev/null || { echo "Install Python 3.12 first (e.g. brew install python@3.12)."; exit 1; }
+  [ -n "$python312" ] || { echo "Install Python 3.12 first (e.g. brew install python@3.12)."; exit 1; }
   mkdir -p .runtime
-  python3.12 -m venv .runtime/reference-venv
+  "$python312" -m venv .runtime/reference-venv
 fi
 py=.runtime/reference-venv/bin/python
 if [ ! -f .runtime/reference-venv/.dependencies-ready ]; then

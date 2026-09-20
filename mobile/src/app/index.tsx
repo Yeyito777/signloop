@@ -32,6 +32,12 @@ export default function Home() {
     </ScrollView>
     <View style={styles.actions}>
       <Button icon="arrow" variant="ink" style={styles.start} onPress={start}>Start conversation</Button>
+      <Button variant="plain" onPress={() => {
+        if (navigating.current) return;
+        navigating.current = true;
+        prepareConversation();
+        router.push('/conversation?demo=1');
+      }}>Try UI demo</Button>
     </View>
   </SafeAreaView>;
 }

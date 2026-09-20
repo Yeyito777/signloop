@@ -64,7 +64,9 @@ export function SharedStageProvider({ children }: { children: ReactNode }) {
     if (next !== owner.current || bounds.width <= 0 || bounds.height <= 0) return;
     const flight = next === 'conversation' && pending.current;
     const changedScreen = measuredOwner.current !== next;
-    const duration = reduced || !hasFrame.current ? 0 : changedScreen ? motion.scene : next === 'home' ? 0 : motion.transition;
+    // Conversation slots can animate (speaking zoom). Track the reserved frame
+    // immediately so the fixed canvas stays aligned; lean-in is a separate scale.
+    const duration = reduced || !hasFrame.current || !changedScreen ? 0 : motion.scene;
     frame.value = withTiming(bounds, { duration, easing: motion.ease });
     home.value = withTiming(next === 'home' ? 1 : 0, { duration, easing: motion.ease });
     if (flight) {
@@ -112,22 +114,35 @@ export const StageSlot = forwardRef<StageSlotHandle, Presentation & { owner: Own
 });
 
 /** Fixed-size render surface: travel transforms its container without resizing a future 3D canvas each frame. */
+const SPEAKING_LEAN = 0.1;
+const SPEAKING_LIFT = 12;
+
 export function SharedStageLayer() {
   const pathname = usePathname();
   const { frame, home, homeViewport, presentation } = useSharedStage();
   const { width: windowWidth, height } = useWindowDimensions();
   const reduced = useReducedMotion();
+  const lean = useSharedValue(0);
+  const speaking = presentation?.mode === 'speaking' && !reduced && !presentation.reducedMotion;
   const [foreground, setForeground] = useState(AppState.currentState === 'active');
   useEffect(() => {
     const subscription = AppState.addEventListener('change', state => setForeground(state === 'active'));
     return () => subscription.remove();
   }, []);
+  useEffect(() => {
+    lean.value = withTiming(speaking ? 1 : 0, {
+      duration: reduced ? 0 : speaking ? motion.scene : motion.transition,
+      easing: motion.ease,
+    });
+  }, [lean, reduced, speaking]);
   const avatar = useAnimatedStyle(() => {
     const rect = frame.value;
+    const fit = Math.min(rect.width / AVATAR_WIDTH, rect.height / AVATAR_HEIGHT);
+    const zoom = 1 - home.value;
     return { opacity: rect.width > 0 ? 1 : 0, transform: [
       { translateX: rect.x + (rect.width - AVATAR_WIDTH) / 2 },
-      { translateY: rect.y + (rect.height - AVATAR_HEIGHT) / 2 },
-      { scale: Math.min(rect.width / AVATAR_WIDTH, rect.height / AVATAR_HEIGHT) },
+      { translateY: rect.y + (rect.height - AVATAR_HEIGHT) / 2 + zoom * SPEAKING_LIFT },
+      { scale: fit * (1 + zoom * SPEAKING_LEAN) },
     ] };
   });
   const oval = useAnimatedStyle(() => {
@@ -141,7 +156,11 @@ export function SharedStageLayer() {
     };
   });
   const homeLoop = useAnimatedProps(() => ({ d: loopPath(frame.value, home.value, windowWidth), opacity: frame.value.width > 0 ? home.value : 0 }));
-  const conversationLoop = useAnimatedProps(() => ({ d: loopPath(frame.value, home.value, windowWidth), opacity: frame.value.width > 0 ? 1 - home.value : 0 }));
+  const conversationLoop = useAnimatedProps(() => ({
+    d: loopPath(frame.value, home.value, windowWidth),
+    opacity: frame.value.width > 0 ? 1 - home.value : 0,
+    strokeWidth: 2.5 + lean.value * 1.5,
+  }));
   // Match Home's scroll viewport so the floating stage never covers its header or Start button.
   const clip = useAnimatedStyle(() => ({
     top: home.value * homeViewport.value.top,
@@ -158,7 +177,7 @@ export function SharedStageLayer() {
     </Animated.View>
     <Svg width={windowWidth} height={height} style={StyleSheet.absoluteFill} accessible={false}>
       <AnimatedPath animatedProps={homeLoop} fill="none" stroke={tokens.color.paper} strokeWidth={3.5} strokeLinecap="round" />
-      <AnimatedPath animatedProps={conversationLoop} fill="none" stroke={tokens.color.coral} strokeWidth={2.5} strokeLinecap="round" />
+      <AnimatedPath animatedProps={conversationLoop} fill="none" stroke={tokens.color.coral} strokeLinecap="round" />
     </Svg>
     </Animated.View>
   </Animated.View>;
