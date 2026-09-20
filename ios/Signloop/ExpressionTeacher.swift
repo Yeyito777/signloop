@@ -3,6 +3,19 @@ import Foundation
 /// A temporary training session, separate from the installed runtime profile.
 /// Two teaching takes plus a fresh validation take for each of six labels.
 struct ExpressionTeacher {
+    enum Status: String {
+        case needsExamples = "Teaching incomplete"
+        case needsRetake = "Teaching needs a retake"
+        case retryCapture = "Take needs a retry"
+        case checksBlocked = "Check waiting for teaching"
+        case checkPending = "Check not run yet"
+        case checkFailed = "Check failed"
+        case passed = "Check passed"
+    }
+    struct Failure {
+        let status: Status
+        let reason: String
+    }
     struct Step: Equatable {
         var label: TaughtExpressionLabel
         var take: Int
@@ -19,6 +32,7 @@ struct ExpressionTeacher {
     }
     private(set) var examples: [TaughtExpressionLabel: [ExpressionExample]] = [:]
     private(set) var validation: [TaughtExpressionLabel: ExpressionValidation] = [:]
+    private(set) var failures: [TaughtExpressionLabel: Failure] = [:]
     private(set) var capture: Capture?
     private(set) var message = "Teach your relaxed face and five expressions once. Your existing demo profile stays active until you save the replacement."
     private(set) var candidate: TaughtExpressionProfile?
@@ -41,20 +55,35 @@ struct ExpressionTeacher {
         return nil
     }
     var completedSteps: Int { examples.values.reduce(0) { $0+$1.count } + validation.count }
+    var teachingTakeCount: Int { examples.values.reduce(0) { $0+$1.count } }
+    var attentionLabels: [TaughtExpressionLabel] { TaughtExpressionLabel.allCases.filter { failures[$0] != nil } }
+    func status(for label: TaughtExpressionLabel) -> Status {
+        if let failure = failures[label] { return failure.status }
+        if validation[label] != nil { return .passed }
+        if examples[label, default: []].count < 2 { return .needsExamples }
+        return model == nil ? .checksBlocked : .checkPending
+    }
+    private mutating func fail(_ reason: String, labels: [TaughtExpressionLabel], status: Status) {
+        message = reason
+        for label in labels { failures[label] = Failure(status: status, reason: reason) }
+    }
     mutating func startCapture() {
         guard readyForCapture, let nextStep, capture == nil else { return }
         capture = Capture(step: nextStep)
         message = "Get ready, then hold your expression steady for two seconds."
     }
     mutating func interrupt() {
-        if capture != nil { message = "Capture interrupted. Completed takes are kept; try this take again." }
+        if let capture {
+            fail("\(capture.step.label.title) capture interrupted. Completed takes are kept; try this take again.",
+                 labels: [capture.step.label], status: .retryCapture)
+        }
         capture = nil; latest = nil; lastMS = nil; readyForCapture = false
     }
     mutating func retake(_ label: TaughtExpressionLabel) {
         guard capture == nil else { return }
         // Neutral is the view/camera reference for every other take.
         if label == .neutral { self = Self(); return }
-        examples[label] = nil; validation = [:]; model = nil; candidate = nil
+        examples[label] = nil; validation = [:]; failures = [:]; model = nil; candidate = nil
         message = "Retake \(label.title.lowercased()). The other teaching examples are kept; all expressions will be checked again."
     }
     mutating func observe(timestampMS: Int, hasFace: Bool, observation: ExpressionObservation?) {
@@ -88,17 +117,22 @@ struct ExpressionTeacher {
     }
     private mutating func finish(_ capture: Capture) {
         let samples = capture.observations
-        guard samples.count >= 12 else { message = "Too few fresh frames. Hold still and retry this take."; return }
+        guard samples.count >= 12 else {
+            fail("Too few fresh frames. Hold still and retry this take.", labels: [capture.step.label], status: .retryCapture)
+            return
+        }
         let reference = samples[samples.count/2].pose
         guard samples.allSatisfy({ abs($0.pose.horizontal-reference.horizontal) < 0.04 && abs($0.pose.vertical-reference.vertical) < 0.04 }) else {
-            message = "Your head moved during that take. Hold it steady and retry."; return
+            fail("Your head moved during that take. Hold it steady and retry.", labels: [capture.step.label], status: .retryCapture)
+            return
         }
         let example = ExpressionExample.summarize(samples)
         if capture.step.isValidation {
             guard let model else { return }
-            let matches = samples.map { sample in
-                model.match(ExpressionCue.allCases.map { sample.values[$0]! }, jawOpening: sample.jawOpening).label == capture.step.label
+            let predicted = samples.map { sample in
+                model.match(ExpressionCue.allCases.map { sample.values[$0]! }, jawOpening: sample.jawOpening).label
             }
+            let matches = predicted.map { $0 == capture.step.label }
             let accepted = matches.filter { $0 }.count
             var since: Int?, longestHold = 0
             for (index, matchesLabel) in matches.enumerated() {
@@ -109,18 +143,34 @@ struct ExpressionTeacher {
             }
             guard longestHold >= 300, Double(accepted)/Double(samples.count) >= 0.8,
                   model.match(example.center, jawOpening: example.jawOpening).label == capture.step.label else {
-                message = "That repeat did not consistently match \(capture.step.label.title.lowercased()). Try again, or retake its teaching examples below."; return
+                let other = TaughtExpressionLabel.allCases.filter { $0 != capture.step.label }
+                    .map { label in (label, predicted.filter { $0 == label }.count) }.max { $0.1 < $1.1 }
+                let reason: String
+                if let other, other.1 > accepted {
+                    reason = "This check matched \(other.0.title.lowercased()) more often than \(capture.step.label.title.lowercased())."
+                } else {
+                    reason = "This check did not consistently hold \(capture.step.label.title.lowercased())."
+                }
+                fail("\(reason) Retry the check, or retake this expression's teaching examples.",
+                     labels: [capture.step.label], status: .checkFailed)
+                return
             }
             validation[capture.step.label] = ExpressionValidation(example: example, accepted: accepted, total: samples.count, longestHoldMS: longestHold)
+            failures[capture.step.label] = nil
         } else {
             examples[capture.step.label, default: []].append(example)
+            failures[capture.step.label] = nil
             if camera == nil { camera = samples[0].camera; pose = reference }
             if examples.values.reduce(0, { $0+$1.count }) == 12 {
-                do { model = try TaughtExpressionModel(examples: examples) }
-                catch { message = error.localizedDescription; return }
+                do { model = try TaughtExpressionModel(examples: examples); failures = [:] }
+                catch {
+                    let labels = (error as? ExpressionTeachingError)?.affectedLabels ?? []
+                    fail(error.localizedDescription, labels: labels, status: .needsRetake)
+                    return
+                }
             }
         }
-        message = capture.step.isValidation ? "Check passed. Relax before the next expression." : "Example saved in this setup. Relax before the next take."
+        message = capture.step.isValidation ? "\(capture.step.label.title) check passed. Relax before the next expression." : "\(capture.step.label.title) example saved. Relax before the next take."
         if validation.count == 6, let camera, let pose {
             let completed = TaughtExpressionProfile(id: UUID().uuidString, createdAt: Date(), camera: camera,
                                                    pose: pose, examples: examples, validation: validation)

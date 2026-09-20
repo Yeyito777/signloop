@@ -127,8 +127,15 @@ final class SingleScreenUITests: XCTestCase {
         XCTAssertTrue(capture.exists)
         XCTAssertFalse(capture.isEnabled)
         XCTAssertFalse(app.buttons["expression-save-profile"].exists)
+        XCTAssertEqual(app.staticTexts["expression-teaching-breakdown"].label, "0/12 teaching captures · 0/6 checks passed")
+        for label in ["neutral", "joy", "anger", "fear", "sadness", "disgust"] {
+            let status = app.staticTexts["expression-status-\(label)"]
+            reveal(status)
+            XCTAssertTrue(status.label.contains("Teaching incomplete"))
+        }
+        XCTAssertFalse(app.staticTexts["expression-teaching-attention"].exists)
         let screenshot = XCTAttachment(screenshot: app.screenshot())
-        screenshot.name = "Expression teaching — relaxed-face take"
+        screenshot.name = "Expression teaching — six-expression checklist"
         screenshot.lifetime = .keepAlways
         add(screenshot)
         app.buttons["Done"].tap()

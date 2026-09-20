@@ -18,6 +18,7 @@ enum TaughtExpressionLabel: String, CaseIterable, Codable, Identifiable {
 
 struct ExpressionTeachingError: LocalizedError {
     let message: String
+    var affectedLabels: [TaughtExpressionLabel] = []
     var errorDescription: String? { message }
 }
 
@@ -149,7 +150,7 @@ struct TaughtExpressionModel {
         if measurement.usesNose {
             let minimumChange = max(neutralNoise[4], examples[.disgust]!.map { $0.spread[4]*3 }.max()!)
             guard examples[.disgust]!.allSatisfy({ $0.center[4]-neutral[4] > minimumChange }) else {
-                throw ExpressionTeachingError(message: "The nose scrunch did not show enough repeatable nose movement. Retake disgust with your head steady and scrunch your nose; lifting your lip alone won't pass this check.")
+                throw ExpressionTeachingError(message: "The nose scrunch did not show enough repeatable nose movement. Retake disgust with your head steady and scrunch your nose; lifting your lip alone won't pass this check.", affectedLabels: [.disgust])
             }
         }
         var smileGate: Double?, jawMinimum: Double?, neutralJaw: Double?, jawSignalMinimum: Double?
@@ -157,20 +158,20 @@ struct TaughtExpressionModel {
             let restingJaw = examples[.neutral]!.map { $0.jawOpening! }.reduce(0,+)/2
             let jawNoise = examples[.neutral]!.map { $0.jawSpread!*3 + abs($0.jawOpening!-restingJaw) }.max()!
             guard examples[.fear]!.allSatisfy({ $0.jawOpening!-$0.jawSpread!*3-restingJaw > max(0.08,jawNoise) }) else {
-                throw ExpressionTeachingError(message: "The jaw signal did not change enough from your relaxed face. Retake fear by lowering your jaw, not just parting your lips.")
+                throw ExpressionTeachingError(message: "The jaw signal did not change enough from your relaxed face. Retake fear by lowering your jaw, not just parting your lips.", affectedLabels: [.fear])
             }
             neutralJaw = restingJaw; jawSignalMinimum = max(0.06,jawNoise)
             let smileChange = examples[.joy]!.map { $0.center[0]-$0.spread[0]*3-neutral[0] }.min()!
             guard smileChange > neutralNoise[0]*2 else {
-                throw ExpressionTeachingError(message: "The smile needs a clearer, repeatable difference from your relaxed mouth so it can block fear. Retake joy with your usual smile.")
+                throw ExpressionTeachingError(message: "The smile needs a clearer, repeatable difference from your relaxed mouth so it can block fear. Retake joy with your usual smile.", affectedLabels: [.joy])
             }
             let gate = neutral[0] + max(neutralNoise[0], smileChange*0.20)
             guard examples[.fear]!.allSatisfy({ $0.center[0]+$0.spread[0]*3 < gate }) else {
-                throw ExpressionTeachingError(message: "Your fear examples include a smile. Retake fear by dropping your jaw with the mouth corners relaxed; a smile always blocks fear.")
+                throw ExpressionTeachingError(message: "Your fear examples include a smile. Retake fear by dropping your jaw with the mouth corners relaxed; a smile always blocks fear.", affectedLabels: [.fear])
             }
             let minimum = max(0.03, neutralNoise[2])
             guard examples[.fear]!.allSatisfy({ $0.center[2]-$0.spread[2]*3-neutral[2] > max(0.04, minimum) }) else {
-                throw ExpressionTeachingError(message: "The fear examples need a visible jaw drop beyond your relaxed mouth. Retake fear by lowering your jaw, without smiling or just parting your lips.")
+                throw ExpressionTeachingError(message: "The fear examples need a visible jaw drop beyond your relaxed mouth. Retake fear by lowering your jaw, without smiling or just parting your lips.", affectedLabels: [.fear])
             }
             smileGate = gate; jawMinimum = minimum
         }
@@ -198,16 +199,16 @@ struct TaughtExpressionModel {
                 (candidate, own.flatMap { a in examples[candidate]!.map { distance(a.center,$0.center) } }.min()!)
             }.min { $0.1 < $1.1 }!
             guard closest.1 >= 0.18 else {
-                throw ExpressionTeachingError(message: "\(label.title) and \(closest.0.title.lowercased()) look too similar in the measured signals. Retake one with a clearer, repeatable difference.")
+                throw ExpressionTeachingError(message: "\(label.title) and \(closest.0.title.lowercased()) look too similar in the measured signals. Retake one with a clearer, repeatable difference.", affectedLabels: [label, closest.0])
             }
             let repeatDistance = distance(own[0].center,own[1].center)
             guard repeatDistance < closest.1 * 0.75 else {
-                throw ExpressionTeachingError(message: "The two \(label.title.lowercased()) examples differ too much. Retake them using the same comfortable expression.")
+                throw ExpressionTeachingError(message: "The two \(label.title.lowercased()) examples differ too much. Retake them using the same comfortable expression.", affectedLabels: [label])
             }
             let jitter = own.map { distance($0.spread, Array(repeating: 0, count: 5)) }.max()!
             let radius = min(0.45, closest.1 * 0.42)
             guard jitter * 2 < radius else {
-                throw ExpressionTeachingError(message: "\(label.title) moved too much during capture. Retake it while holding your expression and head steady.")
+                throw ExpressionTeachingError(message: "\(label.title) moved too much during capture. Retake it while holding your expression and head steady.", affectedLabels: [label])
             }
             radii[label] = radius
         }

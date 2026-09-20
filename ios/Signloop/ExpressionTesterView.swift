@@ -140,6 +140,16 @@ struct ExpressionTesterView: View {
                 Text("Teach my expressions").font(.headline)
                 ProgressView(value: Double(teacher.completedSteps), total: 18)
                 Text("\(teacher.completedSteps) of 18 takes complete").font(.caption).accessibilityIdentifier("expression-teaching-progress")
+                Text("\(teacher.teachingTakeCount)/12 teaching captures · \(teacher.validation.count)/6 checks passed")
+                    .font(.subheadline).accessibilityIdentifier("expression-teaching-breakdown")
+                if !teacher.attentionLabels.isEmpty {
+                    Label("Needs attention: \(teacher.attentionLabels.map(\.title).joined(separator: ", "))", systemImage: "exclamationmark.triangle")
+                        .font(.subheadline.bold()).foregroundStyle(.orange)
+                        .accessibilityIdentifier("expression-teaching-attention")
+                } else if teacher.teachingTakeCount == 12 && teacher.validation.count < 6 {
+                    Text("Teaching captures are saved. Now repeat each expression once to check it.")
+                        .font(.subheadline)
+                }
                 if let step = teacher.nextStep {
                     Text(step.title).font(.title3.bold()).accessibilityIdentifier("expression-teaching-step")
                     Text(step.label.instruction).font(.subheadline)
@@ -148,7 +158,7 @@ struct ExpressionTesterView: View {
                         Text(capture.preparing ? "Get ready…" : "Hold steady…").font(.headline)
                         ProgressView(value: capture.progress)
                     } else {
-                        Button("Capture this expression · 3 s") { self.teacher?.startCapture() }
+                        Button(step.isValidation ? "\(teacher.failures[step.label] == nil ? "Check" : "Retry check for") \(step.label.title.lowercased()) · 3 s" : "Capture this expression · 3 s") { self.teacher?.startCapture() }
                             .buttonStyle(.borderedProminent).disabled(!teacher.readyForCapture || paused)
                             .accessibilityIdentifier("expression-capture")
                     }
@@ -161,18 +171,52 @@ struct ExpressionTesterView: View {
                     }.buttonStyle(.borderedProminent).accessibilityIdentifier("expression-save-profile")
                     if !transferMessage.isEmpty { Text(transferMessage).font(.caption) }
                 }
-                DisclosureGroup("Retake an expression") {
-                    ForEach(TaughtExpressionLabel.allCases) { label in
-                        Button("Retake \(label.title.lowercased())") { self.teacher?.retake(label) }
-                            .frame(minHeight: 44).disabled(teacher.capture != nil)
-                    }
-                }
+                teachingChecklist(teacher)
                 Button("Cancel setup") { self.teacher = nil }
                     .accessibilityIdentifier("expression-cancel-teaching")
                 Text("Your installed profile is kept until all checks pass and you save this replacement.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }.card()
+    }
+
+    private func teachingChecklist(_ teacher: ExpressionTeacher) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Expression checklist").font(.headline)
+            Text("Each expression needs two teaching captures and one passed check. Captured does not mean checked.")
+                .font(.caption).foregroundStyle(.secondary)
+            ForEach(TaughtExpressionLabel.allCases) { label in
+                let status = teacher.status(for: label)
+                let failure = teacher.failures[label]
+                let count = teacher.examples[label, default: []].count
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(label.title).font(.subheadline.bold())
+                    Text("Teaching: \(count)/2 captured").font(.caption)
+                    Label(status.rawValue, systemImage: status == .passed ? "checkmark.circle.fill" : failure != nil ? "exclamationmark.triangle" : "clock")
+                        .font(.subheadline)
+                        .foregroundStyle(status == .passed ? accent : failure != nil ? .orange : .secondary)
+                        .accessibilityIdentifier("expression-status-\(label.rawValue)")
+                    if let failure {
+                        Text(failure.reason).font(.caption)
+                            .accessibilityIdentifier("expression-issue-\(label.rawValue)")
+                    }
+                    if teacher.nextStep?.label == label {
+                        Text(teacher.capture == nil ? "Up next" : "Capturing now…")
+                            .font(.caption.bold()).foregroundStyle(accent)
+                    }
+                    if count > 0 {
+                        Button(label == .neutral ? "Retake relaxed face · restart setup" : "Retake \(label.title.lowercased())") {
+                            self.teacher?.retake(label)
+                        }.buttonStyle(.bordered).frame(minHeight: 44)
+                            .disabled(teacher.capture != nil)
+                            .accessibilityIdentifier("expression-retake-\(label.rawValue)")
+                    }
+                }.frame(maxWidth: .infinity, alignment: .leading)
+                if label != TaughtExpressionLabel.allCases.last { Divider() }
+            }
+            Text("Retaking an expression keeps the other teaching captures, but all six checks must be repeated. Retaking your relaxed face restarts the whole setup.")
+                .font(.caption).foregroundStyle(.secondary)
+        }.accessibilityIdentifier("expression-checklist")
     }
 
     private var movementFeedback: some View {

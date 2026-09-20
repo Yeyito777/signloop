@@ -6,7 +6,7 @@ saved brow/eye/mouth measurements and stays fixed during normal use.
 
 ## On the training phone
 
-1. Install the **Signloop** scheme through Xcode. Build 15's Expression lab says
+1. Install the **HonkAndTell** scheme through Xcode. Build 16's Expression lab says
    **Teach my expressions**; it no longer uses activation sliders as its primary
    recognizer. Merging source does not automatically reinstall a cable-built app.
 2. Tap the smile icon, then **Teach my expressions**.
@@ -20,6 +20,12 @@ saved brow/eye/mouth measurements and stays fixed during normal use.
 4. Repeat all six once more for checks. These fresh takes test the learned
    examples; they do not alter them. If signals overlap or a take is inconsistent,
    the lab explains what to retake. Neutral changes require a new full setup.
+   The checklist shows each expression's captured takes, whether its check has
+   passed, and any failure reason with a direct retake button. **12/18** means
+   all teaching captures are saved, with no fresh checks passed yet. If teaching
+   is blocked, **Needs attention** names the expression(s) to retake; otherwise,
+   continue with the **Check relaxed face** button. Checks that have not run are
+   explicitly marked as pending rather than failed.
 5. Tap **Use this profile for the demo**. The complete checked profile saves
    atomically and becomes active immediately. It loads automatically after the
    app restarts. Closing the lab keeps recognition running on the camera screen.
@@ -88,7 +94,7 @@ The **Demo** configuration:
 - Continues to classify against that profile on every fresh frame, including
   after restart or reinstall. Live camera frames never update it.
 
-The ordinary Signloop training build loads its explicitly saved local profile.
+The ordinary HonkAndTell training build loads its explicitly saved local profile.
 Export/import and teaching controls stay in Expression lab. No images or video
 are stored. The export contains numeric feature summaries, variation, camera/view
 reference, a profile ID/date and validation summaries. The app never uploads it;
