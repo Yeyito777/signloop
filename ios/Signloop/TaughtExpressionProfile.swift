@@ -14,6 +14,16 @@ enum TaughtExpressionLabel: String, CaseIterable, Codable, Identifiable {
         case .disgust: return "Scrunch your nose as if something smells bad. Keep your head steady and your mouth relaxed; hold the same comfortable scrunch each time."
         }
     }
+    var checkInstruction: String {
+        switch self {
+        case .neutral: return "Return to the same relaxed face you taught: relax your brows, mouth and jaw."
+        case .joy: return "Repeat the same comfortable smile you taught for joy."
+        case .anger: return "Repeat your taught angry face: lower and furrow your brows in the same way."
+        case .fear: return "Repeat your taught jaw drop. Open your mouth with the corners relaxed, without smiling; keep your eyes natural."
+        case .sadness: return "Repeat the same sad face you taught, with the same brow and mouth position."
+        case .disgust: return "Repeat your taught nose scrunch. Keep your mouth relaxed and your head steady."
+        }
+    }
 }
 
 struct ExpressionTeachingError: LocalizedError {

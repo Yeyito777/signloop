@@ -3,16 +3,21 @@ import Foundation
 /// A temporary training session, separate from the installed runtime profile.
 /// Two teaching takes plus a fresh validation take for each of six labels.
 struct ExpressionTeacher {
-    enum Status: String {
-        case needsExamples = "Teaching incomplete"
-        case needsRetake = "Teaching needs a retake"
-        case retryCapture = "Take needs a retry"
-        case checksBlocked = "Check waiting for teaching"
-        case checkPending = "Check not run yet"
-        case checkFailed = "Check failed"
-        case passed = "Check passed"
+    enum Status: String, Codable {
+        case needsExamples, needsRetake, retryCapture, checksBlocked, checkPending, checkFailed, passed
+        var title: String {
+            switch self {
+            case .needsExamples: return "Teaching incomplete"
+            case .needsRetake: return "Teaching needs a retake"
+            case .retryCapture: return "Take needs a retry"
+            case .checksBlocked: return "Check waiting for teaching"
+            case .checkPending: return "Check not run yet"
+            case .checkFailed: return "Check failed"
+            case .passed: return "Check passed"
+            }
+        }
     }
-    struct Failure {
+    struct Failure: Codable {
         let status: Status
         let reason: String
     }
@@ -20,7 +25,10 @@ struct ExpressionTeacher {
         var label: TaughtExpressionLabel
         var take: Int
         var isValidation: Bool
-        var title: String { isValidation ? "Check \(label.title.lowercased())" : "Teach \(label.title.lowercased()) · take \(take) of 2" }
+        var checkNumber: Int { TaughtExpressionLabel.allCases.firstIndex(of: label)! + 1 }
+        var title: String { isValidation ? "Check \(checkNumber) of 6: \(label.title)" : "Teach \(label.title.lowercased()) · take \(take) of 2" }
+        var instruction: String { isValidation ? label.checkInstruction : label.instruction }
+        var timingInstruction: String { "Tap to start. Get ready for 1 second, then hold still for 2 seconds. Relax when the take finishes." }
     }
     struct Capture {
         let step: Step
@@ -37,12 +45,86 @@ struct ExpressionTeacher {
     private(set) var message = "Teach your relaxed face and five expressions once. Your existing demo profile stays active until you save the replacement."
     private(set) var candidate: TaughtExpressionProfile?
     private(set) var readyForCapture = false
+    private(set) var readinessInstruction = "Look straight at the camera with your whole face visible."
     private(set) var model: TaughtExpressionModel?
     private var camera: String?
     private var pose: ExpressionPose?
     private var latest: ExpressionObservation?
     var observation: ExpressionObservation? { latest }
     private var lastMS: Int?
+
+    /// Portable progress, deliberately distinct from an installable checked profile.
+    /// Only completed numeric takes are exported, never live frames or camera images.
+    struct SetupExport: Codable {
+        var format = "honk-and-tell-expression-setup"
+        var version = 1
+        var measurementVersion = ExpressionMeasurement.current.rawValue
+        var exportedAt = Date()
+        var camera: String?
+        var pose: ExpressionPose?
+        var examples: [TaughtExpressionLabel: [ExpressionExample]]
+        var validation: [TaughtExpressionLabel: ExpressionValidation]
+        var failures: [TaughtExpressionLabel: Failure]
+    }
+    func exportSetup() throws -> Data {
+        let snapshot = SetupExport(camera: camera, pose: pose, examples: examples, validation: validation, failures: failures)
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try encoder.encode(snapshot)
+    }
+    static func isSetupExport(_ data: Data) -> Bool {
+        struct Header: Decodable { var format: String? }
+        return (try? JSONDecoder().decode(Header.self, from: data).format) == "honk-and-tell-expression-setup"
+    }
+    static func restoreSetup(_ data: Data) throws -> Self {
+        guard data.count <= 262_144 else { throw ExpressionTeachingError(message: "Setup file is too large.") }
+        let saved = try JSONDecoder().decode(SetupExport.self, from: data)
+        guard saved.format == "honk-and-tell-expression-setup", saved.version == 1,
+              saved.measurementVersion == ExpressionMeasurement.current.rawValue,
+              saved.exportedAt.timeIntervalSince1970.isFinite,
+              saved.examples.values.allSatisfy({ takes in
+                  (1...2).contains(takes.count) && takes.allSatisfy { example in
+                      example.isValid && example.jawOpening != nil &&
+                      zip(ExpressionCue.allCases, example.center).allSatisfy { ExpressionMeasurement.current.bounds(for: $0).contains($1) }
+                  }
+              }),
+              saved.failures.allSatisfy({ label, failure in
+                  [.needsRetake, .retryCapture, .checkFailed].contains(failure.status) &&
+                  !failure.reason.isEmpty && failure.reason.count <= 2_000 && saved.validation[label] == nil
+              }) else { throw ExpressionTeachingError(message: "This setup file is incomplete, invalid, or uses older measurements. Your current setup is unchanged.") }
+        if saved.examples.isEmpty {
+            guard saved.camera == nil, saved.pose == nil, saved.validation.isEmpty else {
+                throw ExpressionTeachingError(message: "Empty setup has unexpected saved references.")
+            }
+        } else {
+            guard saved.examples[.neutral] != nil, ["front", "back"].contains(saved.camera ?? ""), saved.pose?.isValid == true else {
+                throw ExpressionTeachingError(message: "This setup is missing its relaxed-face camera reference.")
+            }
+        }
+        var restored = Self()
+        restored.examples = saved.examples; restored.camera = saved.camera; restored.pose = saved.pose
+        restored.failures = saved.failures
+        if restored.teachingTakeCount == 12 {
+            do { restored.model = try TaughtExpressionModel(examples: restored.examples) }
+            catch {
+                restored.fail(error.localizedDescription, labels: (error as? ExpressionTeachingError)?.affectedLabels ?? [], status: .needsRetake)
+            }
+        }
+        for (label, check) in saved.validation {
+            guard let model = restored.model, check.isValid,
+                  model.match(check.example.center, jawOpening: check.example.jawOpening).label == label else {
+                throw ExpressionTeachingError(message: "The saved \(label.title.lowercased()) check does not match this setup. Your current setup is unchanged.")
+            }
+        }
+        restored.validation = saved.validation
+        if restored.validation.count == 6, let camera = restored.camera, let pose = restored.pose {
+            let profile = TaughtExpressionProfile(id: UUID().uuidString, createdAt: Date(), camera: camera,
+                pose: pose, examples: restored.examples, validation: restored.validation)
+            _ = try profile.validatedModel()
+            restored.candidate = profile
+        }
+        restored.message = "Setup restored: \(restored.teachingTakeCount)/12 teaching captures and \(restored.validation.count)/6 checks passed. Follow the next step below."
+        return restored
+    }
 
     var nextStep: Step? {
         for label in TaughtExpressionLabel.allCases where examples[label, default: []].count < 2 {
@@ -78,6 +160,7 @@ struct ExpressionTeacher {
                  labels: [capture.step.label], status: .retryCapture)
         }
         capture = nil; latest = nil; lastMS = nil; readyForCapture = false
+        readinessInstruction = "Look straight at the camera with your whole face visible."
     }
     mutating func retake(_ label: TaughtExpressionLabel) {
         guard capture == nil else { return }
@@ -94,10 +177,12 @@ struct ExpressionTeacher {
         if let lastMS, Double(timestampMS)-Double(lastMS) > 400 { interrupt() }
         lastMS = timestampMS; latest = observation
         if let camera, camera != observation.camera {
-            interrupt(); message = "Switch back to the camera used for your relaxed face."; return
+            interrupt(); message = "Switch back to the camera used for your relaxed face."
+            readinessInstruction = message; return
         }
         if let pose, !observation.pose.isNear(pose) {
-            interrupt(); message = "Face the camera at the angle used for your relaxed face."; return
+            interrupt(); message = "Face the camera at the angle used for your relaxed face."
+            readinessInstruction = message; return
         }
         readyForCapture = true
         guard var capture else { return }

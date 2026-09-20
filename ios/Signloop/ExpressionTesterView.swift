@@ -7,7 +7,8 @@ struct ExpressionProfileDocument: FileDocument {
     init(data: Data) { self.data = data }
     init(configuration: ReadConfiguration) throws {
         guard let data = configuration.file.regularFileContents else { throw CocoaError(.fileReadCorruptFile) }
-        _ = try TaughtExpressionStore.decode(data)
+        if ExpressionTeacher.isSetupExport(data) { _ = try ExpressionTeacher.restoreSetup(data) }
+        else { _ = try TaughtExpressionStore.decode(data) }
         self.data = data
     }
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
@@ -25,6 +26,8 @@ struct ExpressionTesterView: View {
     @State private var showExport = false
     @State private var showImport = false
     @State private var exportDocument: ExpressionProfileDocument?
+    @State private var exportFilename = "ExpressionSetupProgress"
+    @State private var exportCompletionMessage = ""
     @State private var transferMessage = ""
     private let accent = Color(red: 0.78, green: 0.91, blue: 0.62)
 
@@ -33,6 +36,10 @@ struct ExpressionTesterView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     preview
+                    if !transferMessage.isEmpty {
+                        Text(transferMessage).font(.subheadline)
+                            .accessibilityIdentifier("expression-transfer-message")
+                    }
                     VStack(alignment: .leading, spacing: 8) {
                         Text("LIVE EXPRESSION").font(.caption.weight(.semibold)).foregroundStyle(accent)
                         Text(runtime.result.title).font(.title2.bold()).accessibilityIdentifier("expression-result")
@@ -40,6 +47,9 @@ struct ExpressionTesterView: View {
                             .font(.subheadline).foregroundStyle(.secondary)
                     }.card()
                     if teacher != nil { teaching } else { profile }
+                    Button("Import profile or setup progress") {
+                        teacher?.interrupt(); showImport = true
+                    }.accessibilityIdentifier("expression-import")
                     movementFeedback
                     Text("These are labels for the expressions you teach, not a reading of your feelings or ASL meaning. Images and video are never saved or uploaded. The profile contains only numeric examples and check results.")
                         .font(.footnote).foregroundStyle(.secondary)
@@ -47,9 +57,29 @@ struct ExpressionTesterView: View {
                         .font(.caption2).foregroundStyle(.secondary).accessibilityIdentifier("expression-build")
                 }.padding(20)
             }
+            .safeAreaInset(edge: .bottom, spacing: 0) { nextActionPanel }
             .background(Color(red: 0.05, green: 0.07, blue: 0.06))
             .navigationTitle("Expression lab").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.frame(minHeight: 44) } }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Menu {
+                        if teacher != nil || runtime.profile == nil {
+                            Button("Export setup progress") { exportSetup() }
+                                .accessibilityIdentifier("expression-export-setup")
+                        }
+                        if let candidate = teacher?.candidate {
+                            Button("Export checked demo profile") { exportProfile(candidate) }
+                                .accessibilityIdentifier("expression-export-checked")
+                        }
+                        if let saved = runtime.profile {
+                            Button("Export saved demo profile") { exportProfile(saved) }
+                                .accessibilityIdentifier("expression-export-saved")
+                        }
+                    } label: { Text("Export") }
+                    .accessibilityIdentifier("expression-export")
+                }
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.frame(minHeight: 44) }
+            }
         }
         .preferredColorScheme(.dark).tint(accent)
         .onReceive(tracker.$skeleton) { frame in
@@ -59,9 +89,9 @@ struct ExpressionTesterView: View {
         }
         .onDisappear { teacher?.interrupt() }
         .fileExporter(isPresented: $showExport, document: exportDocument, contentType: .json,
-                      defaultFilename: "DemoExpressionProfile") { result in
+                      defaultFilename: exportFilename) { result in
             switch result {
-            case .success: transferMessage = "Profile exported. It can now be bundled into the demo build."
+            case .success: transferMessage = exportCompletionMessage
             case .failure(let error): transferMessage = error.localizedDescription
             }
         }
@@ -70,11 +100,104 @@ struct ExpressionTesterView: View {
                 let url = try result.get()
                 let access = url.startAccessingSecurityScopedResource()
                 defer { if access { url.stopAccessingSecurityScopedResource() } }
-                let profile = try TaughtExpressionStore.read(url)
-                try runtime.install(profile)
-                transferMessage = "Demo profile imported and saved on this phone."
-            } catch { transferMessage = "Import failed: \(error.localizedDescription) Your previous profile is unchanged." }
+                let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? Int.max
+                guard size <= 262_144 else { throw ExpressionTeachingError(message: "Expression file is too large.") }
+                let data = try Data(contentsOf: url)
+                if ExpressionTeacher.isSetupExport(data) {
+                    let restored = try ExpressionTeacher.restoreSetup(data)
+                    teacher = restored
+                    transferMessage = "Setup progress restored. Your saved demo profile stays active until you finish and save this setup."
+                } else {
+                    try runtime.install(TaughtExpressionStore.decode(data))
+                    teacher = nil
+                    transferMessage = "Demo profile imported and saved on this phone."
+                }
+            } catch { transferMessage = "Import failed: \(error.localizedDescription) Your current setup and saved profile are kept." }
         }
+    }
+
+    private func exportSetup() {
+        teacher?.interrupt()
+        do {
+            exportDocument = ExpressionProfileDocument(data: try (teacher ?? ExpressionTeacher()).exportSetup())
+            exportFilename = "ExpressionSetupProgress"
+            exportCompletionMessage = "Setup progress exported. Import this file to continue from your completed takes and checks."
+            showExport = true
+        } catch { transferMessage = "Export failed: \(error.localizedDescription)" }
+    }
+
+    private func exportProfile(_ profile: TaughtExpressionProfile) {
+        teacher?.interrupt()
+        do {
+            exportDocument = ExpressionProfileDocument(data: try TaughtExpressionStore.encode(profile))
+            exportFilename = "DemoExpressionProfile"
+            exportCompletionMessage = "Checked demo profile exported. It can be imported on another phone or bundled into the demo build."
+            showExport = true
+        } catch { transferMessage = "Export failed: \(error.localizedDescription)" }
+    }
+
+    private func saveProfile(_ profile: TaughtExpressionProfile) {
+        do {
+            try runtime.install(profile); teacher = nil
+            transferMessage = "Your fixed demo profile is saved. Export the saved demo profile from the toolbar to back it up."
+        } catch { transferMessage = "Couldn't save: \(error.localizedDescription). Your previous profile is kept." }
+    }
+
+    private var nextActionPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let teacher {
+                if let candidate = teacher.candidate {
+                    Text("Next: save your checked profile").font(.headline).accessibilityIdentifier("expression-next-step")
+                    Text("All six checks passed. Save to activate it, or export the checked profile from the toolbar.").font(.caption)
+                    Button("Use this profile for the demo") { saveProfile(candidate) }
+                        .buttonStyle(.borderedProminent).accessibilityIdentifier("expression-save-profile")
+                } else if let step = teacher.nextStep {
+                    Text("Next: \(step.title)").font(.headline).accessibilityIdentifier("expression-next-step")
+                    Text(step.instruction).font(.caption)
+                    if let capture = teacher.capture {
+                        Text(capture.preparing ? "Get ready — make the expression now." : "Hold it steady until the bar finishes.").font(.subheadline.bold())
+                        ProgressView(value: capture.progress)
+                    } else if paused {
+                        Text("Resume the camera to continue this take.").font(.caption)
+                        Button("Resume camera") { paused = false; tracker.start() }
+                            .buttonStyle(.borderedProminent).accessibilityIdentifier("expression-resume")
+                    } else {
+                        Text(step.timingInstruction).font(.caption).foregroundStyle(.secondary)
+                        if !teacher.readyForCapture {
+                            if tracker.permissionDenied {
+                                Button("Allow camera in Settings") { UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!) }
+                            } else if tracker.errorMessage != nil {
+                                Button("Retry camera") { tracker.start() }
+                            } else {
+                                Text("\(teacher.readinessInstruction) Capture becomes available when tracking is ready.").font(.caption)
+                            }
+                        }
+                        Button(step.isValidation ? "\(teacher.failures[step.label] == nil ? "Start" : "Retry") check \(step.checkNumber) of 6" : "Capture take \(step.take) of 2") {
+                            self.teacher?.startCapture()
+                        }.buttonStyle(.borderedProminent).disabled(!teacher.readyForCapture)
+                            .accessibilityIdentifier("expression-capture")
+                    }
+                } else if let label = teacher.attentionLabels.first(where: { $0 != .neutral }) ?? teacher.attentionLabels.first {
+                    Text("Next: retake \(label.title.lowercased())").font(.headline).accessibilityIdentifier("expression-next-step")
+                    Text("The teaching examples need a fix before the six checks can start. See the reason in the checklist.").font(.caption)
+                    Button(label == .neutral ? "Retake relaxed face · restart setup" : "Retake \(label.title.lowercased())") { self.teacher?.retake(label) }
+                        .buttonStyle(.borderedProminent).accessibilityIdentifier("expression-next-retake")
+                } else {
+                    Text("Next: review the teaching issue").font(.headline).accessibilityIdentifier("expression-next-step")
+                    Text(teacher.message).font(.caption)
+                }
+            } else {
+                Text(runtime.profile == nil ? "Next: teach your expressions" : "Next: use or export your saved profile")
+                    .font(.headline).accessibilityIdentifier("expression-next-step")
+                Text(runtime.profile == nil ? "Start with two takes of each expression, then follow the six guided checks. Export progress whenever you need to stop." : "Your profile is active. Tap Done to use it, or Export to back it up.")
+                    .font(.caption)
+                if runtime.profile == nil {
+                    Button("Teach my expressions") { teacher = ExpressionTeacher() }
+                        .buttonStyle(.borderedProminent).accessibilityIdentifier("expression-teach")
+                }
+            }
+        }.frame(maxWidth: .infinity, alignment: .leading).padding(16)
+            .background(Color(red: 0.07, green: 0.10, blue: 0.08))
     }
 
     private var preview: some View {
@@ -120,17 +243,12 @@ struct ExpressionTesterView: View {
                 Text("Teach your relaxed face and five expressions. Two takes each, then six repeat checks. Your saved profile becomes the recognizer's fixed reference.")
                     .font(.subheadline)
             }
-            Button(runtime.profile == nil ? "Teach my expressions" : runtime.needsJawDropRetake ? "Teach a jaw-drop profile" : "Teach a replacement profile") { teacher = ExpressionTeacher() }
-                .buttonStyle(.borderedProminent).accessibilityIdentifier("expression-teach")
-            Button("Export demo profile") {
-                do {
-                    guard let profile = runtime.profile else { return }
-                    exportDocument = ExpressionProfileDocument(data: try TaughtExpressionStore.encode(profile))
-                    showExport = true
-                } catch { transferMessage = error.localizedDescription }
-            }.disabled(runtime.profile == nil).accessibilityIdentifier("expression-export")
-            Button("Import demo profile") { showImport = true }.accessibilityIdentifier("expression-import")
-            if !transferMessage.isEmpty { Text(transferMessage).font(.caption).accessibilityIdentifier("expression-transfer-message") }
+            if runtime.profile != nil {
+                Button(runtime.needsJawDropRetake ? "Teach a jaw-drop profile" : "Teach a replacement profile") { teacher = ExpressionTeacher() }
+                    .buttonStyle(.borderedProminent).accessibilityIdentifier("expression-teach")
+            }
+            Text("Export setup progress at any time to continue later. A checked demo profile is available after all six checks pass.")
+                .font(.caption).foregroundStyle(.secondary)
         }.card()
     }
 
@@ -152,25 +270,13 @@ struct ExpressionTesterView: View {
                 }
                 if let step = teacher.nextStep {
                     Text(step.title).font(.title3.bold()).accessibilityIdentifier("expression-teaching-step")
-                    Text(step.label.instruction).font(.subheadline)
-                    if step.isValidation { Text("This is a fresh check. It won't change your teaching examples.").font(.caption).foregroundStyle(.secondary) }
-                    if let capture = teacher.capture {
-                        Text(capture.preparing ? "Get ready…" : "Hold steady…").font(.headline)
-                        ProgressView(value: capture.progress)
-                    } else {
-                        Button(step.isValidation ? "\(teacher.failures[step.label] == nil ? "Check" : "Retry check for") \(step.label.title.lowercased()) · 3 s" : "Capture this expression · 3 s") { self.teacher?.startCapture() }
-                            .buttonStyle(.borderedProminent).disabled(!teacher.readyForCapture || paused)
-                            .accessibilityIdentifier("expression-capture")
+                    Text(step.instruction).font(.subheadline)
+                    if step.isValidation {
+                        Text("Repeat the expression you taught, at the same camera angle. This fresh take checks recognition without changing your examples. After it passes, relax and follow the next named check below.")
+                            .font(.caption).foregroundStyle(.secondary)
                     }
                 }
                 Text(teacher.message).font(.subheadline).accessibilityIdentifier("expression-teaching-message")
-                if let candidate = teacher.candidate {
-                    Button("Use this profile for the demo") {
-                        do { try runtime.install(candidate); self.teacher = nil; transferMessage = "Your fixed demo profile is saved. Export it before moving to another build or phone." }
-                        catch { transferMessage = "Couldn't save: \(error.localizedDescription). Your old profile is unchanged." }
-                    }.buttonStyle(.borderedProminent).accessibilityIdentifier("expression-save-profile")
-                    if !transferMessage.isEmpty { Text(transferMessage).font(.caption) }
-                }
                 teachingChecklist(teacher)
                 Button("Cancel setup") { self.teacher = nil }
                     .accessibilityIdentifier("expression-cancel-teaching")
@@ -195,7 +301,7 @@ struct ExpressionTesterView: View {
                     HStack(alignment: .firstTextBaseline) {
                         Image(systemName: status == .passed ? "checkmark.circle.fill" : failure != nil ? "exclamationmark.triangle" : "clock")
                             .accessibilityHidden(true)
-                        Text(status.rawValue).accessibilityIdentifier("expression-status-\(label.rawValue)")
+                        Text(status.title).accessibilityIdentifier("expression-status-\(label.rawValue)")
                     }.font(.subheadline)
                         .foregroundStyle(status == .passed ? accent : failure != nil ? .orange : .secondary)
                     if let failure {

@@ -107,6 +107,75 @@ struct TaughtExpressionTests {
         expect(overlap.status(for: .fear) == .checksBlocked && overlap.validation.isEmpty,
                "a training conflict cannot pretend that validation ran")
     }
+    static func setupTransferChecks() throws {
+        let emptyData = try ExpressionTeacher().exportSetup()
+        expect(ExpressionTeacher.isSetupExport(emptyData), "empty setup can be exported with an explicit progress format")
+        var restored = try ExpressionTeacher.restoreSetup(emptyData)
+        expect(restored.completedSteps == 0 && restored.nextStep?.label == .neutral,
+               "empty progress imports at the first teaching take")
+        rejects("progress cannot masquerade as a checked demo profile") { _ = try TaughtExpressionStore.decode(emptyData) }
+
+        var teacher = ExpressionTeacher(), time = 0
+        take(&teacher, label: .neutral, time: &time)
+        teacher.startCapture()
+        let partial = try teacher.exportSetup()
+        restored = try ExpressionTeacher.restoreSetup(partial)
+        expect(teacher.capture != nil && restored.capture == nil && !restored.readyForCapture,
+               "export snapshots completed work without exporting or resuming an in-flight capture")
+        expect(restored.examples == teacher.examples && restored.nextStep?.take == 2,
+               "partial progress keeps completed examples and resumes the next required take")
+        expect(!String(decoding: partial, as: UTF8.self).contains("observations"), "setup exports contain no live frame history")
+        restored.startCapture()
+        expect(restored.capture == nil, "import requires a fresh tracked face before capture")
+        var rear = sample(.neutral); rear.camera = "back"
+        restored.observe(timestampMS: time+100, hasFace: true, observation: rear)
+        expect(!restored.readyForCapture && restored.readinessInstruction.contains("Switch back"),
+               "restored setup explains the camera reference required to continue")
+
+        teacher = ExpressionTeacher(); time = 0
+        for label in TaughtExpressionLabel.allCases { for _ in 0..<2 { take(&teacher, label: label, time: &time) } }
+        for (index, label) in TaughtExpressionLabel.allCases.enumerated() {
+            restored = try ExpressionTeacher.restoreSetup(teacher.exportSetup())
+            expect(restored.nextStep?.title == "Check \(index+1) of 6: \(label.title)",
+                   "each of the final six checks has a named, numbered next step")
+            expect(restored.nextStep?.instruction == label.checkInstruction && restored.nextStep!.timingInstruction.contains("2 seconds"),
+                   "each repeat check explains its expression and timing")
+            expect(restored.validation == teacher.validation && restored.examples == teacher.examples,
+                   "exports preserve completed checks without changing training")
+            take(&teacher, label: label, time: &time)
+        }
+        restored = try ExpressionTeacher.restoreSetup(teacher.exportSetup())
+        expect(restored.candidate != nil && restored.completedSteps == 18,
+               "completed progress restores a checked candidate ready to save")
+        let checkedData = try TaughtExpressionStore.encode(restored.candidate!)
+        expect(!ExpressionTeacher.isSetupExport(checkedData), "checked profile exports stay compatible with the demo bundler")
+
+        var broken = ExpressionTeacher(); time = 0
+        for label in TaughtExpressionLabel.allCases { for _ in 0..<2 { take(&broken, label: label == .fear ? .neutral : label, time: &time) } }
+        restored = try ExpressionTeacher.restoreSetup(broken.exportSetup())
+        expect(restored.completedSteps == 12 && restored.attentionLabels == [.fear] && restored.model == nil,
+               "blocked teaching exports and imports with its actionable failure intact")
+        broken.retake(.fear)
+        for _ in 0..<2 { take(&broken, label: .fear, time: &time) }
+        take(&broken, label: .joy, time: &time) // Fails the relaxed-face check.
+        restored = try ExpressionTeacher.restoreSetup(broken.exportSetup())
+        expect(restored.status(for: .neutral) == .checkFailed && restored.failures[.neutral]?.reason == broken.failures[.neutral]?.reason,
+               "failed check can be exported and resumed with its explanation")
+
+        var corrupt = try JSONDecoder().decode(ExpressionTeacher.SetupExport.self, from: partial)
+        corrupt.examples[.neutral] = Array(repeating: corrupt.examples[.neutral]![0], count: 3)
+        rejects("oversized take arrays are rejected") { _ = try ExpressionTeacher.restoreSetup(JSONEncoder().encode(corrupt)) }
+        corrupt = try JSONDecoder().decode(ExpressionTeacher.SetupExport.self, from: partial)
+        corrupt.validation[.joy] = teacher.validation[.joy]
+        rejects("a partial draft cannot claim passed checks without the trained model") { _ = try ExpressionTeacher.restoreSetup(JSONEncoder().encode(corrupt)) }
+        corrupt = try JSONDecoder().decode(ExpressionTeacher.SetupExport.self, from: partial)
+        corrupt.failures[.joy] = ExpressionTeacher.Failure(status: .passed, reason: "fake pass")
+        rejects("status text cannot forge a passed check") { _ = try ExpressionTeacher.restoreSetup(JSONEncoder().encode(corrupt)) }
+        corrupt = try JSONDecoder().decode(ExpressionTeacher.SetupExport.self, from: partial)
+        corrupt.measurementVersion = "unknown-version"
+        rejects("unsupported draft measurements are rejected") { _ = try ExpressionTeacher.restoreSetup(JSONEncoder().encode(corrupt)) }
+        rejects("oversized setup files are rejected") { _ = try ExpressionTeacher.restoreSetup(Data(repeating: 0, count: 262_145)) }
+    }
     static func sensitiveMovementChecks(_ profile: TaughtExpressionProfile) throws {
         let model = try profile.validatedModel()
         let neutral = ExpressionCue.allCases.map { sample(.neutral).values[$0]! }
@@ -157,6 +226,7 @@ struct TaughtExpressionTests {
     }
     static func main() throws {
         progressChecks()
+        try setupTransferChecks()
         let profile = taught(), model = try profile.validatedModel()
         try sensitiveMovementChecks(profile)
         for label in TaughtExpressionLabel.allCases {

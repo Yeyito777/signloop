@@ -133,6 +133,8 @@ final class SingleScreenUITests: XCTestCase {
             reveal(status)
             XCTAssertTrue(status.label.contains("Teaching incomplete"))
         }
+        XCTAssertTrue(app.staticTexts["expression-next-step"].isHittable)
+        XCTAssertTrue(app.buttons["expression-export"].isHittable)
         XCTAssertFalse(app.staticTexts["expression-teaching-attention"].exists)
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "Expression teaching — six-expression checklist"
@@ -141,19 +143,43 @@ final class SingleScreenUITests: XCTestCase {
         app.buttons["Done"].tap()
     }
 
-    func testExpressionSetupStaysInLabAndRequiresCompleteProfileForExport() {
+    func testExpressionSetupExportsProgressBeforeProfileIsReady() {
         XCTAssertTrue(app.buttons["expression-lab"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.buttons["expression-teach"].exists)
         app.buttons["expression-lab"].tap()
         let export = app.buttons["expression-export"]
-        reveal(export)
         XCTAssertTrue(export.exists)
-        XCTAssertFalse(export.isEnabled)
+        XCTAssertTrue(export.isEnabled)
+        XCTAssertTrue(export.isHittable)
+        export.tap()
+        let progressExport = app.buttons["Export setup progress"]
+        XCTAssertTrue(progressExport.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Export checked demo profile"].exists)
+        XCTAssertFalse(app.buttons["Export saved demo profile"].exists)
+        progressExport.tap()
+        let saveExport = app.buttons["Save"].firstMatch
+        XCTAssertTrue(saveExport.waitForExistence(timeout: 10))
+        saveExport.tap()
+        let transferMessage = app.staticTexts["expression-transfer-message"]
+        XCTAssertTrue(transferMessage.waitForExistence(timeout: 10))
+        XCTAssertTrue(transferMessage.label.contains("Setup progress exported"))
         let teach = app.buttons["expression-teach"]
-        // Return to the beginning so the teaching button is fully on screen.
-        app.scrollViews.firstMatch.swipeDown()
-        reveal(teach)
+        XCTAssertTrue(teach.waitForExistence(timeout: 5))
+        XCTAssertTrue(teach.isHittable)
         teach.tap()
+        XCTAssertTrue(app.staticTexts["expression-next-step"].label.contains("Teach relaxed face"))
+        XCTAssertTrue(export.isHittable)
+        export.tap()
+        XCTAssertTrue(progressExport.waitForExistence(timeout: 5))
+        progressExport.tap()
+        XCTAssertTrue(saveExport.waitForExistence(timeout: 10))
+        saveExport.tap()
+        // Both exports intentionally use the same filename on this disposable
+        // simulator. The system may ask to replace the first progress file.
+        let replace = app.buttons["Replace"].firstMatch
+        if replace.waitForExistence(timeout: 3) { replace.tap() }
+        XCTAssertTrue(transferMessage.waitForExistence(timeout: 10))
+        XCTAssertTrue(transferMessage.label.contains("Setup progress exported"))
         let cancel = app.buttons["expression-cancel-teaching"]
         reveal(cancel)
         cancel.tap()
@@ -195,6 +221,21 @@ final class SingleScreenUITests: XCTestCase {
         settings.tap()
         XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Done"].isHittable)
+        app.buttons["Done"].tap()
+    }
+
+    func testLargeTextKeepsTeachingNextStepAndExportVisible() {
+        app.terminate()
+        app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL"]
+        app.launch()
+        XCTAssertTrue(app.buttons["expression-lab"].waitForExistence(timeout: 10))
+        app.buttons["expression-lab"].tap()
+        XCTAssertTrue(app.buttons["expression-teach"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["expression-teach"].isHittable)
+        app.buttons["expression-teach"].tap()
+        XCTAssertTrue(app.staticTexts["expression-next-step"].isHittable)
+        XCTAssertTrue(app.buttons["expression-export"].isHittable)
+        XCTAssertTrue(app.buttons["expression-capture"].isHittable)
         app.buttons["Done"].tap()
     }
 }
