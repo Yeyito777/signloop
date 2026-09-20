@@ -6,7 +6,7 @@ saved brow/eye/mouth measurements and stays fixed during normal use.
 
 ## On the training phone
 
-1. Install the **HonkAndTell** scheme through Xcode. Build 17's Expression lab says
+1. Install the **HonkAndTell** scheme through Xcode. Build 20's Expression lab says
    **Teach my expressions**; it no longer uses activation sliders as its primary
    recognizer. Merging source does not automatically reinstall a cable-built app.
 2. Tap the smile icon, then **Teach my expressions**.

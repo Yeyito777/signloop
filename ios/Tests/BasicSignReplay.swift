@@ -1,0 +1,69 @@
+import Foundation
+
+@main struct BasicSignReplay {
+    struct Event: Codable {
+        let timestamp: Int
+        let label: String?
+        let distance: Float
+        let margin: Float
+        var scores: [BasicSignScore]? = nil
+    }
+    struct Row: Codable {
+        let id: String
+        let label: String
+        let split: String
+        let events: [Event]
+        let elapsedMS: Double
+    }
+    static func main() throws {
+        let args = CommandLine.arguments
+        let source = try JSONDecoder().decode(BasicReferenceBank.self, from: Data(contentsOf: URL(fileURLWithPath: args[1])))
+        let bank = try args.contains("--presentation")
+            ? source.restricted(to: BasicSignScore.presentationVocabulary) : source
+        let scale = args.first { $0.hasPrefix("--we-scale=") }.flatMap { Float($0.dropFirst("--we-scale=".count)) }
+        let matcher = try BasicSignMatcher(bank: bank, weMotionScale: scale)
+        if args.count == 4 && args[2] == "--pack" {
+            try JSONEncoder().encode(matcher.packedBank()).write(to: URL(fileURLWithPath: args[3]), options: .atomic)
+            print("Packed \(matcher.usableReferenceCount) usable private references")
+            return
+        }
+        let clips = try JSONDecoder().decode([BasicReference].self, from: Data(contentsOf: URL(fileURLWithPath: args[2])))
+        guard Set(clips.map(\.signer)).isDisjoint(with: Set(bank.references.map(\.signer))) else {
+            fatalError("Training/evaluation signer overlap")
+        }
+        var rows: [Row] = []
+        for clip in clips {
+            var frames: [SkeletonFrame] = []
+            var events: [Event] = []
+            var last = -1000
+            var observed: Int?
+            let start = Date()
+            for frame in clip.frames {
+                if let time = observed, frame.timestampMS-time > 300 {
+                    frames.removeAll()
+                    last = -1000
+                    observed = nil
+                }
+                if !frame.hands.isEmpty && frame.hasPose { observed = frame.timestampMS }
+                frames.append(frame)
+                frames.removeAll { $0.timestampMS < frame.timestampMS-2400 }
+                // The live adapter clears confirmation immediately on every
+                // hand/pose-loss frame, even between scheduled match requests.
+                if frame.hands.isEmpty || !frame.hasPose {
+                    events.append(Event(timestamp: frame.timestampMS, label: nil, distance: 999, margin: 0))
+                    continue
+                }
+                if frame.timestampMS-last < 100 { continue }
+                last = frame.timestampMS
+                let c = matcher.candidate(frames)
+                events.append(Event(timestamp: frame.timestampMS, label: c.label,
+                                    distance: c.distance, margin: c.margin,
+                                    scores: args.contains("--scores") ? c.scores : nil))
+            }
+            rows.append(Row(id: clip.id, label: clip.label, split: clip.split,
+                            events: events, elapsedMS: -start.timeIntervalSinceNow*1000))
+        }
+        try JSONEncoder().encode(rows).write(to: URL(fileURLWithPath: args[3]), options: .atomic)
+        print("Replayed \(rows.count) clips; usable training references \(matcher.usableReferenceCount)/\(bank.references.count)")
+    }
+}

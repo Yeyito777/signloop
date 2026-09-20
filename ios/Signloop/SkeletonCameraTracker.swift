@@ -28,15 +28,23 @@ final class SkeletonCameraTracker: NSObject, ObservableObject, AVCaptureVideoDat
     @Published var showFace = UserDefaults.standard.object(forKey: "skeletonFace") as? Bool ?? true {
         didSet { UserDefaults.standard.set(showFace, forKey: "skeletonFace") }
     }
+    @Published var trackFace = UserDefaults.standard.bool(forKey: "experimentalFaceTracking") {
+        didSet {
+            UserDefaults.standard.set(trackFace, forKey: "experimentalFaceTracking")
+            if wantsRunning { start() }
+        }
+    }
     @Published var showNumbers = UserDefaults.standard.bool(forKey: "showJointNumbers") {
         didSet { UserDefaults.standard.set(showNumbers, forKey: "showJointNumbers") }
     }
     /// Optional in-process consumers only. No automatic storage or transport.
     var onSkeletonFrame: ((SkeletonFrame) -> Void)?
+    var onSkeletonReset: (() -> Void)?
     private(set) var probeBuffer = SkeletonBuffer() // main thread only
 
     private let queue = DispatchQueue(label: "com.signloop.camera", qos: .userInitiated)
     private var pipeline: SkeletonPipeline?
+    private var faceEnabledOnQueue = false
     private var configured = false
     private var front = true
     private var uiGeneration = 0
@@ -78,6 +86,7 @@ final class SkeletonCameraTracker: NSObject, ObservableObject, AVCaptureVideoDat
     deinit { observers.forEach(NotificationCenter.default.removeObserver) }
 
     private func clearFrame() {
+        onSkeletonReset?()
         skeleton = nil
         frameAgeMS = nil
         fps = 0
@@ -104,7 +113,12 @@ final class SkeletonCameraTracker: NSObject, ObservableObject, AVCaptureVideoDat
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             permissionDenied = false
-            queue.async { self.startOnQueue(token: token, generation: generation) }
+            let useFace = trackFace
+            queue.async {
+                guard self.lifecycle.accepts(token) else { return }
+                self.faceEnabledOnQueue = useFace
+                self.startOnQueue(token: token, generation: generation)
+            }
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { [weak self] _ in
                 DispatchQueue.main.async { self?.requestStart(token: token) }
@@ -159,7 +173,7 @@ final class SkeletonCameraTracker: NSObject, ObservableObject, AVCaptureVideoDat
         do {
             if session.isRunning { session.stopRunning() }
             pipeline = nil
-            pipeline = try SkeletonPipeline()
+            pipeline = try SkeletonPipeline(trackFace: faceEnabledOnQueue)
             if !configured {
                 session.beginConfiguration()
                 session.sessionPreset = .hd1280x720
@@ -277,8 +291,9 @@ final class SkeletonCameraTracker: NSObject, ObservableObject, AVCaptureVideoDat
                 self.bufferedFrames = self.probeBuffer.frames.count
                 self.frameSize = CGSize(width: frame.width, height: frame.height)
                 if let measuredFPS { self.fps = measuredFPS }
-                self.status = frame.hasPose && frame.hasFace && !frame.hands.isEmpty
-                    ? "Tracking hands, body and face" : "Frame your face, hands and waist"
+                self.status = frame.hasPose && !frame.hands.isEmpty
+                    ? (self.trackFace ? "Tracking hands, body and face" : "Tracking hands and upper body · face off")
+                    : "Keep your hands, shoulders and chest in view"
                 self.onSkeletonFrame?(frame)
             }
         } catch { report(error, token: token, generation: generation) }

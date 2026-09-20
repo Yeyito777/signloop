@@ -16,6 +16,9 @@ final class SingleScreenUITests: XCTestCase {
         let deny = system.alerts.firstMatch.buttons.matching(
             NSPredicate(format: "label BEGINSWITH %@", "Don")).firstMatch
         if deny.waitForExistence(timeout: 3) { deny.tap() }
+        // Independent tests start without a persisted debug overlay. The
+        // persistence test relaunches within its own method (not this setup).
+        if app.buttons["hide-sign-scores"].exists { app.buttons["hide-sign-scores"].tap() }
     }
 
     override func tearDownWithError() throws { app?.terminate() }
@@ -37,6 +40,8 @@ final class SingleScreenUITests: XCTestCase {
         XCTAssertTrue(app.buttons["camera-settings"].exists)
         XCTAssertTrue(app.staticTexts["analysis-mode"].label.contains("Offline"))
         XCTAssertFalse(app.staticTexts["Connecting…"].exists)
+        XCTAssertTrue(app.staticTexts["recognition-status"].label.contains("references"))
+        XCTAssertEqual(app.staticTexts["current-sign"].label, "Tracking")
     }
 
     func testCameraRecoveryScreenContrast() throws {
@@ -93,12 +98,15 @@ final class SingleScreenUITests: XCTestCase {
         XCTAssertTrue(app.buttons["skeleton-inspector"].waitForExistence(timeout: 10))
         app.buttons["skeleton-inspector"].tap()
         XCTAssertTrue(app.staticTexts["probe-missing"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.staticTexts["current-sign"].exists)
+        // The underlying camera now has a caption area; without private
+        // references it must remain Tracking, never a fabricated sign.
+        XCTAssertEqual(app.staticTexts["current-sign"].label, "Tracking")
         app.buttons["Done"].tap()
     }
 
     func testAllThreeOverlayControlsAvailable() {
         app.buttons["camera-settings"].tap()
+        XCTAssertTrue(actualSwitch("Track face (slower)").exists)
         XCTAssertTrue(actualSwitch("Show hand joints").exists)
         XCTAssertTrue(actualSwitch("Show upper-body pose").exists)
         XCTAssertTrue(actualSwitch("Show facial features").exists)
@@ -141,6 +149,23 @@ final class SingleScreenUITests: XCTestCase {
         screenshot.lifetime = .keepAlways
         add(screenshot)
         app.buttons["Done"].tap()
+    }
+
+    func testExpressionLabEnablesFaceTrackingWithoutRemovingSpelling() {
+        app.buttons["camera-settings"].tap()
+        let face = actualSwitch("Track face (slower)")
+        if face.value as? String == "1" { face.tap() }
+        app.buttons["Done"].tap()
+        app.buttons["expression-lab"].tap()
+        XCTAssertTrue(app.staticTexts["expression-result"].waitForExistence(timeout: 5))
+        app.buttons["Done"].tap()
+        app.buttons["camera-settings"].tap()
+        XCTAssertEqual(actualSwitch("Track face (slower)").value as? String, "1")
+        // Restore the word-only performance preference.
+        actualSwitch("Track face (slower)").tap()
+        app.buttons["Done"].tap()
+        app.segmentedControls["recognition-mode"].buttons["Spell name"].tap()
+        XCTAssertTrue(app.buttons["manual-spelling"].exists)
     }
 
     func testExpressionSetupExportsProgressBeforeProfileIsReady() {
@@ -237,5 +262,103 @@ final class SingleScreenUITests: XCTestCase {
         XCTAssertTrue(app.buttons["expression-export"].isHittable)
         XCTAssertTrue(app.buttons["expression-capture"].isHittable)
         app.buttons["Done"].tap()
+    }
+
+    func testAllSignScoresCanBeEnabledPersistedAndHidden() {
+        app.buttons["camera-settings"].tap()
+        let toggle = actualSwitch("Show match scores")
+        if toggle.value as? String != "1" { toggle.tap() }
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.staticTexts["scores-disclaimer"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["scores-disclaimer"].label.contains("not probability"))
+        let list = app.scrollViews["sign-scores-list"]
+        XCTAssertTrue(list.exists)
+        let hello = app.descendants(matching: .any)["score-HELLO"].firstMatch
+        XCTAssertTrue(hello.exists)
+        XCTAssertEqual(hello.value as? String, "No current score")
+        let mode = app.buttons["score-list-mode"]
+        XCTAssertTrue(mode.exists)
+        XCTAssertEqual(mode.label, "Show all candidates")
+        mode.tap()
+        XCTAssertEqual(mode.label, "Show top three matches")
+        XCTAssertFalse(app.descendants(matching: .any)["score-CAMERA"].firstMatch.exists)
+        XCTAssertFalse(app.descendants(matching: .any)["score-YES"].firstMatch.exists)
+        let last = app.descendants(matching: .any)["score-ILOVEYOU"].firstMatch
+        for _ in 0..<8 {
+            if last.exists && last.isHittable { break }
+            list.swipeUp()
+        }
+        XCTAssertTrue(last.exists)
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.buttons["hide-sign-scores"].waitForExistence(timeout: 5))
+        app.buttons["hide-sign-scores"].tap()
+        XCTAssertFalse(app.scrollViews["sign-scores-list"].exists)
+        app.buttons["camera-settings"].tap()
+        XCTAssertEqual(actualSwitch("Show match scores").value as? String, "0")
+        app.buttons["Done"].tap()
+    }
+
+    func testScorePanelLargeTextKeepsCameraControlsReachable() {
+        app.terminate()
+        app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL"]
+        app.launch()
+        app.buttons["camera-settings"].tap()
+        let toggle = actualSwitch("Show match scores")
+        if toggle.value as? String != "1" { toggle.tap() }
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.buttons["camera-settings"].isHittable)
+        XCTAssertTrue(app.buttons["pause-resume"].isHittable)
+        // Hide through Settings as well as the panel's close control.
+        app.buttons["camera-settings"].tap()
+        actualSwitch("Show match scores").tap()
+        app.buttons["Done"].tap()
+    }
+
+    func testSpellingModeNeedsConfirmationAndOnlyAllowsAurelio() {
+        app.segmentedControls["recognition-mode"].buttons["Spell name"].tap()
+        XCTAssertTrue(app.staticTexts["spelling-draft"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["current-sign"].label, "Watching…")
+        XCTAssertFalse(app.buttons["add-letter"].isEnabled)
+        app.buttons["manual-spelling"].tap()
+        XCTAssertFalse(app.buttons["C (manual)"].exists)
+        XCTAssertFalse(app.buttons["P (manual)"].exists)
+        XCTAssertFalse(app.buttons["J (manual)"].exists)
+        app.buttons["A (manual)"].tap()
+        XCTAssertEqual(app.staticTexts["spelling-draft"].label, "A")
+        app.buttons["manual-spelling"].tap()
+        app.buttons["U (manual)"].tap()
+        XCTAssertEqual(app.staticTexts["spelling-draft"].label, "AU")
+        app.buttons["delete-letter"].tap()
+        XCTAssertEqual(app.staticTexts["spelling-draft"].label, "A")
+        app.segmentedControls["recognition-mode"].buttons["Signs"].tap()
+        XCTAssertFalse(app.staticTexts["spelling-draft"].exists)
+        XCTAssertEqual(app.staticTexts["current-sign"].label, "Tracking")
+        app.segmentedControls["recognition-mode"].buttons["Spell name"].tap()
+        XCTAssertEqual(app.staticTexts["spelling-draft"].label, "A")
+    }
+
+    func testSpellingIsNotSavedAcrossLaunches() {
+        app.segmentedControls["recognition-mode"].buttons["Spell name"].tap()
+        app.buttons["manual-spelling"].tap()
+        app.buttons["A (manual)"].tap()
+        app.terminate(); app.launch()
+        app.segmentedControls["recognition-mode"].buttons["Spell name"].tap()
+        XCTAssertEqual(app.staticTexts["spelling-draft"].label, "Spelling…")
+    }
+
+    func testSpellingLargeTextKeepsControlsReachable() {
+        app.terminate()
+        app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL"]
+        app.launch()
+        app.segmentedControls["recognition-mode"].buttons["Spell name"].tap()
+        XCTAssertTrue(app.buttons["camera-settings"].isHittable)
+        XCTAssertTrue(app.buttons["pause-resume"].isHittable)
+        XCTAssertTrue(app.buttons["manual-spelling"].isHittable)
+        XCTAssertTrue(app.buttons["delete-letter"].isHittable)
+        XCTAssertFalse(app.staticTexts["recognition-status"].label.contains("unavailable"))
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.lifetime = .keepAlways
+        add(screenshot) // simulator-only class guard; never capture a phone.
     }
 }
