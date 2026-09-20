@@ -6,9 +6,7 @@ import numpy as np
 from recognition.stream import fusion, temporal
 from recognition.stream.context import Candidate, JevResolver, NoContext, UNKNOWN
 from recognition.stream.provider import RecognitionProvider, Window
-from recognition.stream.session import SessionConfig, StreamingSession
 from recognition.stream.temporal import ResolverConfig, TemporalResolver, make_windows
-from recognition.stream import xray
 
 GLOSSES = ["water", "drink", "coffee", "tea"]
 
@@ -100,48 +98,7 @@ class ContextContractTests(unittest.TestCase):
         self.assertEqual(d.resolved, "water")
 
 
-class SessionTests(unittest.TestCase):
-    def run_session(self, providers, seconds=4.0, fps=25):
-        s = StreamingSession(providers, np.arange(4), GLOSSES, SessionConfig(width=1.0, stride=0.25), NoContext())
-        kp = np.zeros((75, 3), np.float32)
-        t0 = time.perf_counter()
-        push_max = 0.0
-        for i in range(int(seconds * fps)):
-            t = time.perf_counter()
-            s.push_frame(i / fps, kp)
-            push_max = max(push_max, time.perf_counter() - t)
-            time.sleep(max(0, (i + 1) / fps - (time.perf_counter() - t0)))
-        time.sleep(0.6)
-        snap = s.snapshot()
-        s.close()
-        return snap, push_max
-
-    def test_confident_providers_commit_a_word_and_expose_state(self):
-        snap, _ = self.run_session({"a": Stub("a", [9, 1, 1, 1]), "b": Stub("b", [8, 2, 1, 1])})
-        self.assertIn("water", snap["committed"])
-        self.assertEqual(set(snap["providers"]), {"a", "b"})
-        text = xray.render(snap)
-        for token in ("CAMERA", "TEMPORAL", "JEV RESOLVER", "CAPTION", "WATER"):
-            self.assertIn(token, text)
-
-    def test_slow_inference_never_blocks_the_camera(self):
-        snap, push_max = self.run_session({"slow": Stub("slow", [9, 1, 1, 1], delay=0.5)}, seconds=3.0)
-        self.assertLess(push_max, 0.05)              # push_frame stays fast while inference lags
-        self.assertGreater(snap["dropped"] + snap["windows_queued"], 0)
-
-    def test_providers_run_concurrently(self):
-        provs = {f"p{i}": Stub(f"p{i}", [9, 1, 1, 1], delay=0.3) for i in range(4)}
-        s = StreamingSession(provs, np.arange(4), GLOSSES, SessionConfig(), NoContext())
-        kp = np.zeros((75, 3), np.float32)
-        t0 = time.perf_counter()
-        for i in range(20):                                # 0.8 s of frames -> first window at ~0.6 s
-            s.push_frame(i / 25, kp)
-        while s.snapshot()["windows_done"] < 1 and time.perf_counter() - t0 < 3:
-            time.sleep(0.01)
-        elapsed = time.perf_counter() - t0
-        s.close()
-        self.assertEqual(s.snapshot()["windows_done"] >= 1, True)
-        self.assertLess(elapsed, 0.3 * 4 * 0.7)            # serial would be >= 1.2 s
+# Session lifecycle and concurrency regressions live in test_controller.py.
 
 
 if __name__ == "__main__":

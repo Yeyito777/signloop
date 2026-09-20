@@ -46,9 +46,14 @@ class RecognitionProvider(ABC):
     def infer(self, window: Window, vocab: np.ndarray | None = None, k: int = 10) -> ProviderResult:
         import time
         t = time.perf_counter()
-        p = self.probs([window], vocab)[0]
-        ms = (time.perf_counter() - t) * 1000
         idx = vocab if vocab is not None else np.arange(len(self.labels))
+        rows = np.asarray(self.probs([window], vocab), dtype=float)
+        if (rows.shape != (1, len(idx)) or not np.isfinite(rows).all() or
+                (rows < 0).any() or (rows > 1).any() or
+                not np.isclose(rows.sum(), 1.0, atol=1e-4, rtol=0)):
+            raise ValueError("provider must return a finite normalized (1, active_vocab) distribution")
+        p = rows[0]
+        ms = (time.perf_counter() - t) * 1000
         order = np.argsort(-p)[:k]
         return ProviderResult(self.name, window.t0, window.t1, [(self.labels[int(idx[i])], float(p[i])) for i in order],
                               ms, len(idx))

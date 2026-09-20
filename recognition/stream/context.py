@@ -29,8 +29,9 @@ class ResolverDecision:
     confidence: float
     scores: dict                        # label -> resolver probability (for fusion / analysis)
     latency_ms: float
-    ok: bool = True                     # False: call failed/malformed; caller must fall back to visual order
+    ok: bool = True                     # False: unavailable evidence, not a visual approval
     error: str = ""
+    error_kind: str = ""                # transport | malformed (distinct from a valid UNKNOWN)
 
 
 class ContextResolver(ABC):
@@ -95,9 +96,14 @@ class JevResolver(ContextResolver):
                 "system_one": {"state": state, "questions": {"sign": {"type": "choice", "instructions": STYLES[self.style],
                                                                        "criteria": criteria}}},
             }, self.provider)
+        except Exception as e:
+            return ResolverDecision(UNKNOWN, 0.0, {}, (time.perf_counter() - t) * 1000,
+                                    ok=False, error=type(e).__name__, error_kind="transport")
+        try:
             scores = self._parse(result, set(labels))
-        except Exception as e:                      # ServiceError, malformed schema, network
-            return ResolverDecision(UNKNOWN, 0.0, {}, (time.perf_counter() - t) * 1000, ok=False, error=type(e).__name__ + ": " + str(e)[:120])
+        except (KeyError, TypeError, ValueError) as e:
+            return ResolverDecision(UNKNOWN, 0.0, {}, (time.perf_counter() - t) * 1000,
+                                    ok=False, error=type(e).__name__, error_kind="malformed")
         winner = max(scores, key=scores.get)
         return ResolverDecision(winner, scores[winner], scores, (time.perf_counter() - t) * 1000)
 
@@ -105,7 +111,7 @@ class JevResolver(ContextResolver):
     def _parse(result: dict, labels: set[str]) -> dict:
         answer = result["system_one"]["answers"]["sign"]
         scores = answer["probabilities"]
-        if answer["type"] != "choice" or set(scores) != labels | {UNKNOWN}:
+        if answer["type"] != "choice" or not isinstance(scores, dict) or set(scores) != labels | {UNKNOWN}:
             raise ValueError("resolver returned labels outside the candidate set")
         if any(type(v) not in (int, float) or not math.isfinite(v) or not 0 <= v <= 1 for v in scores.values()):
             raise ValueError("bad probability")
