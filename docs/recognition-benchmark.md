@@ -89,12 +89,45 @@ What this does and does not show:
 * After-rejection top-1 is below raw top-1 for every model: the conservative threshold rule
   gives up some known signs to hold the false-accept rate down. That is the intended trade.
 
-## Ablations not yet reported
+## Feature, rejection and augmentation ablations (3 signer folds, 20 epochs, synthetic)
 
-`recognition.ablate --suite features|reject|aug` (derivatives, shape-only vs trajectory, angle features,
-rotation normalization, background class vs threshold-only, and per-augmentation removal) is implemented
-and was started but had not finished when this was written. Rerun it on real data; its synthetic outputs
-would not change any decision.
+These finished after the first version of this doc. Same caveat: synthetic data, differences inside the fold std are noise.
+
+### Features
+| Variant | Params | Raw top-1 (no rejection) | Top-1 after rejection | Macro F1 | FAR | ECE | Stress raw top-1 | Stress FAR |
+|---|---|---|---|---|---|---|---|---|
+| dual/full | 425,089 | 0.957±0.060 | 0.937±0.063 | 0.961±0.036 | 0.011±0.004 | 0.038±0.027 | 0.938±0.052 | 0.007±0.004 |
+| dual/no-derivatives | 425,089 | 0.966±0.048 | 0.928±0.066 | 0.951±0.034 | 0.024±0.013 | 0.032±0.012 | 0.960±0.051 | 0.015±0.007 |
+| dual/shape-only (no trajectory stream) | 425,089 | 0.811±0.019 | 0.044±0.028 | 0.149±0.040 | 0.017±0.007 | 0.079±0.013 | 0.815±0.018 | 0.003±0.004 |
+| dual/no-angle-features | 425,089 | 0.949±0.073 | 0.924±0.077 | 0.953±0.043 | 0.014±0.011 | 0.048±0.024 | 0.934±0.076 | 0.009±0.007 |
+| dual/in-plane-rotation-normalized | 425,089 | 0.949±0.056 | 0.935±0.055 | 0.958±0.028 | 0.017±0.016 | 0.032±0.014 | 0.936±0.052 | 0.011±0.011 |
+
+### Rejection
+| Variant | Params | Raw top-1 (no rejection) | Top-1 after rejection | Macro F1 | FAR | ECE | Stress raw top-1 | Stress FAR |
+|---|---|---|---|---|---|---|---|---|
+| dual/background-class+policy | 425,089 | 0.957±0.060 | 0.937±0.063 | 0.961±0.036 | 0.011±0.004 | 0.038±0.027 | 0.938±0.052 | 0.007±0.004 |
+| dual/no-background (threshold on known-only model) | 424,960 | 0.966±0.048 | 0.683±0.168 | 0.785±0.114 | 0.022±0.019 | 0.390±0.074 | 0.957±0.047 | 0.005±0.004 |
+
+### Augmentation
+| Variant | Params | Raw top-1 (no rejection) | Top-1 after rejection | Macro F1 | FAR | ECE | Stress raw top-1 | Stress FAR |
+|---|---|---|---|---|---|---|---|---|
+| aug/all-default | 425,089 | 0.957±0.060 | 0.937±0.063 | 0.961±0.036 | 0.011±0.004 | 0.038±0.027 | 0.938±0.052 | 0.007±0.004 |
+| aug/none | 425,089 | 0.949±0.073 | 0.932±0.069 | 0.959±0.039 | 0.010±0.007 | 0.041±0.027 | 0.926±0.070 | 0.003±0.002 |
+| aug/no-landmark-dropout | 425,089 | 0.953±0.060 | 0.929±0.067 | 0.958±0.039 | 0.008±0.004 | 0.028±0.018 | 0.927±0.054 | 0.004±0.000 |
+| aug/no-jitter | 425,089 | 0.957±0.060 | 0.941±0.057 | 0.960±0.036 | 0.018±0.012 | 0.032±0.023 | 0.941±0.067 | 0.006±0.002 |
+| aug/no-time-warp | 425,089 | 0.956±0.062 | 0.940±0.058 | 0.962±0.032 | 0.013±0.007 | 0.037±0.021 | 0.948±0.063 | 0.004±0.000 |
+| aug/no-viewpoint+roll | 425,089 | 0.955±0.059 | 0.938±0.057 | 0.961±0.034 | 0.013±0.009 | 0.036±0.024 | 0.936±0.057 | 0.003±0.002 |
+| aug/no-crop-pad | 425,089 | 0.958±0.059 | 0.932±0.069 | 0.957±0.036 | 0.016±0.013 | 0.040±0.021 | 0.950±0.051 | 0.004±0.000 |
+| aug/with-mirror | 425,089 | 0.992±0.011 | 0.979±0.015 | 0.983±0.006 | 0.014±0.011 | 0.014±0.002 | 0.980±0.012 | 0.007±0.007 |
+
+What they show on this data:
+
+* **A trajectory stream is essential** for signs that differ only by motion (shape-only collapses to 0.81 raw and 0.04
+  after rejection). Velocity/acceleration and engineered angle features are inside the noise.
+* **The explicit UNKNOWN class matters**: without it, threshold-only rejection loses ~25 points after rejection and
+  calibration degrades (ECE 0.39 vs 0.04).
+* **Augmentations are all inside the noise** except mirroring, which helps here only because the synthetic signers include
+  left-handed ones by construction (a confound, not evidence). Do not conclude anything about real data.
 
 ## What would make this a real result
 
