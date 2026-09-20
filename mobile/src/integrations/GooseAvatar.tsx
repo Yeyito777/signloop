@@ -6,8 +6,8 @@ import { goosePresentation } from './goosePresentation';
 import { gooseSvg } from './demo-art';
 
 /** One renderer identity and playback clock for Home, live capture, and UI demos. */
-export function GooseAvatar({ mode, emotion, reducedMotion, style }: AvatarProps) {
+export function GooseAvatar({ mode, emotion, reducedMotion, emote, onEmoteEnd, style }: AvatarProps) {
   return <MrGoose {...goosePresentation(mode, emotion)} style={style}
-    reducedMotion={reducedMotion} transparent lipSync={gooseLipSync}
+    reducedMotion={reducedMotion} emote={emote} onEmoteEnd={onEmoteEnd} transparent lipSync={gooseLipSync}
     fallback={<SvgXml xml={gooseSvg} width="100%" height="100%" />} />;
 }

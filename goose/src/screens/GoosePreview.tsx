@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MrGoose } from '../components/MrGoose';
+import { GoosePressTarget } from '../components/GoosePressTarget';
 import { gooseEmotions, type GooseActivity, type GooseEmotion } from '../components/goose/motion';
 import { colors } from '../components/goose/settings';
 import { useGooseVoice } from '../hooks/useGooseVoice';
 import { useMotionPreferences } from '../hooks/useMotionPreferences';
+import { useGooseEmote } from '../hooks/useGooseEmote';
 
 const emotionLabel: Record<GooseEmotion, string> = {
   neutral: 'Neutral',
@@ -62,9 +64,11 @@ export function GoosePreview() {
   const [textFocused, setTextFocused] = useState(false);
   const [emotion, setEmotion] = useState<GooseEmotion>('neutral');
   const { reducedMotion } = useMotionPreferences();
+  const dance = useGooseEmote();
   const voice = useGooseVoice();
   const trimmed = asrText.trim();
   const activity = activityFromVoice(voice.status, textFocused);
+  const danceDisabled = activity === 'thinking' || activity === 'speaking' || !animationEnabled;
   const readyDisabled = !voice.configured || !trimmed || voice.status === 'loading';
   const stopDisabled = voice.status !== 'loading' && voice.status !== 'speaking';
   const caption = voice.status === 'waiting' ? voice.pending : voice.lastSpoken;
@@ -84,9 +88,13 @@ export function GoosePreview() {
           <View style={styles.eyebrow}><View style={styles.dot} /><Text style={styles.eyebrowText}>HONK & TELL</Text></View>
           <Text accessibilityRole="header" style={styles.title}>Mr. Goose</Text>
         </View>
-        <MrGoose animationEnabled={animationEnabled} activity={activity} emotion={emotion} lipSync={voice.lipSync} style={styles.goose} />
+        <View style={styles.goose}>
+          <MrGoose animationEnabled={animationEnabled} activity={activity} emotion={emotion} lipSync={voice.lipSync} emote={dance.request} onEmoteEnd={dance.onEmoteEnd} style={StyleSheet.absoluteFill} />
+          <GoosePressTarget onPress={dance.request ? dance.stop : dance.play} playing={!!dance.request} disabled={danceDisabled} />
+        </View>
         {caption ? <Text style={styles.spoken} accessibilityLiveRegion="polite">{caption}</Text> : null}
         <View style={styles.controls}>
+          <Text style={[styles.note, styles.danceStatus]} numberOfLines={1} accessibilityLiveRegion="polite">{dance.request ? 'Dancing… Tap again to stop.' : dance.result?.status === 'skipped' ? 'A little celebration. Keeping still.' : 'Tap Mr. Goose to dance.'}</Text>
           <TextInput
             accessibilityLabel="Phrase for Mr. Goose to say"
             placeholder="Phrase in progress…"
@@ -177,4 +185,5 @@ const styles = StyleSheet.create({
   secondaryPressed: { backgroundColor: '#E7E2D4' },
   secondaryText: { color: '#394738', fontSize: 17, fontWeight: '600' },
   note: { color: '#8C887D', fontSize: 15, marginTop: 4, textAlign: 'center' },
+  danceStatus: { alignSelf: 'stretch' },
 });

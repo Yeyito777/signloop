@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
+import type { EmoteProps } from '../../../goose/src/components/goose/emotes';
 import type { Emotion } from '../../../goose/src/emotion';
 export type { Emotion } from '../../../goose/src/emotion';
 import type { ExpressionEvent } from '../../modules/signloop-camera/events';
@@ -10,7 +11,7 @@ export type Framing = 'finding' | 'ready' | 'hands-missing' | 'too-close' | 'too
   | 'camera-denied' | 'camera-unavailable' | 'camera-error' | 'camera-update-required' | 'camera-model-missing'
   | 'body-missing' | 'recognizer-loading' | 'recognizer-missing' | 'recognizer-error';
 export type AvatarMode = 'idle' | 'listening' | 'thinking' | 'speaking';
-export type AvatarProps = {
+export type AvatarProps = EmoteProps & {
   mode: AvatarMode;
   emotion: Emotion;
   reducedMotion: boolean;

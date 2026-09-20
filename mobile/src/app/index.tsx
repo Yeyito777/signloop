@@ -6,9 +6,12 @@ import { GooseAvatar } from '../integrations/GooseAvatar';
 import { Button, Copy, IconButton, Wordmark, useReducedMotion } from '../ui/primitives';
 import { StageSlot, useSharedStage, type StageSlotHandle } from '../ui/SharedStage';
 import { tokens } from '../ui/theme';
+import { useGooseEmote } from '../../../goose/src/hooks/useGooseEmote';
+import { GoosePressTarget } from '../../../goose/src/components/GoosePressTarget';
 
 export default function Home() {
   const reducedMotion = useReducedMotion();
+  const dance = useGooseEmote();
   const { width, fontScale } = useWindowDimensions();
   // This display headline is already large: preserve whole words as Dynamic Type grows.
   // Body text, captions, and controls continue to use the full system scale.
@@ -17,20 +20,28 @@ export default function Home() {
   const scroll = useRef<ScrollView>(null);
   const { prepareConversation, homeViewport } = useSharedStage();
   const navigating = useRef(false);
-  useFocusEffect(useCallback(() => { navigating.current = false; }, []));
+  useFocusEffect(useCallback(() => {
+    navigating.current = false;
+    return dance.stop;
+  }, [dance.stop]));
   const start = () => {
     if (navigating.current) return;
     navigating.current = true;
+    dance.stop();
     prepareConversation();
     router.push('/conversation');
   };
   return <SafeAreaView style={styles.screen}>
-    <View style={styles.header}><Wordmark /><IconButton icon="settings" label="Voice settings" onPress={() => router.push('/settings')} /></View>
+    <View style={styles.header}><Wordmark /><IconButton icon="settings" label="Voice settings" onPress={() => { dance.stop(); router.push('/settings'); }} /></View>
     <ScrollView ref={scroll} onLayout={() => scroll.current?.getNativeScrollRef()?.measureInWindow((_, y, __, h) => { homeViewport.value = { top: y, bottom: y + h }; })} onScroll={() => stage.current?.measure()} scrollEventThrottle={16} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <Copy role="poster" accessibilityRole="header" style={[styles.title, { fontSize: headlineSize, lineHeight: headlineSize * tokens.type.poster.lineHeight / tokens.type.poster.size }]}>You were{ '\n' }saying?</Copy>
-      <StageSlot ref={stage} owner="home" Renderer={GooseAvatar} mode="idle" emotion="neutral" reducedMotion={reducedMotion} style={[styles.stage, { minHeight: width * 0.95 }]} />
+      <StageSlot ref={stage} owner="home" Renderer={GooseAvatar} mode="idle" emotion="neutral" reducedMotion={reducedMotion} emote={dance.request} onEmoteEnd={dance.onEmoteEnd} style={[styles.stage, { minHeight: width * 0.95 }]}>
+        <GoosePressTarget onPress={dance.request ? dance.stop : dance.play} playing={!!dance.request} />
+      </StageSlot>
     </ScrollView>
     <View style={styles.actions}>
+      {/* Reserve one line so feedback never resizes the goose's viewport. */}
+      <Copy role="supporting" numberOfLines={1} accessibilityLiveRegion="polite" style={styles.danceStatus}>{dance.result?.status === 'completed' ? 'Nice moves, Mr. Goose.' : dance.result?.status === 'skipped' ? 'A little celebration. Keeping still.' : dance.result?.status === 'cancelled' ? 'Dance stopped.' : '\u00a0'}</Copy>
       <Button icon="arrow" variant="ink" style={styles.start} onPress={start}>Start conversation</Button>
       <Button variant="plain" onPress={() => {
         if (navigating.current) return;
@@ -50,4 +61,5 @@ const styles = StyleSheet.create({
   stage: { flex: 1, marginHorizontal: -16 },
   start: { minHeight: 64, justifyContent: 'space-between', paddingHorizontal: 24 },
   actions: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 14 },
+  danceStatus: { textAlign: 'center', marginBottom: 8 },
 });

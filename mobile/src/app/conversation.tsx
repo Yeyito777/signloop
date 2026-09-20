@@ -1,5 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { BackHandler, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -18,6 +18,8 @@ import { tokens } from '../ui/theme';
 import { conversationEmotion, moodPresentation } from '../integrations/expression';
 import { useIsFocused } from '@react-navigation/native';
 import type { DetectionSettings } from '../session/ConversationSheets';
+import { useGooseEmote } from '../../../goose/src/hooks/useGooseEmote';
+import { GoosePressTarget } from '../../../goose/src/components/GoosePressTarget';
 
 function isDemo(value: string | string[] | undefined) {
   return (Array.isArray(value) ? value[0] : value) === '1';
@@ -33,6 +35,8 @@ export default function Conversation() {
   const { state: liveState, dispatch, captureActive, onFraming, onTranslation, onExpression } = useConversation(kit);
   useEffect(() => { if (!focused) dispatch({ type: 'pause' }); }, [focused]);
   const { reduced, enter, exit, layout, sceneLayout } = useMotion();
+  const dance = useGooseEmote();
+  useFocusEffect(useCallback(() => dance.stop, [dance.stop]));
   const entrance = useConversationEntrance();
   const { width, height, fontScale } = useWindowDimensions();
   const [available, setAvailable] = useState({ height: height - 160, width });
@@ -49,6 +53,8 @@ export default function Conversation() {
   }, []);
   const mode: AvatarMode = paused || covered || state.framing.startsWith('camera-') ? 'idle'
     : state.speech?.started ? 'speaking' : state.speech || state.phase === 'thinking' ? 'thinking' : 'listening';
+  const danceDisabled = reduced || paused || covered || mode === 'thinking' || mode === 'speaking';
+  useEffect(() => { if (danceDisabled) dance.stop(); }, [danceDisabled, dance.stop]);
   const focus = conversationFocus(mode, reduced);
   const regions = conversationLayout(available.height, fontScale, focus, available.width);
   const regionLayout = focus === 'speaking' ? sceneLayout : layout;
@@ -77,7 +83,9 @@ export default function Conversation() {
         </Touch>}
       </Animated.View>
       <Animated.View layout={regionLayout} style={[styles.stage, { height: regions.goose, marginTop: regions.clearance }]}>
-        <StageSlot owner="conversation" Renderer={kit.Avatar} mode={mode} emotion={conversationEmotion(liveState)} reducedMotion={reduced || paused || covered} style={styles.stageSlot} />
+        <StageSlot owner="conversation" Renderer={kit.Avatar} mode={mode} emotion={conversationEmotion(liveState)} reducedMotion={reduced || paused || covered} emote={dance.request} onEmoteEnd={dance.onEmoteEnd} style={styles.stageSlot}>
+          <GoosePressTarget onPress={dance.request ? dance.stop : dance.play} playing={!!dance.request} disabled={danceDisabled} />
+        </StageSlot>
         <View pointerEvents="none" style={styles.mood} accessibilityLabel={`Goose mood: ${mood.mood}. ${mood.detail}`}>
           <Copy role="label">{mood.mood}</Copy>
           <Copy role="supporting" style={styles.moodDetail}>{mood.detail}</Copy>

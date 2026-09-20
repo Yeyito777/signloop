@@ -1,6 +1,8 @@
 import { Component, type ReactNode, type RefObject } from 'react';
 import { Platform, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useMotionPreferences } from '../hooks/useMotionPreferences';
+import { useEmotePlayback } from '../hooks/useGooseEmote';
+import { canPlayEmote, type EmoteProps } from './goose/emotes';
 import type { LipSync } from '../voice/envelope.ts';
 import { Canvas } from './goose/GooseCanvas';
 import { GooseScene } from './goose/GooseScene';
@@ -17,7 +19,7 @@ class RenderBoundary extends Component<{ children: ReactNode; fallback?: ReactNo
   }
 }
 
-export type MrGooseProps = {
+export type MrGooseProps = EmoteProps & {
   animationEnabled?: boolean;
   reducedMotion?: boolean;
   transparent?: boolean;
@@ -29,10 +31,11 @@ export type MrGooseProps = {
 };
 
 /** A self-contained 3D character. Give its container a width and height. */
-export function MrGoose({ animationEnabled = true, reducedMotion: appReducedMotion = false, transparent = false, fallback, activity = 'idle', emotion, lipSync, style }: MrGooseProps) {
+export function MrGoose({ animationEnabled = true, reducedMotion: appReducedMotion = false, transparent = false, fallback, activity = 'idle', emotion, lipSync, emote, onEmoteEnd, style }: MrGooseProps) {
   const { reducedMotion: systemReducedMotion, appActive } = useMotionPreferences();
   const reducedMotion = appReducedMotion || systemReducedMotion;
   const animate = animationEnabled && !reducedMotion && appActive;
+  const emotePlayback = useEmotePlayback({ emote, onEmoteEnd }, canPlayEmote(animate, activity));
   return (
     <View style={[styles.container, transparent && { backgroundColor: 'transparent' }, style]} accessible accessibilityRole="image"
       accessibilityLabel="Mr. Goose, a plump Canada goose with white cheeks, bright eyes, and little brown wings.">
@@ -40,7 +43,7 @@ export function MrGoose({ animationEnabled = true, reducedMotion: appReducedMoti
         <Canvas orthographic camera={{ position: [0, 3.15, 8], zoom: 110, near: 0.1, far: 30 }}
           frameloop={animate ? 'always' : 'demand'}
           gl={{ antialias: Platform.OS === 'web', alpha: transparent, premultipliedAlpha: false }}>
-          <GooseScene background={transparent ? null : colors.background} animate={animate} reducedMotion={reducedMotion} activity={activity} emotion={emotion} lipSync={lipSync} />
+          <GooseScene background={transparent ? null : colors.background} animate={animate} reducedMotion={reducedMotion} activity={activity} emotion={emotion} lipSync={lipSync} emote={emotePlayback} />
         </Canvas>
       </RenderBoundary>
     </View>

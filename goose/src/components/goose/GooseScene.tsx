@@ -6,6 +6,7 @@ import { useSoftwarePreview } from './renderQuality';
 import { advanceTime, composePose, stillPose, stepPose, type GooseActivity, type GooseEmotion, type GoosePose } from './motion';
 import { levelAt, type LipSync } from '../../voice/envelope.ts';
 import { gestureAt } from '../../voice/gestures.ts';
+import type { EmotePlayback } from './emotes';
 
 type Vec3 = [number, number, number];
 type PebbleProps = {
@@ -45,12 +46,13 @@ function Eye({ side, blinkRef }: { side: number; blinkRef: RefObject<Group | nul
   );
 }
 
-function Goose({ animate, reducedMotion, activity, emotion, lipSync }: {
+function Goose({ animate, reducedMotion, activity, emotion, lipSync, emote }: {
   animate: boolean;
   reducedMotion: boolean;
   activity: GooseActivity;
   emotion?: GooseEmotion;
   lipSync?: RefObject<LipSync>;
+  emote?: EmotePlayback | null;
 }) {
   const root = useRef<Group>(null);
   const body = useRef<Group>(null);
@@ -65,6 +67,7 @@ function Goose({ animate, reducedMotion, activity, emotion, lipSync }: {
   const tearDrops = useRef<(Mesh | null)[]>([null, null, null, null]);
   const time = useRef(0);
   const displayed = useRef<GoosePose>(stillPose(emotion));
+  const hadEmote = useRef(false);
   const invalidate = useThree(state => state.invalidate);
 
   function applyPose(pose: GoosePose) {
@@ -119,14 +122,15 @@ function Goose({ animate, reducedMotion, activity, emotion, lipSync }: {
   }
 
   useEffect(() => {
-    if (reducedMotion) {
+    if (reducedMotion || (!animate && hadEmote.current)) {
       time.current = 0;
       displayed.current = stillPose(emotion);
       applyPose(displayed.current);
     }
     applyEffects(time.current, emotion);
+    hadEmote.current = !!emote;
     invalidate();
-  }, [reducedMotion, activity, emotion, invalidate]);
+  }, [reducedMotion, animate, activity, emotion, emote, invalidate]);
 
   useFrame((_, delta) => {
     if (!animate) return;
@@ -134,8 +138,9 @@ function Goose({ animate, reducedMotion, activity, emotion, lipSync }: {
     const clock = lipSync?.current?.currentTime() ?? 0;
     const speakingLevel = activity === 'speaking' ? levelAt(lipSync?.current?.envelope, clock) : undefined;
     const gesture = activity === 'speaking' ? gestureAt(lipSync?.current?.gestures, clock) : undefined;
-    const blend = speakingLevel === undefined && !gesture ? motion.blendSeconds : motion.lipSyncSeconds;
-    displayed.current = stepPose(displayed.current, composePose(time.current, activity, emotion, speakingLevel, gesture), delta, blend);
+    const action = emote ? { name: emote.request.name, elapsedMS: performance.now() - emote.startedAt } : undefined;
+    const blend = action ? 0.075 : speakingLevel === undefined && !gesture ? motion.blendSeconds : motion.lipSyncSeconds;
+    displayed.current = stepPose(displayed.current, composePose(time.current, activity, emotion, speakingLevel, gesture, action), delta, blend);
     applyPose(displayed.current);
     applyEffects(time.current, emotion);
   });
@@ -204,6 +209,7 @@ export function GooseScene({ background = colors.background, ...props }: {
   activity: GooseActivity;
   emotion?: GooseEmotion;
   lipSync?: RefObject<LipSync>;
+  emote?: EmotePlayback | null;
 }) {
   const { camera, size, invalidate } = useThree();
   useEffect(() => {

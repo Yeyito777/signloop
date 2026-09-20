@@ -1,5 +1,14 @@
 # Sanvi's goose in Honk & Tell
 
+Tap the goose on Home or in a conversation to play a three-second wing-and-body emote; tap it again
+while it plays to stop. The shared renderer accepts an optional
+`emote` request and `onEmoteEnd` callback independently of its activity/expression.
+Speech preparation/playback, pause, sheets, backgrounding, and leaving the screen cancel the
+action. Reduce Motion uses a short status message on Home and disables the
+conversation's dance target. The standalone goose preview
+uses the same tap interaction. The character's touch target supports keyboard and
+screen-reader activation. See [the emote implementation notes](../../../docs/goose-emote-plan.md).
+
 The canonical character source is now [`goose/src/`](../../../goose/src), imported on `main` from `origin/sanvi-signloop` through `341afb4`. The duplicate character under `mobile/src/avatar/` was removed when resolving the merge. Sanvi's geometry, poses, effects, and motion stay in `goose/src/components/goose/`.
 
 The mobile adapter is [`GooseAvatar.tsx`](../integrations/GooseAvatar.tsx). Home, live capture, and the explicit UI demo use the same component identity. It maps listening → watching. The shared expression values are neutral, joy, sadness, anger, fear, and disgust; neutral has no emotional override. While listening, the goose follows fresh stable native expression events. During speech preparation and playback, it follows the frozen phrase expression. Pause, sheets, and unavailable/stale tracking return it to neutral. See [expression integration](../../../docs/goose-expression-integration.md).

@@ -10,7 +10,7 @@ import { tokens } from './theme';
 
 type Owner = 'home' | 'conversation';
 type Frame = { x: number; y: number; width: number; height: number };
-type Presentation = { Renderer: ComponentType<AvatarProps>; mode: AvatarProps['mode']; emotion: AvatarProps['emotion']; reducedMotion: boolean };
+type Presentation = Omit<AvatarProps, 'style'> & { Renderer: ComponentType<AvatarProps> };
 type StageContextValue = {
   frame: SharedValue<Frame>; home: SharedValue<number>; entrance: SharedValue<number>;
   homeViewport: SharedValue<{ top: number; bottom: number }>;
@@ -18,6 +18,7 @@ type StageContextValue = {
   activate: (owner: Owner) => void;
   measure: (owner: Owner, frame: Frame) => void;
   present: (owner: Owner, presentation: Presentation) => void;
+  clearEmote: (owner: Owner) => void;
   prepareConversation: () => void;
 };
 const StageContext = createContext<StageContextValue | null>(null);
@@ -79,10 +80,13 @@ export function SharedStageProvider({ children }: { children: ReactNode }) {
   const present = useCallback((next: Owner, props: Presentation) => {
     if (next === owner.current) setPresentation(props);
   }, []);
+  const clearEmote = useCallback((next: Owner) => {
+    if (next === owner.current) setPresentation(current => current?.emote ? { ...current, emote: null } : current);
+  }, []);
   useEffect(() => {
     if (reduced) { cancelAnimation(entrance); entrance.value = 1; }
   }, [entrance, reduced]);
-  return <StageContext.Provider value={{ frame, home, entrance, homeViewport, presentation, activate, measure, present, prepareConversation }}>{children}</StageContext.Provider>;
+  return <StageContext.Provider value={{ frame, home, entrance, homeViewport, presentation, activate, measure, present, clearEmote, prepareConversation }}>{children}</StageContext.Provider>;
 }
 
 export function useSharedStage() {
@@ -93,10 +97,10 @@ export function useSharedStage() {
 
 export type StageSlotHandle = { measure: () => void };
 /** Screens reserve space; the root renders exactly one replaceable avatar, above routes and below sheets. */
-export const StageSlot = forwardRef<StageSlotHandle, Presentation & { owner: Owner; style?: StyleProp<ViewStyle> }>(function StageSlot({ owner, style, Renderer, mode, emotion, reducedMotion }, forwardedRef) {
+export const StageSlot = forwardRef<StageSlotHandle, Presentation & { owner: Owner; style?: StyleProp<ViewStyle>; children?: ReactNode }>(function StageSlot({ owner, style, Renderer, mode, emotion, reducedMotion, emote, onEmoteEnd, children }, forwardedRef) {
   const ref = useRef<View>(null);
   const focused = useIsFocused();
-  const { activate, measure: publishFrame, present } = useSharedStage();
+  const { activate, measure: publishFrame, present, clearEmote } = useSharedStage();
   const measure = useCallback(() => {
     if (!focused) return;
     ref.current?.measureInWindow((x, y, width, height) => publishFrame(owner, { x, y, width, height }));
@@ -105,12 +109,14 @@ export const StageSlot = forwardRef<StageSlotHandle, Presentation & { owner: Own
   useFocusEffect(useCallback(() => {
     activate(owner);
     const id = requestAnimationFrame(measure);
-    return () => cancelAnimationFrame(id);
-  }, [activate, measure, owner]));
+    return () => { cancelAnimationFrame(id); clearEmote(owner); };
+  }, [activate, measure, owner, clearEmote]));
   useEffect(() => {
-    if (focused) present(owner, { Renderer, mode, emotion, reducedMotion });
-  }, [Renderer, emotion, focused, mode, owner, present, reducedMotion]);
-  return <View ref={ref} collapsable={false} pointerEvents="none" onLayout={measure} style={style} />;
+    if (focused) present(owner, { Renderer, mode, emotion, reducedMotion, emote, onEmoteEnd });
+  }, [Renderer, emotion, focused, mode, owner, present, reducedMotion, emote, onEmoteEnd]);
+  return <View ref={ref} collapsable={false} pointerEvents={children && focused ? 'box-none' : 'none'} onLayout={measure} style={style}>
+    {focused ? children : null}
+  </View>;
 });
 
 /** Fixed-size render surface: travel transforms its container without resizing a future 3D canvas each frame. */
@@ -173,7 +179,7 @@ export function SharedStageLayer() {
     <Animated.View style={[styles.contents, { height }, contents]}>
     <Animated.View style={[styles.oval, oval]} />
     <Animated.View style={[styles.avatar, avatar]}>
-      <Renderer mode={presentation.mode} emotion={presentation.emotion} reducedMotion={reduced || presentation.reducedMotion || !foreground} style={StyleSheet.absoluteFill} />
+      <Renderer mode={presentation.mode} emotion={presentation.emotion} emote={presentation.emote} onEmoteEnd={presentation.onEmoteEnd} reducedMotion={reduced || presentation.reducedMotion || !foreground} style={StyleSheet.absoluteFill} />
     </Animated.View>
     <Svg width={windowWidth} height={height} style={StyleSheet.absoluteFill} accessible={false}>
       <AnimatedPath animatedProps={homeLoop} fill="none" stroke={tokens.color.paper} strokeWidth={3.5} strokeLinecap="round" />

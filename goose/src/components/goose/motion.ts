@@ -1,4 +1,5 @@
 import { emotionOffset, motion, poseLimits } from './settings.ts';
+import { emoteOffset, type GooseEmote } from './emotes.ts';
 
 export type GooseActivity = 'idle' | 'watching' | 'thinking' | 'speaking';
 export type { Emotion as GooseEmotion } from '../../emotion.ts';
@@ -185,9 +186,12 @@ export function composePose(
   emotion?: GooseEmotion,
   speakingLevel?: number,
   gesture?: { name: GooseGesture; localTime: number },
+  emote?: { name: GooseEmote; elapsedMS: number },
 ): GoosePose {
   const withEmotion = addPose(addPose(idlePose(time), activityOffset(activity, time, speakingLevel)), emotionTint(emotion, time));
-  return clampPose(gesture ? addPose(withEmotion, gestureOffset(gesture.name, gesture.localTime)) : withEmotion);
+  const withGesture = gesture ? addPose(withEmotion, gestureOffset(gesture.name, gesture.localTime)) : withEmotion;
+  return clampPose(emote && (activity === 'idle' || activity === 'watching')
+    ? addPose(withGesture, emoteOffset(emote.name, emote.elapsedMS)) : withGesture);
 }
 
 export function mixPose(from: GoosePose, to: GoosePose, amount: number): GoosePose {
