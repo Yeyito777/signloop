@@ -1,4 +1,4 @@
-# Signloop worktree flow
+# Honk & Tell worktree flow
 
 Each task gets a branch and a checkout in `.worktrees/<name>`. The main checkout
 stays on `yeyito`; creating a worktree does not switch it or change `main`.
@@ -73,7 +73,7 @@ worktrees created by these scripts (identified by ignored local metadata).
 Build mode explicitly disables signing and never installs, launches, replaces,
 or stops an app on your phone. Xcode Run is an intentional separate step. Task
 checkouts use the same `com.yeyito.signloop` identifier by default, so deploying
-one will replace the existing Signloop app. Use a different bundle identifier
+one will replace the existing Honk & Tell app. Use a different bundle identifier
 and valid signing configuration if you need simultaneous phone installs.
 
 `post-checkout` is best-effort and offline-only: it regenerates an Xcode project
@@ -102,6 +102,10 @@ then removes both task checkouts and branches. It never touches remote branches.
 For live cloud inference, see [backend setup](backend.md). `.env` files are
 never seeded automatically; pass an explicit `--env-file` path. No live samples
 or reference recordings are saved. Stop a worktree's backend before cleaning.
+
+Build 11's camera uses the offline [multimodal skeleton](multimodal-skeleton.md).
+Seeding includes official hand, gesture, pose-lite and face task bundles.
+Legacy cloud research is not connected to the camera UI.
 
 Adapted from Exocortex's `create-worktree`, `clean-worktree`, `worktree-common.sh`,
 `post-checkout`, and `exotest`. On this Mac those references were found under

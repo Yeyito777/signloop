@@ -1,10 +1,10 @@
 """First-party corpus builder. The only data path that can produce a shippable model.
 
-Recordings come from the app's landmark export (CameraTracker.exportLandmarks -> signloop-landmarks.json):
+Recordings come from the app's landmark export (CameraTracker.exportLandmarks -> honk-and-tell-landmarks.json):
 hand landmarks only, no pixels. Each clip is added with explicit provenance and consent so that
 recognition.data.assert_shippable can prove what a model was trained on.
 
-    python -m recognition.collect add --corpus corpus.json --export signloop-landmarks.json \\
+    python -m recognition.collect add --corpus corpus.json --export honk-and-tell-landmarks.json \\
         --label HELLO --signer P07 --session 2026-09-19-a --device "iPhone 15" \\
         --consent "Written consent v1, signed 2026-09-19, landmarks only, redistribution allowed" \\
         --lighting bright --distance arm --background plain --speed normal
@@ -53,7 +53,7 @@ def add(args) -> dict:
     n = sum(1 for s in corpus["samples"] if s["signer"] == args.signer)
     sample = {
         "id": f"{args.signer}-{args.session}-{args.label}-{n:03d}", "label": args.label, "signer": args.signer,
-        "session": f"{args.signer}-{args.session}", "source": "first-party consented recording (Signloop app landmark export)",
+        "session": f"{args.signer}-{args.session}", "source": "first-party consented recording (Honk & Tell app landmark export)",
         "license": args.consent, "redistribution": "ALLOWED" if args.allow_redistribution else "PROHIBITED",
         "kind": args.kind or ("sign" if args.label != D.UNKNOWN else "nonsign"),
         "device": args.device, "fps": _fps(frames), "duration_ms": frames[-1]["timestampMS"] - frames[0]["timestampMS"],
@@ -118,7 +118,7 @@ def main():
     a.add_argument("--allow-redistribution", action="store_true", help="consent covers bundling a model trained on this clip")
     a.add_argument("--verified-by", help="ID of the fluent signer who confirmed the label")
     a.add_argument("--kind", choices=NEGATIVE_KINDS + ["sign"])
-    a.add_argument("--dataset", default="Signloop first-party consented recordings")
+    a.add_argument("--dataset", default="Honk & Tell first-party consented recordings")
     a.add_argument("--skin-tone-self-reported", help="optional, self-reported by the signer")
     for c, vals in CONDITIONS.items():
         a.add_argument(f"--{c}", choices=vals)

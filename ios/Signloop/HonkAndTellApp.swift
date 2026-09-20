@@ -1,12 +1,14 @@
 import SwiftUI
 
 @main
-struct SignloopApp: App {
+struct HonkAndTellApp: App {
     var body: some Scene {
         WindowGroup {
             #if DEBUG
             #if targetEnvironment(simulator)
-            if ProcessInfo.processInfo.arguments.contains("--signloop-live-replay") {
+            if ProcessInfo.processInfo.arguments.contains("--signloop-skeleton-benchmark") {
+                NativeSkeletonBenchmark().preferredColorScheme(.dark)
+            } else if ProcessInfo.processInfo.arguments.contains("--signloop-live-replay") {
                 NativeLiveReplay().preferredColorScheme(.dark)
             } else {
                 debugContent

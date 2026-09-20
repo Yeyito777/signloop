@@ -12,7 +12,7 @@ if [ ! -s "$model" ]; then
   mv "$download" "$model"
 fi
 
-# Both app shells now share the Gesture Recognizer tracker.
+# The Expo camera uses Gesture Recognizer; the native skeleton uses Hand Landmarker.
 gesture=Signloop/Resources/gesture_recognizer.task
 gesture_sha=97952348cf6a6a4915c2ea1496b4b37ebabc50cbbf80571435643c455f2b0482
 if [ ! -s "$gesture" ]; then

@@ -12,7 +12,7 @@ export function createFramingFeedback(emit: (framing: Framing) => void) {
       cancel();
       if (!active) return;
       // Permission/device failures must never wait behind a friendly tracking animation.
-      if (next.startsWith('camera-')) { commit(next); return; }
+      if (next.startsWith('camera-') || next.startsWith('recognizer-')) { commit(next); return; }
       if (shown === next) return;
       const current = version;
       timer = setTimeout(() => { if (version === current) commit(next); }, next === 'ready' ? 300 : 450);

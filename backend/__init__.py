@@ -1,1 +1,1 @@
-"""Signloop's server-only model gateway."""
+"""Honk & Tell's server-only model gateway."""

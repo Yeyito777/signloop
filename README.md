@@ -1,6 +1,11 @@
-# Signloop
+# Honk & Tell
 
 Hack the North · limited-vocabulary ASL-to-English prototype.
+
+The app is now **Honk & Tell**. The standalone Xcode project and scheme are
+`HonkAndTell`. Existing bundle IDs, saved-data keys, native module names, and
+`ios/Signloop/` source paths remain stable so installed apps and integrations keep
+working. Rebuild and install the app to update its home-screen name.
 
 ## Consumer app design system
 
@@ -13,15 +18,19 @@ rendering and animation assets replaceable.
 ## Unified consumer mobile app
 
 The Expo app lives in [`mobile/`](mobile/README.md): Home, Conversation, and local
-transcript/correction sheets in the Playroom style. The native Expo camera module reuses the
-Swift tracker below. The app now renders the shared 3D goose and offers a complete
-limited flow: **offline ILY handshape estimate → explicit confirmation → caption
+transcript/correction sheets in the Playroom style. The native Expo camera module
+uses `ios/Signloop/SkeletonCameraTracker.swift` and the shared temporal matcher. The app renders
+the shared 3D goose and offers a complete
+limited flow: **offline 11-sign choices → tap to hold a choice → explicit confirmation → caption
 → optional backend-generated goose voice**. Voice uploads require foreground-session
 consent in Settings. Provider keys stay on the backend. This is not general ASL
 translation. An explicit sample-conversation mode still uses labeled sample data
 and silent playback.
 See [voice setup](docs/voice-backend.md) and [integration checks](docs/branch-integration.md).
 See the [frontend integration handoff](docs/frontend-flow-and-handoff.md).
+The goose app now shares the standalone hand/body tracker and temporal matcher.
+Rebuild its native iPhone app and provision the existing private reference bank
+in its own container; see [recognition setup](mobile/modules/signloop-camera/README.md).
 
 ```sh
 cd mobile
@@ -47,31 +56,101 @@ intentional for the camera app's Xcode compatibility. See
 No credentials were imported. Client-side `EXPO_PUBLIC_*` keys in the standalone
 prototype are not secret; use the consumer app's backend path for shared builds.
 
-## Standalone native scanner: offline handshape preview
+## Standalone native scanner: offline skeleton + experimental matching
 
-Open the app, put one hand in view, and see the **current possible sign** update
-automatically over the full-screen camera. No settings workflow, reference
-capture, saving, or Analyze button. Pause/flip stay on the camera; the top-right
-settings button controls hand joints, joint numbers and tracking stats.
+The standalone native build uses `SkeletonCameraTracker`:
+camera → MediaPipe hand and upper-body landmarkers (face optional) → one synchronized,
+inspectable skeleton → optional **private temporal matching**, with an optional
+taught facial-expression profile from main. The live word scope is the 11
+presentation signs; spelling is restricted to AURELIO's seven letters.
+No backend, API key, transcription, camera recording or uploads. Expression lab
+can explicitly save/export a numeric personal calibration profile.
 
-**The default offline preview currently recognizes only the ILY (“I love you”)
-handshape without extra model assets.** Extend thumb, index and pinky; fold middle
-and ring. A private Debug build with verified pretrained assets automatically
-enables the [five-sign offline research mode](docs/live-offline.md):
-HELLO, YES, NO, PLEASE and THANK_YOU. It requires no Mac connection, network or API key and does not
-upload images or landmarks. Thumbs-up is never relabeled as ASL YES.
+Build 19 integrates both branches while retaining main's Honk & Tell Expo app,
+voice backend, SignEngine, camera orientation fixes and expression teaching/demo
+schemes. That merge retained separate recognition pipelines; the subsequent
+Expo adapter now connects the matcher to the confirmed-caption flow. See
+[the original merge notes](docs/main-detection-merge.md) and
+[the current Expo integration](mobile/modules/signloop-camera/README.md).
 
-MediaPipe's pretrained Gesture Recognizer supplies both real landmarks and
-handshape estimates. This is not a general ASL model. See
-[the local evaluation and limitations](docs/local-gesture-preview.md).
+Build 18 restricts spelling to **A U R E L I O** only and adds smaller-motion
+training-reference variants for WE. C/P and all other letters cannot win or be
+entered. The app can no longer fingerspell SIGNLOOP in this restricted mode.
+See [Aurelio spelling and WE tolerance](docs/aurelio-and-we.md).
 
-The camera screen is now **offline only**; the cloud toggle and automatic
-backend calls have been removed. Legacy [backend research tools](docs/backend.md)
-remain separate. The five-sign weights are not bundled or publicly distributed
-while their provenance/rights are clarified. Live iPhone and fresh-signer
-accuracy validation remain open project goals.
+Build 17 limits the standalone scanner to the **11 presentation-script signs**,
+including **I love you**. The other 21 words no longer enter matching or the score
+list. Separate name/app fingerspelling stays unchanged. See
+[presentation-only scope](docs/presentation-only.md).
 
-## Local reference-matching experiment
+Build 16 replaces arbitrary percentage bars with a ranked closest-three distance
+inspector (Settings → **Show match scores**, then **All 32** for the full list).
+The [score audit](docs/score-audit.md) verifies that expanding the vocabulary does
+not dilute individual distances; new competitors can still change the winner.
+
+Build 15 adds a 32-word research vocabulary for introductions and presenting the
+project, including **I love you**, plus a separate **Spell name** mode.
+Fingerspelling recognizes 24 static letters; **J/Z are explicitly manual**.
+Verify and tap Add to compose a name—nothing is auto-transcribed or saved.
+See [vocabulary, spelling and evaluation limitations](docs/demo32-and-spelling.md).
+
+Build 14 shows the **best current guess**, explicitly uncertain, rather than
+hiding it behind Unknown. It adds hand-local 3D geometry, soft finger-shape
+rules and a shared temporal window with wrist/palm motion features. Face tracking
+is off by default; shoulders/chest remain. Existing test replays improved from
+21/48 to 26/48 correct most-frequent guesses, but all 10 unsupported clips also
+got guesses. This is still experimental, not reliable ASL recognition.
+It needs a separately provisioned schema-2 reference bank; see
+[current behavior and evidence](docs/basic-live-matching.md).
+
+Historical baseline:
+Build 12 displays tentative **Possible sign / Unknown** results when its private
+research references are provisioned separately. The bank is not in Git or the app
+bundle. The initial reserved replay displayed the correct label in **11/48**
+supported clips, and a wrong label in **5/48**; this is not reliable 16-sign
+recognition. See [matching, tests and private provisioning](docs/basic-live-matching.md).
+Without references, the skeleton still works. This change does not wire the
+separate Expo consumer app's gesture flow.
+Build 13 adds Settings → **Show all sign scores**: live similarity bars for all
+16 candidates, including rejected matches. These are not calibrated probabilities
+and do not change recognition or rejection.
+
+- Up to two hands, 21 points each.
+- Upper-body pose through the hips (25 original MediaPipe landmark IDs).
+- 478 face/iris points and 52 facial movement blendshape coefficients.
+- Settings toggle hand/body/face overlays, point numbers and performance stats.
+- Tap a point or the scope button to inspect live coordinates and facial signals.
+- Pause and camera switch clear observations; the two-second probe buffer is RAM-only.
+
+Facial signals are **not sentiment/emotion labels or recognized ASL grammar**.
+Coordinates share the camera image plane, not a calibrated 3D coordinate system.
+See [architecture, probe schema and testing](docs/multimodal-skeleton.md).
+
+Tap the smiling-face button for [Expression lab](docs/expression-tester.md):
+teach your relaxed face and five expressions once, check them against fresh
+repetitions, then save/export a fixed personal demo profile. Recognition continues
+on the camera screen after the lab closes. The **HonkAndTellDemo** scheme bundles
+the checked profile and hides teaching from the demo experience.
+The lab keeps its next step and capture action visible while scrolling. Export
+is always in the toolbar: save unfinished setup progress to resume later, or
+export a checked demo profile after the six guided checks pass.
+The experimental presets do not infer emotion or ASL meaning.
+
+This replaces the standalone camera's earlier ILY/five-sign research display;
+old recognition experiments remain below for reference and are not called by the new camera UI.
+No private sign-model assets are needed for skeleton tracking. Temporal word
+matching still requires its separately provisioned private research bank.
+Installation is a separate explicit step.
+
+## Small temporal reference dataset
+
+[Basic-sign corpus tooling](docs/basic-signs-corpus.md) produced **196 sequences
+for 16 everyday labels in 8.56 MB**, using the build 11 hand/body/facial trackers.
+It never downloads the full ASL Citizen archive. Research coordinates
+remain private, outside Git and the app; this is data preparation, not validated
+live recognition.
+
+## Previous recognition research (not active in the tracking UI)
 
 The zero-shot path has not demonstrated reliable recognition. A separate
 **nearest-reference + dynamic time warping** backend now supports developer-side
@@ -168,7 +247,7 @@ Requires macOS, Xcode (iOS 17+ SDK), and [XcodeGen](https://github.com/yonaskolb
 brew install xcodegen
 cd ios
 bash scripts/bootstrap.sh
-open Signloop.xcodeproj
+open HonkAndTell.xcodeproj
 ```
 
 Choose your Apple development team in Signing & Capabilities, select your connected iPhone,
@@ -187,7 +266,7 @@ The app links the device/simulator graph archive explicitly, matching Google's C
 bash scripts/test-core.sh
 
 # Device build with your team
-xcodebuild -project Signloop.xcodeproj -scheme Signloop \
+xcodebuild -project HonkAndTell.xcodeproj -scheme HonkAndTell \
   -configuration Debug -destination 'generic/platform=iOS' \
   -derivedDataPath build DEVELOPMENT_TEAM=YOUR_TEAM_ID \
   -allowProvisioningUpdates build

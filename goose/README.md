@@ -7,7 +7,7 @@ and without merging its unrelated history. The original branch's nonempty API
 key should be treated as exposed and rotated if live.
 
 This directory remains a standalone **Expo 57** preview, including the newer
-streaming experiments. Signloop's `../mobile/` app intentionally uses Expo 55;
+streaming experiments. Honk & Tell's `../mobile/` app intentionally uses Expo 55;
 it now reuses the renderer and animation helpers with its own compatible
 dependencies and server-proxied voice adapter. The direct provider/streaming
 client below is not used by the consumer app. Keep the dependency trees separate.
@@ -52,7 +52,7 @@ import { MrGoose } from './src/components/MrGoose';
 
 ## Goose voice (local prototype)
 
-This is not real speech recognition. Type the English line ASR would have emitted, then tap **Speak**.
+Type the English line. The goose waits until the phrase is done; tap Ready to speak it. The goose consumes { text, emotion, ready }: it only talks when ready is true.
 
 1. Copy `.env.example` to `.env`.
 2. In the ElevenLabs website, open your custom goose voice and copy its **Voice ID**.

@@ -1,5 +1,5 @@
 {
-  "name": "Signloop Playroom",
+  "name": "Honk & Tell Playroom",
   "version": "0.1.0",
   "units": "Logical pixels / points; milliseconds for duration",
   "color": {
@@ -10,6 +10,7 @@
     "coral": "#F87960",
     "blue": "#A7C6E8",
     "muted": "#75675F",
+    "onInkMuted": "#D9C9B9",
     "line": "#D6CEBE",
     "captionShadow": "#DCC480",
     "successSurface": "#E3F0D2",
@@ -25,6 +26,7 @@
       "raised": "#FFFCF0",
       "primary": "#F87960",
       "secondary": "#A7C6E8",
+      "inverse": "#49312D",
       "success": "#E3F0D2",
       "caution": "#FFEDC3"
     },
@@ -33,6 +35,8 @@
       "secondary": "#75675F",
       "onPrimary": "#432D2B",
       "onSecondary": "#49312D",
+      "onInverse": "#FFFCF0",
+      "onInverseSecondary": "#D9C9B9",
       "success": "#40532B",
       "caution": "#70502B",
       "destructive": "#AA3E29"
@@ -63,25 +67,39 @@
     }
   },
   "type": {
+    "poster": {
+      "font": "display",
+      "weight": 500,
+      "size": 96,
+      "lineHeight": 80,
+      "letterSpacing": -3.5
+    },
+    "featuredCaption": {
+      "font": "display",
+      "weight": 400,
+      "size": 32,
+      "lineHeight": 34,
+      "letterSpacing": -0.5
+    },
     "hero": {
       "font": "display",
       "weight": 500,
       "size": 48,
-      "lineHeight": 52,
+      "lineHeight": 48,
       "letterSpacing": -1
     },
     "title": {
       "font": "display",
       "weight": 500,
       "size": 40,
-      "lineHeight": 44,
+      "lineHeight": 42,
       "letterSpacing": -0.8
     },
     "sheetTitle": {
       "font": "display",
       "weight": 500,
       "size": 28,
-      "lineHeight": 32,
+      "lineHeight": 30,
       "letterSpacing": -0.5
     },
     "sectionTitle": {
@@ -102,21 +120,21 @@
       "font": "display",
       "weight": 400,
       "size": 24,
-      "lineHeight": 28,
+      "lineHeight": 26,
       "letterSpacing": -0.2
     },
     "captionLarge": {
       "font": "display",
       "weight": 400,
       "size": 30,
-      "lineHeight": 36,
+      "lineHeight": 32,
       "letterSpacing": -0.2
     },
     "body": {
       "font": "body",
       "weight": 400,
       "size": 16,
-      "lineHeight": 24,
+      "lineHeight": 22,
       "letterSpacing": 0
     },
     "button": {

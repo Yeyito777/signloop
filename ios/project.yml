@@ -1,4 +1,8 @@
-name: Signloop
+name: HonkAndTell
+configs:
+  Debug: debug
+  Release: release
+  Demo: release
 options:
   bundleIdPrefix: com.yeyito
   deploymentTarget:
@@ -10,7 +14,8 @@ settings:
     CODE_SIGN_STYLE: Automatic
     PRODUCT_BUNDLE_IDENTIFIER: com.yeyito.signloop
     MARKETING_VERSION: "0.1.0"
-    CURRENT_PROJECT_VERSION: "10"
+    CURRENT_PROJECT_VERSION: "20"
+    EXPRESSION_TRAINING_ENABLED: "YES"
     ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     OTHER_LDFLAGS:
       - $(inherited)
@@ -18,8 +23,12 @@ settings:
       - -lc++
     "OTHER_LDFLAGS[sdk=iphoneos*]": $(inherited) -force_load "$(PROJECT_DIR)/Vendor/MediaPipeTasksCommon/frameworks/graph_libraries/libMediaPipeTasksCommon_device_graph.a"
     "OTHER_LDFLAGS[sdk=iphonesimulator*]": $(inherited) -force_load "$(PROJECT_DIR)/Vendor/MediaPipeTasksCommon/frameworks/graph_libraries/libMediaPipeTasksCommon_simulator_graph.a"
+  configs:
+    Demo:
+      EXPRESSION_TRAINING_ENABLED: "NO"
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) SIGNLOOP_DEMO
 targets:
-  Signloop:
+  HonkAndTell:
     type: application
     platform: iOS
     settings:
@@ -30,15 +39,32 @@ targets:
     sources:
       - path: Signloop
         excludes:
-          - Resources/hand_landmarker.task
+          - RemoteRecognition.swift
+          - Resources/DemoExpressionProfile.json
       - path: Vendor/TensorFlowLiteSwift
+    preBuildScripts:
+      - name: Validate bundled demo expression profile
+        basedOnDependencyAnalysis: false
+        script: |
+          if [ "$EXPRESSION_TRAINING_ENABLED" = "NO" ]; then
+            bash "$PROJECT_DIR/scripts/check-expression-profile.sh"
+          fi
+    postBuildScripts:
+      - name: Embed fixed demo expression profile
+        basedOnDependencyAnalysis: false
+        script: |
+          if [ "$EXPRESSION_TRAINING_ENABLED" = "NO" ]; then
+            mkdir -p "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH"
+            cp "$PROJECT_DIR/Signloop/Resources/DemoExpressionProfile.json" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/DemoExpressionProfile.json"
+          fi
     info:
       path: Signloop/Info.plist
       properties:
-        CFBundleDisplayName: Signloop
+        CFBundleDisplayName: Honk & Tell
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        NSCameraUsageDescription: Signloop tracks hands and estimates supported signs on your iPhone. No images or video are uploaded or saved.
+        ExpressionTrainingEnabled: $(EXPRESSION_TRAINING_ENABLED)
+        NSCameraUsageDescription: Honk & Tell tracks your hands, upper body and facial movements on your iPhone. No images or video are uploaded or saved.
         UILaunchScreen: {}
         UIRequiresFullScreen: true
         UIApplicationSceneManifest:
@@ -62,26 +88,38 @@ targets:
       - sdk: MetalKit.framework
       - sdk: QuartzCore.framework
       - sdk: Security.framework
-  SignloopUITests:
+  HonkAndTellUITests:
     type: bundle.ui-testing
     platform: iOS
     sources:
       - Tests/UI
     dependencies:
-      - target: Signloop
+      - target: HonkAndTell
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        TEST_TARGET_NAME: Signloop
+        TEST_TARGET_NAME: HonkAndTell
         PRODUCT_BUNDLE_IDENTIFIER: com.yeyito.signloop.uitests
         OTHER_LDFLAGS: ""
         "OTHER_LDFLAGS[sdk=iphoneos*]": ""
         "OTHER_LDFLAGS[sdk=iphonesimulator*]": ""
 schemes:
-  Signloop:
+  HonkAndTell:
     build:
       targets:
-        Signloop: all
+        HonkAndTell: all
     test:
       targets:
-        - SignloopUITests
+        - HonkAndTellUITests
+  HonkAndTellDemo:
+    build:
+      targets:
+        HonkAndTell: all
+    run:
+      config: Demo
+    archive:
+      config: Demo
+    test:
+      config: Demo
+      targets:
+        - HonkAndTellUITests

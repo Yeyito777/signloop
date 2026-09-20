@@ -1,4 +1,4 @@
-# Signloop — Playroom design system
+# Honk & Tell — Playroom design system
 
 Approved visual foundation, v0.1 · Sunny · September 19, 2026.
 
@@ -25,6 +25,8 @@ The HTML prototypes, illustrative camera person, goose drawings, hardcoded devic
 
 Warm, direct, and playful. Butter-yellow surfaces, coral actions, blue supporting areas, dark brown ink, rounded typography, and a restrained solid-offset shadow. Personality comes from the visual language and eventual character, not extra slogans or tiny decorative labels.
 
+The selected screen direction is **Go big**, with **“You were saying?”** on Home. Its large artwork and typography use the existing palette: a dark pill-shaped Start button, open captions on butter, and ink-coloured sheets with paper text. The earlier outlined cards remain available as primitives, but this composition uses fewer enclosing surfaces. A continuous curved line changes shape with the shared stage; it is decorative and never communicates scanner or voice status.
+
 - Make the signed message the most readable content on the screen.
 - Prefer generous open space to extra cards, badges, dividers, or metrics.
 - Use sentence case and useful labels. Remove copy that does not explain a state, action, or next step.
@@ -42,12 +44,15 @@ Warm, direct, and playful. Butter-yellow surfaces, coral actions, blue supportin
 | Ink | `#49312D` | Main text and strong outlines |
 | Strong ink | `#432D2B` | Labels on coral primary actions |
 | Muted ink | `#75675F` | Supporting text on butter or paper |
+| Muted on ink | `#D9C9B9` | Supporting text on dark sheets |
 | Success | `#E3F0D2` / `#40532B` | A successful state, with an icon and text |
 | Caution | `#FFEDC3` / `#70502B` | Recoverable issues with specific guidance |
 | Destructive ink | `#AA3E29` | Destructive-action text on paper |
 | Focus | `#315991` | Visible keyboard focus |
 
 Use semantic roles (`semantic.surface.canvas`, `semantic.text.default`) in components. Palette names are available for art and exceptional uses. Muted text is approved on butter and paper, not every colored surface. Never use white text on coral. Strong ink slightly darkens the primary-action label to clear 4.5:1 contrast without changing the coral.
+
+Dark sheets use `semantic.surface.inverse`, `semantic.text.onInverse`, and `semantic.text.onInverseSecondary`. Both text pairings are included in the generator's contrast checks.
 
 Status always needs text or an icon alongside color. Soft dividers are decorative; interactive boundaries use strong ink. Success means the specific check passed—for example, visible hands and face—not that a translation is guaranteed correct.
 
@@ -57,14 +62,16 @@ Status always needs text or an icon alongside color. Soft dividers are decorativ
 
 | Token | Family / weight | Size / line height | Use |
 |---|---|---|---|
-| `hero` | Fredoka 500 | 48 / 52 | Occasional short welcome headline |
-| `title` | Fredoka 500 | 40 / 44 | Main screen heading |
-| `sheetTitle` | Fredoka 500 | 28 / 32 | Sheet heading |
+| `poster` | Fredoka 500 | 96 / 80 | Home display base; screen fits two lines at up to 80 pt, scaling leading with size |
+| `featuredCaption` | Fredoka 400 | 32 / 34 | Open, prominent accepted captions |
+| `hero` | Fredoka 500 | 48 / 48 | Occasional short welcome headline |
+| `title` | Fredoka 500 | 40 / 42 | Main screen heading |
+| `sheetTitle` | Fredoka 500 | 28 / 30 | Sheet heading |
 | `sectionTitle` | Fredoka 500 | 24 / 28 | Section heading |
 | `status` | Fredoka 500 | 20 / 24 | A brief state label |
-| `caption` | Fredoka 400 | 24 / 28 | Main translated message |
-| `captionLarge` | Fredoka 400 | 30 / 36 | Larger-caption option |
-| `body` | DM Sans 400 | 16 / 24 | Instructions and prose |
+| `caption` | Fredoka 400 | 24 / 26 | Main translated message |
+| `captionLarge` | Fredoka 400 | 30 / 32 | Larger-caption option |
+| `body` | DM Sans 400 | 16 / 22 | Instructions and prose |
 | `button` | DM Sans 600 | 16 / 24 | Action labels |
 | `label` | DM Sans 600 | 14 / 20 | Useful metadata and state qualifiers |
 | `supporting` | DM Sans 400 | 14 / 20 | Secondary explanatory copy |
@@ -88,7 +95,7 @@ The native styles select the actual loaded weight by alias; they do not depend o
 - Use a **4-point spacing unit**: `space[1] = 4`, `space[3] = 12`, `space[6] = 24`. Common choices are 8 within small groups, 12 between related components, and 24 between sections.
 - Screen gutters start at 24; 16 is the compact option. Add the device's safe-area insets separately. Do not copy the prototype's fake status bar or home indicator.
 - Radius: 8 for small surfaces, 16 for controls, 20 for caption bubbles, 28 for larger panels/sheets. A bubble can use the 4-point tail corner deliberately.
-- Outlines are usually 1.5 points of ink; use 2 for emphasis. Avoid soft card shadows everywhere. Primary actions use a 3-point solid downward offset; captions may use the softer ochre offset.
+- Outlined variants use 1.5 points of ink; use 2 for emphasis. Avoid soft card shadows everywhere. The selected Home action has a solid ink fill and pill radius, and its captions have no enclosing card. Offset shadows remain available for other variants.
 - A compact icon control has a **minimum 44 × 44 touch area**, even when its glyph is 20–22 points. Prefer 48 where space allows. Primary actions have a minimum height of 52 and can grow with text.
 - Keep pause discoverable and labeled for assistive technology. A gesture can supplement it, but must not be the only way to stop capture or speech.
 - Use the same visual hierarchy for primary, secondary, and destructive actions across screens. Button width, exact placement, and screen-specific layouts remain open for iteration.
@@ -101,7 +108,7 @@ Icons use a 24 × 24 viewBox, rounded caps and joins, a 1.75-unit outline, and `
 
 The geometry registry contains `path` and `circle` elements. An app adapter can map these to its SVG renderer; no SVG runtime or rendering library is imposed here. `$surface` in the settings icon means the background directly beneath the icon; standalone SVG exports default it to paper.
 
-Give icon-only controls an action label such as “Pause camera and speech.” Treat the icon itself as decorative when the parent control already supplies its accessible name. These are original UI assets from the Signloop studies, not final branding or a goose asset pack.
+Give icon-only controls an action label such as “Pause camera and speech.” Treat the icon itself as decorative when the parent control already supplies its accessible name. These are original UI assets from the Honk & Tell studies, not final branding or a goose asset pack.
 
 ## Motion and the future 3D goose
 

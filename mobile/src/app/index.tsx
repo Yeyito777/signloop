@@ -9,7 +9,10 @@ import { tokens } from '../ui/theme';
 
 export default function Home() {
   const reducedMotion = useReducedMotion();
-  const { height } = useWindowDimensions();
+  const { width, fontScale } = useWindowDimensions();
+  // This display headline is already large: preserve whole words as Dynamic Type grows.
+  // Body text, captions, and controls continue to use the full system scale.
+  const headlineSize = Math.min(80, (width - 48) / (4.75 * Math.max(1, fontScale)));
   const stage = useRef<StageSlotHandle>(null);
   const scroll = useRef<ScrollView>(null);
   const { prepareConversation, homeViewport } = useSharedStage();
@@ -24,14 +27,11 @@ export default function Home() {
   return <SafeAreaView style={styles.screen}>
     <View style={styles.header}><Wordmark /><IconButton icon="settings" label="Voice settings" onPress={() => router.push('/settings')} /></View>
     <ScrollView ref={scroll} onLayout={() => scroll.current?.getNativeScrollRef()?.measureInWindow((_, y, __, h) => { homeViewport.value = { top: y, bottom: y + h }; })} onScroll={() => stage.current?.measure()} scrollEventThrottle={16} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      <Copy role="hero" accessibilityRole="header" style={styles.title}>Ready when{ '\n' }you are.</Copy>
-      <StageSlot ref={stage} owner="home" Renderer={GooseAvatar} mode="idle" emotion="neutral" reducedMotion={reducedMotion} style={[styles.stage, { minHeight: height < 750 ? 200 : 270 }]} />
-      <Copy role="sectionTitle" style={styles.description}>Try the ILY handshape.{ '\n' }Confirm it. Let your goose speak.</Copy>
-      <Copy role="supporting" style={{ textAlign: 'center' }}>Experimental, limited-vocabulary preview. Not full ASL translation.</Copy>
+      <Copy role="poster" accessibilityRole="header" style={[styles.title, { fontSize: headlineSize, lineHeight: headlineSize * tokens.type.poster.lineHeight / tokens.type.poster.size }]}>You were{ '\n' }saying?</Copy>
+      <StageSlot ref={stage} owner="home" Renderer={GooseAvatar} mode="idle" emotion="neutral" reducedMotion={reducedMotion} style={[styles.stage, { minHeight: width * 0.95 }]} />
     </ScrollView>
     <View style={styles.actions}>
-      <Button icon="arrow" onPress={start}>Start conversation</Button>
-      <Button variant="plain" onPress={() => router.push('/conversation?demo=1')}>Preview sample conversation</Button>
+      <Button icon="arrow" variant="ink" style={styles.start} onPress={start}>Start conversation</Button>
     </View>
   </SafeAreaView>;
 }
@@ -39,9 +39,9 @@ export default function Home() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: tokens.color.butter },
   header: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  content: { paddingHorizontal: 24, paddingTop: 28, paddingBottom: 20, flexGrow: 1 },
-  title: { fontSize: 48, lineHeight: 51 },
-  stage: { flex: 1, alignItems: 'center', justifyContent: 'center', marginVertical: 12 },
-  description: { textAlign: 'center', fontSize: 23, lineHeight: 30 },
+  content: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 8, flexGrow: 1 },
+  title: { paddingBottom: 12 },
+  stage: { flex: 1, marginHorizontal: -16 },
+  start: { minHeight: 64, justifyContent: 'space-between', paddingHorizontal: 24 },
   actions: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 14 },
 });

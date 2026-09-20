@@ -20,6 +20,12 @@ const copy: Record<Framing, { title: string; hint: string; icon: IconName }> = {
   'camera-denied': { title: 'Camera access needed', hint: 'Allow camera access in Settings, then return and tap Resume.', icon: 'frame' },
   'camera-unavailable': { title: 'Camera unavailable here', hint: 'Open the development build on an iPhone to try hand tracking.', icon: 'frame' },
   'camera-error': { title: 'Camera couldn’t start', hint: 'Try starting the camera again.', icon: 'frame' },
+  'camera-update-required': { title: 'App update needed', hint: 'Install the rebuilt iPhone app to use sign recognition. Reloading this screen won’t update the scanner.', icon: 'frame' },
+  'camera-model-missing': { title: 'Tracking setup incomplete', hint: 'The app is missing its hand and body models. Install a complete build.', icon: 'frame' },
+  'body-missing': { title: 'Shoulders out of view', hint: 'Move back until both shoulders and your signing hands are visible.', icon: 'frame' },
+  'recognizer-loading': { title: 'Loading sign recognition', hint: 'Keep your hands and shoulders in view.', icon: 'frame' },
+  'recognizer-missing': { title: 'Sign recognition needs setup', hint: 'The sign reference library has not been installed in this app. Ask your team to complete setup, then retry.', icon: 'info' },
+  'recognizer-error': { title: 'Sign library couldn’t load', hint: 'Install a valid reference library for this build, then retry.', icon: 'info' },
 };
 
 function useFramingFeedback(framing: Framing, active: boolean) {
@@ -32,7 +38,7 @@ function useFramingFeedback(framing: Framing, active: boolean) {
     feedback.update(framing, active);
   }, [active, feedback, framing]);
   useEffect(() => () => feedback.dispose(), [feedback]);
-  return framing.startsWith('camera-') ? framing : shown;
+  return framing.startsWith('camera-') || framing.startsWith('recognizer-') ? framing : shown;
 }
 
 export function CameraGuidance({ framing, active, mode, dispatch, demo }: {
@@ -44,9 +50,9 @@ export function CameraGuidance({ framing, active, mode, dispatch, demo }: {
   const blocked = shown.startsWith('camera-');
   const issue = !ready && shown !== 'finding';
   const guidance = mode !== 'demo' && shown === 'ready'
-    ? { title: 'Hand detected', hint: '', icon: 'check' as const }
+    ? { title: 'Ready to sign', hint: '', icon: 'check' as const }
     : mode !== 'demo' && shown === 'finding'
-      ? { title: 'Finding your hands', hint: 'Bring your hands inside the corners.', icon: 'frame' as const }
+      ? { title: 'Finding your frame', hint: 'Keep your hands and both shoulders in view.', icon: 'frame' as const }
       : copy[shown];
   const settled = useSharedValue(0);
   useEffect(() => { settled.value = withTiming(ready ? 1 : 0, { duration: reduced ? 0 : motion.transition, easing: motion.ease }); }, [ready, reduced, settled]);
@@ -71,6 +77,7 @@ export function CameraGuidance({ framing, active, mode, dispatch, demo }: {
       {shown === 'camera-denied' && <Button variant="plain" onPress={() => { dispatch({ type: 'pause' }); void Linking.openSettings(); }}>Open Settings</Button>}
       {shown === 'camera-unavailable' && <Button variant="plain" onPress={() => router.replace('/conversation?demo=1')}>Try the UI demo</Button>}
       {shown === 'camera-error' && <Button variant="plain" icon="repeat" onPress={() => dispatch({ type: 'retry' })}>Try camera again</Button>}
+      {(shown === 'recognizer-missing' || shown === 'recognizer-error') && <Button variant="plain" icon="repeat" onPress={() => dispatch({ type: 'retry' })}>Retry recognition setup</Button>}
     </Animated.View>}
   </>;
 }

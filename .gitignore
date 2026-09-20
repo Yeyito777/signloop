@@ -2,10 +2,13 @@
 ios/Vendor/
 ios/Signloop/Resources/hand_landmarker.task
 ios/Signloop/Resources/gesture_recognizer.task
+ios/Signloop/Resources/pose_landmarker_lite.task
+ios/Signloop/Resources/face_landmarker.task
 ios/Signloop/Resources/MediaPipeTasks*-LICENSE.txt
 ios/Signloop/Resources/TensorFlowLite-LICENSE.txt
 ios/build/
 ios/Signloop.xcodeproj/
+ios/HonkAndTell.xcodeproj/
 *.xcuserstate
 xcuserdata/
 .env
@@ -24,5 +27,10 @@ ios/*.log
 __pycache__/
 *.pyc
 .runtime/
+# Private per-device temporal reference banks
+basic-references*.json
 # Trained SignEngine packages are provisioned per build after a provenance check
 ios/Signloop/Resources/SignEngine/
+
+# Locally exported personal expression profile, provisioned for demo builds
+ios/Signloop/Resources/DemoExpressionProfile.json

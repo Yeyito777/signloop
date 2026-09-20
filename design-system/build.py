@@ -106,12 +106,14 @@ def check_contrast(tokens):
     roles = tokens['semantic']
     pairs = [('default','canvas'),('default','raised'),('secondary','canvas'),
              ('secondary','raised'),('onPrimary','primary'),('onSecondary','secondary'),
-             ('success','success'),('caution','caution'),('destructive','raised')]
+             ('success','success'),('caution','caution'),('destructive','raised'),
+             ('onInverse','inverse'),('onInverseSecondary','inverse')]
     for text, surface in pairs:
         a,b=sorted([luminance(roles['text'][text]),luminance(roles['surface'][surface])])
         ratio=(b+.05)/(a+.05)
         if ratio < 4.5:
             raise ValueError(f'Text contrast below 4.5:1: {text}/{surface} ({ratio:.2f}:1)')
+    return len(pairs)
 
 
 def main():
@@ -119,7 +121,7 @@ def main():
     parser.add_argument('--check', action='store_true', help='Verify generated files without writing')
     args=parser.parse_args()
     outputs,tokens=generate()
-    check_contrast(tokens)
+    contrast_pairs = check_contrast(tokens)
     mismatches=[]
     for name, content in outputs.items():
         path=ROOT/name
@@ -131,7 +133,7 @@ def main():
             path.write_text(content)
     if mismatches:
         raise SystemExit('Regenerate stale or missing files: '+', '.join(mismatches))
-    print(f'{"Verified" if args.check else "Generated"} {len(outputs)} files; 9 text/surface contrast pairs pass 4.5:1.')
+    print(f'{"Verified" if args.check else "Generated"} {len(outputs)} files; {contrast_pairs} text/surface contrast pairs pass 4.5:1.')
 
 
 if __name__ == '__main__':

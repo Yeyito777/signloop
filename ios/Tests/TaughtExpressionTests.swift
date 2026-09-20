@@ -1,0 +1,423 @@
+import Foundation
+
+@main
+struct TaughtExpressionTests {
+    static var checks = 0
+    static func expect(_ value: @autoclosure () -> Bool, _ message: String) {
+        checks += 1; guard value() else { fatalError("FAIL: \(message)") }
+    }
+    static func rejects(_ message: String, _ operation: () throws -> Void) {
+        checks += 1
+        do { try operation(); fatalError("FAIL: \(message)") } catch { }
+    }
+    static func sample(_ label: TaughtExpressionLabel, delta: Double = 0) -> ExpressionObservation {
+        let vector: [Double]
+        switch label {
+        case .neutral: vector = [0.05,-0.70,0.12,0.20,-0.24]
+        case .joy: vector = [0.65,-0.72,0.10,0.21,-0.20]
+        case .anger: vector = [0.08,-0.50,0.10,0.15,-0.24]
+        case .fear: vector = [0.07,-0.78,0.30,0.20,-0.24]
+        case .sadness: vector = [0.05,-0.78,0.11,0.38,-0.24]
+        case .disgust: vector = [0.08,-0.64,0.09,0.16,-0.20]
+        }
+        return ExpressionObservation(values: Dictionary(uniqueKeysWithValues: zip(ExpressionCue.allCases,vector.map { $0+delta })),
+                                     pose: ExpressionPose(horizontal: 0, vertical: 0.25), camera: "front",
+                                     jawOpening: (label == .fear ? 0.8 : 0.2)+delta)
+    }
+    static func take(_ teacher: inout ExpressionTeacher, label: TaughtExpressionLabel, time: inout Int) {
+        time += 100
+        teacher.observe(timestampMS: time, hasFace: true, observation: sample(label))
+        teacher.startCapture()
+        for index in 0...30 {
+            time += 100
+            teacher.observe(timestampMS: time, hasFace: true,
+                            observation: sample(label, delta: index.isMultiple(of: 2) ? 0.001 : -0.001))
+        }
+    }
+    static func taught() -> TaughtExpressionProfile {
+        var teacher = ExpressionTeacher(), time = 0
+        for label in TaughtExpressionLabel.allCases {
+            for _ in 0..<2 { take(&teacher, label: label, time: &time) }
+        }
+        expect(teacher.completedSteps == 12 && teacher.model != nil && teacher.candidate == nil,
+               "teaching alone cannot install an unvalidated profile")
+        for label in TaughtExpressionLabel.allCases { take(&teacher, label: label, time: &time) }
+        expect(teacher.completedSteps == 18 && teacher.candidate != nil, "one full setup produces a checked profile")
+        return teacher.candidate!
+    }
+    static func progressChecks() {
+        var teacher = ExpressionTeacher(), time = 0
+        expect(TaughtExpressionLabel.allCases.allSatisfy { teacher.status(for: $0) == .needsExamples },
+               "new setup shows all six expressions as incomplete, not failed")
+        for label in TaughtExpressionLabel.allCases {
+            for _ in 0..<2 { take(&teacher, label: label, time: &time) }
+        }
+        expect(teacher.teachingTakeCount == 12 && teacher.validation.isEmpty && teacher.attentionLabels.isEmpty,
+               "12 of 18 means twelve captures and zero checks, with no invented failures")
+        expect(TaughtExpressionLabel.allCases.allSatisfy { teacher.status(for: $0) == .checkPending },
+               "captured expressions clearly say their check has not run")
+        take(&teacher, label: .joy, time: &time) // The requested check is relaxed face.
+        expect(teacher.attentionLabels == [.neutral] && teacher.status(for: .neutral) == .checkFailed,
+               "failed relaxed-face check identifies only that expression")
+        expect(teacher.failures[.neutral]?.reason.contains("joy") == true && teacher.status(for: .joy) == .checkPending,
+               "failed check names its competing expression without marking that untested expression failed")
+        teacher.interrupt()
+        expect(teacher.status(for: .neutral) == .checkFailed,
+               "failure remains visible when live tracking is interrupted")
+        take(&teacher, label: .neutral, time: &time)
+        expect(teacher.completedSteps == 13 && teacher.status(for: .neutral) == .passed && teacher.failures[.neutral] == nil,
+               "successful retry clears the failure and marks just that check passed")
+        for label in TaughtExpressionLabel.allCases where label != .neutral { take(&teacher, label: label, time: &time) }
+        expect(TaughtExpressionLabel.allCases.allSatisfy { teacher.status(for: $0) == .passed },
+               "completed profile displays six passed checks")
+        teacher.retake(.anger)
+        expect(teacher.status(for: .anger) == .needsExamples && teacher.status(for: .joy) == .checksBlocked && teacher.validation.isEmpty,
+               "retake cannot leave stale passed check badges on the other expressions")
+
+        // Reproduce the 12/18 dead end: fear captures contain no jaw drop.
+        var blocked = ExpressionTeacher(); time = 0
+        for label in TaughtExpressionLabel.allCases {
+            for _ in 0..<2 { take(&blocked, label: label == .fear ? .neutral : label, time: &time) }
+        }
+        expect(blocked.completedSteps == 12 && blocked.model == nil && blocked.nextStep == nil,
+               "bad teaching examples reproduce the reported twelve-take stall")
+        expect(blocked.attentionLabels == [.fear] && blocked.status(for: .fear) == .needsRetake,
+               "the blocking jaw-drop error is attached to fear")
+        expect(blocked.status(for: .joy) == .checksBlocked && blocked.failures[.joy] == nil,
+               "other captures are waiting for a fix, not incorrectly marked as failed checks")
+        blocked.observe(timestampMS: time+100, hasFace: false, observation: nil)
+        expect(blocked.failures[.fear]?.reason.contains("jaw") == true,
+               "blocking expression and reason survive unrelated tracking updates")
+        let smile = blocked.examples[.joy]
+        blocked.retake(.fear)
+        expect(blocked.examples[.joy] == smile && blocked.attentionLabels.isEmpty && blocked.teachingTakeCount == 10,
+               "targeted retake preserves the other expressions and clears obsolete diagnostics")
+        for _ in 0..<2 { take(&blocked, label: .fear, time: &time) }
+        expect(blocked.model != nil && blocked.nextStep?.isValidation == true && blocked.status(for: .fear) == .checkPending,
+               "repairing the flagged expression unblocks the fresh checks")
+
+        var overlap = ExpressionTeacher(); time = 0
+        for label in TaughtExpressionLabel.allCases {
+            for _ in 0..<2 { take(&overlap, label: label == .disgust ? .joy : label, time: &time) }
+        }
+        expect(Set(overlap.attentionLabels) == Set([.joy, .disgust]),
+               "overlapping teaching examples identify both expressions in the conflict")
+        expect(overlap.status(for: .joy) == .needsRetake && overlap.status(for: .disgust) == .needsRetake,
+               "both conflicting rows offer a teaching retake")
+        expect(overlap.status(for: .fear) == .checksBlocked && overlap.validation.isEmpty,
+               "a training conflict cannot pretend that validation ran")
+    }
+    static func setupTransferChecks() throws {
+        let emptyData = try ExpressionTeacher().exportSetup()
+        expect(ExpressionTeacher.isSetupExport(emptyData), "empty setup can be exported with an explicit progress format")
+        var restored = try ExpressionTeacher.restoreSetup(emptyData)
+        expect(restored.completedSteps == 0 && restored.nextStep?.label == .neutral,
+               "empty progress imports at the first teaching take")
+        rejects("progress cannot masquerade as a checked demo profile") { _ = try TaughtExpressionStore.decode(emptyData) }
+
+        var teacher = ExpressionTeacher(), time = 0
+        take(&teacher, label: .neutral, time: &time)
+        teacher.startCapture()
+        let partial = try teacher.exportSetup()
+        restored = try ExpressionTeacher.restoreSetup(partial)
+        expect(teacher.capture != nil && restored.capture == nil && !restored.readyForCapture,
+               "export snapshots completed work without exporting or resuming an in-flight capture")
+        expect(restored.examples == teacher.examples && restored.nextStep?.take == 2,
+               "partial progress keeps completed examples and resumes the next required take")
+        expect(!String(decoding: partial, as: UTF8.self).contains("observations"), "setup exports contain no live frame history")
+        restored.startCapture()
+        expect(restored.capture == nil, "import requires a fresh tracked face before capture")
+        var rear = sample(.neutral); rear.camera = "back"
+        restored.observe(timestampMS: time+100, hasFace: true, observation: rear)
+        expect(!restored.readyForCapture && restored.readinessInstruction.contains("Switch back"),
+               "restored setup explains the camera reference required to continue")
+
+        teacher = ExpressionTeacher(); time = 0
+        for label in TaughtExpressionLabel.allCases { for _ in 0..<2 { take(&teacher, label: label, time: &time) } }
+        for (index, label) in TaughtExpressionLabel.allCases.enumerated() {
+            restored = try ExpressionTeacher.restoreSetup(teacher.exportSetup())
+            expect(restored.nextStep?.title == "Check \(index+1) of 6: \(label.title)",
+                   "each of the final six checks has a named, numbered next step")
+            expect(restored.nextStep?.instruction == label.checkInstruction && restored.nextStep!.timingInstruction.contains("2 seconds"),
+                   "each repeat check explains its expression and timing")
+            expect(restored.validation == teacher.validation && restored.examples == teacher.examples,
+                   "exports preserve completed checks without changing training")
+            take(&teacher, label: label, time: &time)
+        }
+        restored = try ExpressionTeacher.restoreSetup(teacher.exportSetup())
+        expect(restored.candidate != nil && restored.completedSteps == 18,
+               "completed progress restores a checked candidate ready to save")
+        let checkedData = try TaughtExpressionStore.encode(restored.candidate!)
+        expect(!ExpressionTeacher.isSetupExport(checkedData), "checked profile exports stay compatible with the demo bundler")
+
+        var broken = ExpressionTeacher(); time = 0
+        for label in TaughtExpressionLabel.allCases { for _ in 0..<2 { take(&broken, label: label == .fear ? .neutral : label, time: &time) } }
+        restored = try ExpressionTeacher.restoreSetup(broken.exportSetup())
+        expect(restored.completedSteps == 12 && restored.attentionLabels == [.fear] && restored.model == nil,
+               "blocked teaching exports and imports with its actionable failure intact")
+        broken.retake(.fear)
+        for _ in 0..<2 { take(&broken, label: .fear, time: &time) }
+        take(&broken, label: .joy, time: &time) // Fails the relaxed-face check.
+        restored = try ExpressionTeacher.restoreSetup(broken.exportSetup())
+        expect(restored.status(for: .neutral) == .checkFailed && restored.failures[.neutral]?.reason == broken.failures[.neutral]?.reason,
+               "failed check can be exported and resumed with its explanation")
+
+        var corrupt = try JSONDecoder().decode(ExpressionTeacher.SetupExport.self, from: partial)
+        corrupt.examples[.neutral] = Array(repeating: corrupt.examples[.neutral]![0], count: 3)
+        rejects("oversized take arrays are rejected") { _ = try ExpressionTeacher.restoreSetup(JSONEncoder().encode(corrupt)) }
+        corrupt = try JSONDecoder().decode(ExpressionTeacher.SetupExport.self, from: partial)
+        corrupt.validation[.joy] = teacher.validation[.joy]
+        rejects("a partial draft cannot claim passed checks without the trained model") { _ = try ExpressionTeacher.restoreSetup(JSONEncoder().encode(corrupt)) }
+        corrupt = try JSONDecoder().decode(ExpressionTeacher.SetupExport.self, from: partial)
+        corrupt.failures[.joy] = ExpressionTeacher.Failure(status: .passed, reason: "fake pass")
+        rejects("status text cannot forge a passed check") { _ = try ExpressionTeacher.restoreSetup(JSONEncoder().encode(corrupt)) }
+        corrupt = try JSONDecoder().decode(ExpressionTeacher.SetupExport.self, from: partial)
+        corrupt.measurementVersion = "unknown-version"
+        rejects("unsupported draft measurements are rejected") { _ = try ExpressionTeacher.restoreSetup(JSONEncoder().encode(corrupt)) }
+        rejects("oversized setup files are rejected") { _ = try ExpressionTeacher.restoreSetup(Data(repeating: 0, count: 262_145)) }
+    }
+    static func sensitiveMovementChecks(_ profile: TaughtExpressionProfile) throws {
+        let model = try profile.validatedModel()
+        let neutral = ExpressionCue.allCases.map { sample(.neutral).values[$0]! }
+        for label in [TaughtExpressionLabel.anger, .fear] {
+            let target = ExpressionCue.allCases.map { sample(label).values[$0]! }
+            for strength in [0.4, 0.65, 1.3] {
+                let vector = zip(neutral,target).map { $0+($1-$0)*strength }
+                let jaw = 0.2 + ((label == .fear ? 0.8 : 0.2)-0.2)*strength
+                expect(model.match(vector, jawOpening: jaw).label == label, "\(label): recognizes \(strength) of the taught pattern")
+            }
+            let reversed = zip(neutral,target).map { $0-($1-$0)*0.65 }
+            expect(model.match(reversed, jawOpening: 0.2).label != label, "\(label): opposite movement cannot trigger the label")
+        }
+        // Raised resting brows, small eyes, and a much larger sad-brow motion.
+        // These small repeatable changes were overwhelmed by the old global range.
+        var examples = profile.examples
+        for label in [TaughtExpressionLabel.anger, .fear] {
+            var target = neutral
+            target[label == .anger ? 1 : 2] += label == .anger ? 0.01 : 0.006
+            examples[label] = (0..<2).map { _ in ExpressionExample(center: target, spread: [0,0.0002,0.0001,0,0], sampleCount: 21) }
+        }
+        examples[.neutral] = (0..<2).map { _ in ExpressionExample(center: neutral, spread: [0,0.0002,0.0001,0,0], sampleCount: 21) }
+        // Older nose-v2 profiles keep their eye-based fear sensitivity.
+        let subtle = try TaughtExpressionModel(examples: examples, measurement: .noseScrunch)
+        for label in [TaughtExpressionLabel.anger, .fear] {
+            let target = examples[label]![0].center
+            for strength in [0.4,0.75,1.0,1.3] {
+                let vector = zip(neutral,target).map { $0+($1-$0)*strength }
+                expect(subtle.match(vector).label == label, "\(label): small geometric change survives at \(strength) strength")
+            }
+        }
+        for delta in [-0.0008, 0, 0.0008] {
+            var resting = neutral; resting[1] += delta; resting[2] += delta
+            expect(subtle.match(resting).label == .neutral, "neutral tracking jitter never becomes a sensitive expression")
+        }
+        var mixed = neutral; mixed[1] += 0.006; mixed[2] += 0.0036
+        expect(subtle.match(mixed).label == nil, "mixed brow and eye motions can abstain instead of forcing a label")
+        for label in [TaughtExpressionLabel.joy, .sadness, .disgust] {
+            expect(subtle.match(examples[label]![0].center).label == label, "\(label): preserved while brow/eye sensitivity changes")
+        }
+        var measured = sample(.neutral); measured.values[.anger]! += 0.005
+        let reading = ExpressionMovementReading.make(cue: .anger, observation: measured, examples: examples)
+        expect(abs(reading!.fraction!-0.5) < 0.000001, "0.005 brow change displays as half of a personal 0.01 taught range")
+        expect(ExpressionMovementReading.make(cue: .anger, observation: nil, examples: examples) == nil,
+               "movement readout never invents a value without a face")
+        let draft = ExpressionMovementReading.make(cue: .fear, observation: sample(.fear), examples: [.neutral: examples[.neutral]!])
+        expect(draft?.fraction == nil && draft?.change != nil, "unfinished teaching shows a raw delta without inventing a percentage")
+    }
+    static func main() throws {
+        progressChecks()
+        try setupTransferChecks()
+        let profile = taught(), model = try profile.validatedModel()
+        try sensitiveMovementChecks(profile)
+        for label in TaughtExpressionLabel.allCases {
+            let vector = ExpressionCue.allCases.map { sample(label,delta: 0.003).values[$0]! }
+            expect(model.match(vector, jawOpening: sample(label,delta: 0.003).jawOpening).label == label, "\(label): fresh measurements match the taught pattern")
+        }
+        expect(sample(.joy).values[.disgust] == sample(.disgust).values[.disgust], "whole pattern separates smile/disgust even if the nose also moves in a smile")
+        var runtime = TaughtExpressionRuntime(profile: profile)
+        for label in TaughtExpressionLabel.allCases {
+            runtime.resetTracking()
+            runtime.observe(timestampMS: 0, hasFace: true, observation: sample(label))
+            expect(runtime.result == (label == .neutral ? .neutral : .holding(label)), "\(label): neutral clears, expression waits")
+            for time in stride(from: 100, through: 400, by: 100) { runtime.observe(timestampMS: time, hasFace: true, observation: sample(label)) }
+            expect(runtime.result == (label == .neutral ? .neutral : .active(label)), "\(label): stable taught expression activates")
+            expect(runtime.profile == profile, "classification never learns over the fixed profile")
+            runtime.observe(timestampMS: 500, hasFace: true, observation: sample(.neutral))
+            expect(runtime.result == .neutral, "neutral immediately releases every active expression")
+        }
+        var unknown = sample(.neutral)
+        unknown.values[.joy] = 1; unknown.values[.anger] = 1; unknown.values[.sadness] = -1
+        runtime.observe(timestampMS: 600, hasFace: true, observation: unknown)
+        expect(runtime.result == .unknown, "unseen expression is not forced into an emotion")
+        runtime.observe(timestampMS: 700, hasFace: true, observation: sample(.joy))
+        for _ in 0..<20 { runtime.observe(timestampMS: 700, hasFace: true, observation: sample(.joy)) }
+        expect(runtime.result == .holding(.joy), "duplicate frames do not advance holds")
+        runtime.observe(timestampMS: 1700, hasFace: true, observation: sample(.joy))
+        expect(runtime.result == .holding(.joy), "long gap starts a fresh hold")
+        runtime.observe(timestampMS: 1600, hasFace: true, observation: sample(.joy))
+        expect(runtime.result == .unavailable, "backward capture time invalidates result")
+        runtime.observe(timestampMS: 1800, hasFace: false, observation: nil)
+        expect(runtime.result == .noFace && runtime.profile == profile, "face loss preserves the installed profile")
+        var rear = sample(.joy); rear.camera = "back"
+        runtime.observe(timestampMS: 1900, hasFace: true, observation: rear)
+        expect(runtime.result == .wrongCamera, "profile does not silently switch cameras")
+        var turn = sample(.joy); turn.pose.horizontal = 0.3
+        runtime.observe(timestampMS: 2000, hasFace: true, observation: turn)
+        expect(runtime.result == .faceForward, "large view change abstains")
+        var malformed = sample(.joy); malformed.values[.fear] = .nan
+        runtime.observe(timestampMS: 2100, hasFace: true, observation: malformed)
+        expect(runtime.result == .unavailable, "invalid measurements abstain")
+        var blank = TaughtExpressionRuntime()
+        blank.observe(timestampMS: 0, hasFace: true, observation: sample(.joy))
+        expect(blank.result == .noProfile, "no generic rule fallback before a complete taught profile")
+
+        var teacher = ExpressionTeacher(), time = 0
+        teacher.startCapture()
+        expect(teacher.capture == nil, "teaching cannot capture without a fresh face")
+        teacher.observe(timestampMS: 0, hasFace: true, observation: sample(.neutral))
+        teacher.startCapture()
+        for stamp in stride(from: 100, through: 900, by: 100) { teacher.observe(timestampMS: stamp, hasFace: true, observation: sample(.neutral)) }
+        expect(teacher.capture?.observations.isEmpty == true, "preparation frames are excluded")
+        teacher.observe(timestampMS: 1000, hasFace: false, observation: nil)
+        expect(teacher.capture == nil && teacher.completedSteps == 0, "lost face aborts unfinished take")
+        expect(teacher.status(for: .neutral) == .retryCapture && teacher.attentionLabels == [.neutral],
+               "interrupted capture shows exactly which take needs retrying")
+        time = 1100
+        take(&teacher, label: .neutral, time: &time)
+        expect(teacher.completedSteps == 1, "first complete take retained")
+        expect(teacher.failures[.neutral] == nil && teacher.status(for: .neutral) == .needsExamples,
+               "successful capture clears interruption while showing the remaining teaching take")
+        teacher.startCapture()
+        teacher.observe(timestampMS: time+1000, hasFace: true, observation: sample(.neutral))
+        expect(teacher.capture == nil && teacher.completedSteps == 1, "capture gap keeps completed takes only")
+        teacher.interrupt()
+        expect(teacher.completedSteps == 1 && !teacher.readyForCapture, "pause keeps training draft but needs fresh observations")
+        teacher = ExpressionTeacher(); time = 0
+        for label in TaughtExpressionLabel.allCases { for _ in 0..<2 { take(&teacher,label: label,time: &time) } }
+        let frozenExamples = teacher.examples
+        var flickering = teacher
+        var flickerTime = time + 100
+        flickering.observe(timestampMS: flickerTime, hasFace: true, observation: sample(.neutral))
+        flickering.startCapture()
+        for index in 0...75 {
+            flickerTime += 40
+            flickering.observe(timestampMS: flickerTime, hasFace: true,
+                               observation: sample(index % 5 == 1 ? .joy : .neutral))
+        }
+        expect(flickering.validation.isEmpty && flickering.completedSteps == 12,
+               "80 percent frame agreement is insufficient without a continuous runtime-length hold")
+        take(&teacher,label: .joy,time: &time) // Expected validation label is neutral.
+        expect(teacher.validation.isEmpty && teacher.candidate == nil, "wrong expression cannot pass a repeat check")
+        expect(teacher.examples == frozenExamples, "repeat checks never become training examples")
+        for label in TaughtExpressionLabel.allCases { take(&teacher,label: label,time: &time) }
+        expect(teacher.candidate != nil, "correct repetitions complete validation")
+        teacher.retake(.disgust)
+        expect(teacher.examples[.disgust] == nil && teacher.examples[.joy] != nil && teacher.validation.isEmpty && teacher.candidate == nil,
+               "retake invalidates all old check results and preserves other teaching takes")
+        teacher.retake(.neutral)
+        expect(teacher.examples.isEmpty, "changing reference face requires a new full teaching run")
+
+        var examples = profile.examples
+        examples[.disgust] = examples[.joy]
+        rejects("indistinguishable joy/disgust examples cannot be saved") { _ = try TaughtExpressionModel(examples: examples) }
+        examples = profile.examples
+        examples[.joy]![0].spread = [0.3,0.3,0.3,0.3,0.3]
+        rejects("noisy expression cannot be accepted just by broadening its match radius") { _ = try TaughtExpressionModel(examples: examples) }
+        examples = profile.examples
+        examples[.joy]![1] = examples[.disgust]![1]
+        rejects("inconsistent duplicate captures are rejected") { _ = try TaughtExpressionModel(examples: examples) }
+
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("TaughtExpressionTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let local = directory.appendingPathComponent("local.json"), bundled = directory.appendingPathComponent("bundled.json")
+        let store = TaughtExpressionStore(localURL: local, bundledURL: bundled)
+        try store.save(profile)
+        expect(store.load() == profile, "the entire frozen profile survives a fresh store instance")
+        let data = try TaughtExpressionStore.encode(profile)
+        let decoded = try TaughtExpressionStore.decode(data)
+        expect(decoded == profile, "export/import is lossless")
+        var noseV2 = profile; noseV2.measurementVersion = ExpressionMeasurement.noseScrunch.rawValue
+        for label in TaughtExpressionLabel.allCases {
+            for index in 0..<2 { noseV2.examples[label]![index].jawOpening = nil; noseV2.examples[label]![index].jawSpread = nil }
+            noseV2.validation[label]!.example.jawOpening = nil; noseV2.validation[label]!.example.jawSpread = nil
+        }
+        let decodedNoseV2 = try TaughtExpressionStore.decode(JSONEncoder().encode(noseV2))
+        var noseRuntime = TaughtExpressionRuntime(profile: decodedNoseV2)
+        expect(noseRuntime.needsJawDropRetake && !noseRuntime.needsNoseScrunchRetake,
+               "build-14 nose profile remains installed and requests only the new jaw teaching flow")
+        var eyeObservation = sample(.fear); eyeObservation.measurement = .noseScrunch
+        noseRuntime.observe(timestampMS: 0, hasFace: true, observation: eyeObservation)
+        expect(noseRuntime.result == .holding(.fear), "build-14 profile keeps interpreting its original eye measurements")
+        noseRuntime.observe(timestampMS: 100, hasFace: true, observation: sample(.fear))
+        expect(noseRuntime.result == .unavailable, "old eye profile never silently reads new jaw units")
+        var old = noseV2; old.matchingVersion = nil; old.measurementVersion = ExpressionMeasurement.upperLip.rawValue
+        for label in TaughtExpressionLabel.allCases {
+            for index in 0..<2 { old.examples[label]![index].center[4] += 1 }
+            old.validation[label]!.example.center[4] += 1
+        }
+        let oldData = try JSONEncoder().encode(old)
+        let migrated = try TaughtExpressionStore.decode(oldData)
+        let migratedModel = try migrated.validatedModel()
+        expect(migrated.matchingVersion == nil && migratedModel.sensitiveGeometry,
+               "build-12 export without a matching version automatically uses sensitivity when its checks still pass")
+        // A valid earlier small sad expression falls inside the new neutral
+        // noise buffer. Retain that profile with its original classifier.
+        var oldSad = old.examples[.neutral]![0].center; oldSad[3] += 0.02
+        let oldExample = ExpressionExample(center: oldSad, spread: [0,0,0,0,0], sampleCount: 21)
+        old.examples[.sadness] = [oldExample, oldExample]
+        old.validation[.sadness] = ExpressionValidation(example: oldExample, accepted: 21, total: 21, longestHoldMS: 2000)
+        let retained = try TaughtExpressionStore.decode(JSONEncoder().encode(old))
+        let retainedModel = try retained.validatedModel()
+        expect(!retainedModel.sensitiveGeometry,
+               "valid earlier profile keeps original matching if sensitive revalidation fails")
+        var oldRuntime = TaughtExpressionRuntime(profile: retained)
+        oldRuntime.observe(timestampMS: 0, hasFace: true,
+                           observation: ExpressionObservation(values: Dictionary(uniqueKeysWithValues: zip(ExpressionCue.allCases,oldSad)),
+                               pose: sample(.neutral).pose, camera: "front", measurement: .upperLip))
+        expect(oldRuntime.needsSensitivityRetake && oldRuntime.needsNoseScrunchRetake && oldRuntime.result == .holding(.sadness),
+               "older profile remains active and requests a sensitivity retake instead of disappearing")
+        oldRuntime.observe(timestampMS: 100, hasFace: true, observation: sample(.joy))
+        expect(oldRuntime.result == .unavailable, "nose geometry can never be interpreted as an old upper-lip observation")
+        var mislabeled = old; mislabeled.measurementVersion = ExpressionMeasurement.current.rawValue; mislabeled.matchingVersion = 2
+        rejects("old lip examples cannot be relabeled as a nose profile") { _ = try mislabeled.validatedModel() }
+        try data.write(to: bundled)
+        var replacement = profile; replacement.id = UUID().uuidString
+        try store.save(replacement)
+        expect(store.load()?.id == replacement.id, "training build loads explicitly installed replacement")
+        let demo = TaughtExpressionStore(localURL: local, bundledURL: bundled, allowLocal: false)
+        expect(demo.load()?.id == profile.id, "demo build always uses bundled face, not leftover local training")
+        rejects("locked demo profile cannot be overwritten") { try demo.save(replacement) }
+        let before = try Data(contentsOf: local)
+        var corrupt = replacement; corrupt.validation.removeValue(forKey: .anger)
+        rejects("unverified profile cannot replace saved profile") { try store.save(corrupt) }
+        let after = try Data(contentsOf: local)
+        expect(after == before, "failed save leaves previous bytes intact")
+        var installed = TaughtExpressionRuntime(profile: profile)
+        rejects("failed persistence leaves active profile intact") { try installed.install(replacement,store: demo) }
+        expect(installed.profile?.id == profile.id, "write failure cannot silently activate an unsaved profile")
+        try installed.install(replacement,store: store)
+        expect(installed.profile == replacement && store.load() == replacement, "explicit install saves and switches atomically")
+        corrupt = profile; corrupt.schemaVersion = 99
+        rejects("unknown profile schema rejected") { _ = try TaughtExpressionStore.decode(JSONEncoder().encode(corrupt)) }
+        corrupt = profile; corrupt.measurementVersion = "other-model"
+        rejects("incompatible feature units rejected") { _ = try corrupt.validatedModel() }
+        corrupt = profile; corrupt.matchingVersion = 99
+        rejects("unknown matching version rejected") { _ = try corrupt.validatedModel() }
+        corrupt = profile; corrupt.validation[.joy]!.accepted = 0
+        rejects("failed repeat validation rejected") { _ = try corrupt.validatedModel() }
+        corrupt = profile; corrupt.validation[.fear]!.longestHoldMS = 100
+        rejects("export cannot claim validation without a usable hold") { _ = try corrupt.validatedModel() }
+        rejects("oversized profile rejected") { _ = try TaughtExpressionStore.decode(Data(repeating: 0,count: 262_145)) }
+        try Data("corrupt".utf8).write(to: local)
+        expect(store.load() == profile, "corrupt local profile falls back to validated bundle")
+        try Data("corrupt".utf8).write(to: bundled)
+        expect(store.load() == nil, "two invalid profiles never enable default guesses")
+
+        // Optional, explicitly synthetic fixture for disposable simulator/build validation.
+        if CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--fixture-output" {
+            try TaughtExpressionStore.encode(profile).write(to: URL(fileURLWithPath: CommandLine.arguments[2]), options: .atomic)
+        }
+        print("PASS: \(checks) taught-expression checks (full-pattern matching, frozen profile, training/validation separation, lifecycle, persistence, demo lock)")
+    }
+}

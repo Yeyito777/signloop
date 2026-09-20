@@ -1,72 +1,105 @@
-# Native camera handoff
+# Native recognition handoff
 
-This local Expo SDK 55 module embeds the shared Swift scanner in the Conversation camera slot. It owns one `AVCaptureSession` for the mirrored front preview and MediaPipe processing. Pixels never cross into JavaScript. No camera video or landmark data is uploaded by this module.
+The Expo SDK 55 module runs the same `SkeletonCameraTracker` → `SkeletonPipeline`
+→ `BasicLiveRecognition` → `BasicSignMatcher` path as the standalone scanner.
+It uses one camera session. Images and landmark windows stay native and in RAM;
+only status and tentative word predictions cross into JavaScript.
 
-## Shared implementation
+## Build and provision
 
-- `ios/Signloop/CameraTracker.swift`: capture, permissions, MediaPipe, bounded landmark buffer.
-- `ios/Signloop/CaptureLifecycle.swift`: generation checks for delayed permissions/start/inference work.
-- `ios/Signloop/CaptureCadence.swift` and `CaptureFreshness.swift`: frame pacing, capture-time validation, and stale-overlay expiry.
-- `ios/Signloop/CameraPreview.swift`: the shared portrait/aspect-fill preview view.
-- `ios/Signloop/Recognition.swift`: landmark schema, normalization, buffer, coordinate mapping.
-- This directory's `ios/`: Expo module and native view; native skeleton drawing and deduplicated status events.
-- Root `SignloopCamera.podspec`: compiles both sets of sources into the Expo app without copying. CocoaPods pins the same MediaPipe 0.10.21 as the standalone scanner.
+From `mobile/`:
 
-After modifying shared Swift files, rebuild the development app. If you add a new shared file, include it in the podspec's explicit source list. Regenerate the standalone Xcode project with its bootstrap script when needed; it remains a separate app.
-
-## React Native contract
-
-`SignloopCamera` accepts `active`, `captureId`, `showSkeleton`, standard view styles,
-`onStatus`, and `onSign`. Status payloads contain `captureId`, `status`, `handCount`,
-and a diagnostic `message`. Tentative sign events carry `captureId`, `label`, and
-`observedAtMS`; a 250ms heartbeat refreshes a held candidate. The adapter validates
-the current generation and freshness before forwarding into the session reducer.
-
-| Native status | Frontend meaning |
-|---|---|
-| `starting` | Requesting access or starting capture |
-| `searching` | No complete tracked hand inside the visible crop |
-| `tracking` | At least one complete hand inside the visible crop; not language confidence |
-| `denied` | User/system denied camera access; show Settings |
-| `unavailable` | Simulator; fallback wrapper also handles missing module/other platforms |
-| `error` | Capture/model failure; show retry |
-
-Pausing, opening a sheet, ending, or backgrounding stops capture. Returning from background requires Resume. A permission prompt temporarily makes iOS inactive; capture can continue after that prompt if the conversation is still active. A late permission reply or camera-interruption notification cannot restart an explicitly paused tracker.
-
-## Connecting recognition next
-
-The native view ref exposes:
-
-```ts
-getRecentFrames(): Promise<{ captureId: number; frames: LandmarkFrame[] }>
+```sh
+npm run camera:assets
+npx pod-install ios
+npm run ios -- --device
+npm run camera:references -- /absolute/path/basic-references.json DEVICE_ID
 ```
 
-It returns the most recent 1.2 seconds from the native bounded buffer, or an empty array when capture stopped/the generation changed. Coordinates are image-normalized, portrait, mirrored for the front camera; z is relative depth. Handedness confidence is not sign confidence. The native skeleton uses the same aspect-fill math as the standalone app.
+The assets command downloads and SHA-256 verifies Google's public hand and lite
+pose models. CocoaPods includes them in `SignloopCameraModels.bundle`. Face
+tracking is disabled for this word-only Expo path. The standalone app retains
+its own settings and optional face/expression functionality.
 
-Keep at most one classification request in flight and request a fresh window after it completes. Cancel requests on pause/generation changes; reject stale results again on receipt. Keep provider API keys on the backend. You can also connect the existing Swift `RemoteRecognition` beside the tracker, avoiding landmark serialization through JS entirely. It is not compiled into this camera pod yet.
+Recognition also requires the existing private word reference bank in
+**`com.signloop.mobile` → `Documents/basic-references.json`**. The provisioning
+command validates the bank with the real Swift matcher and copies it into that
+app's container. The standalone scanner uses a different bundle ID; its file
+is not shared automatically. Use the packed bank from the working scanner and
+keep it out of Git. No private bank is included in this repository or app bundle.
 
-The shared tracker now uses MediaPipe Gesture Recognizer (including hand landmarks),
-loaded from the pod's `gesture_recognizer.task` resource. The native view runs the
-same stale-frame watchdog as the standalone camera. The private five-sign
-LiteRT engine is still standalone-only and is not compiled into this pod.
+After provisioning, tap **Retry recognition setup** (or pause and resume).
+Missing and invalid banks have distinct visible states, and load failures can
+be retried without restarting the app. A missing tracking model requires a
+complete new native build.
 
-Tentative ILY estimates are exposed separately from `TranslationEvent.accepted`.
-`cameraKit` now maps only that public handshape to a confirmation candidate.
-The user must confirm a fresh candidate before it enters the transcript/voice
-pipeline. Unknown, cropped-out, or stale observations clear candidates. The
-goose and optional real backend voice adapter are connected; no simulated
-successful voice playback is used outside the explicitly labelled UI demo.
+Swift changes require reinstalling the native app. `recognitionVersion: 4`
+lets the JS adapter detect an incompatible native installation and explain that a
+rebuild is needed instead of silently showing no results. Expo Go cannot load
+this module. Simulator can exercise UI but cannot recognize camera input.
 
-## Build and check
+## Contract
 
-From `mobile/`: `npm ci`, then `npm run ios`. For a connected phone use `npm run ios -- --device`. For a manual prebuild/pod install, first run `npm run camera:assets`. The downloaded model is ignored by Git and packaged in `SignloopCameraModels.bundle`.
+`SignloopCamera` accepts `active`, `captureId`, `showSkeleton`, view styles,
+`onStatus`, and `onPrediction`. Types are in `events.ts`.
 
-Simulator checks native registration, screens, pause/resume, sheets, and the unavailable fallback. It cannot test actual camera frames. On an iPhone:
+- Status includes a capture ID, hand count, diagnostic message and state:
+  camera startup/access/errors; missing models; reference loading/failure;
+  missing hands/shoulders; or ready tracking.
+- Predictions identify `basic-temporal-v3`, the capture ID, a label (or null),
+  `matched`, the phase (`preview`, `completed`, or `cleared`), and the **input
+  frame's** wall-clock observation time. Rolling and completed rankings share an
+  attempt ID and include up to three ranked labels with distances. Distances are not confidence
+  probabilities; completed results remain explicitly uncertain.
+- The presentation vocabulary is HELLO, MY, NAME, TODAY, WE, SHOW, PHONE,
+  PLEASE, SORRY, THANKYOU, ILOVEYOU. There is no alphabet/spelling UI in Expo.
+- Fresh rolling guesses immediately offer up to three choices and **None of these**.
+  Gesture completion is an additional observation, not a review gate. Selecting a choice and confirming
+  it are separate actions; only confirmation produces a caption or speech.
+  Delivery must be within one second of observation; an accepted review lasts
+  up to ten seconds. Invalid labels, stale events, old capture generations and
+  old attempt IDs cannot confirm a caption.
+- The shared SignSegmenter detects movement/rest and static holds. This adapter
+  uses 200 ms of elapsed-time motion history and preserves the attempt's leading
+  observations even when onset detection is late. The trained SignEngine keeps
+  its existing frame-based defaults. Matching a completed gesture uses its
+  whole hand/body sequence instead of cropping it to the preview window. A
+  bounded queue preserves completions while the worker is busy. Tracking loss
+  immediately cancels the gesture rather than treating missing hands as its end.
+- The existing acceptance policy was calibrated on rolling windows. Whole
+  segments therefore remain uncertain until separately evaluated and calibrated.
+  Unselected choices follow fresh results; a result with older input cannot
+  overwrite a newer ranking in the same attempt. Tapping any choice freezes it
+  and its original expiry. Neither rolling nor completed results can replace an
+  explicit selection. A held pose cannot reopen a handled attempt. Fresh movement
+  can begin the next attempt; **Review another sign** explicitly restarts capture
+  when the user wants to retry or repeat without a detected movement boundary.
+- Pausing/backgrounding stops capture and resets recognition. A changed
+  capture ID resets matching and rejects earlier frames/jobs without rebuilding
+  the tracking models. Hand/body loss and camera stalls clear predictions.
+- The full portrait preview uses aspect-fit with matching mirrored overlay
+  geometry, so the goose's short camera tile does not crop away sign evidence.
 
-1. Open Start conversation; allow camera access and check that the preview starts.
-2. Move one/two hands into view; confirm joint alignment and no success when hands leave the visible crop.
-3. Pause/resume, open/close a sheet, background/return, and end. Check that camera use stops and no old readiness returns.
-4. Deny permission, open Settings, grant it, return, and Resume. Also leave the conversation while a permission request is pending.
-5. Confirm that hand detection produces no sample sentence, audio, or network request.
+## Validation
 
-Core checks: `npm run typecheck`, `npm test`, and from the repository root `bash ios/scripts/test-core.sh`.
+Run `npm run typecheck`, `npm test`, and `bash ../ios/scripts/test-core.sh`.
+Tests cover the actual native vocabulary mapping to confirmed captions, the
+existing voice path, explicit uncertainty, alternative selection/rejection,
+completed-gesture boundaries, stale/generation rejection, reference load/retry
+failures, worker reset callbacks, and fit/mirror geometry. Synthetic
+Swift fixtures check the pipeline; they do not establish live ASL accuracy.
+
+On a physical phone with the private bank installed:
+
+1. Open the rebuilt goose app and Start conversation. Confirm hands and both
+   shoulders are visible, with joints aligned to the selfie preview.
+2. Try the 11 supported signs, keeping hands and shoulders in view. Choices
+   should update while signing, without waiting for a final hold. Select one,
+   check that it stays fixed, then confirm. Nothing should be added or spoken automatically.
+3. Select and confirm a choice with voice disabled, then with configured voice
+   enabled. Check alternatives, None of these, expiry, caption, speech, goose
+   animation, held-sign deduplication, and repeating a sign after relaxing.
+4. Remove hands/shoulders, pause/resume, open a sheet, and background/return.
+   No old prediction may reappear or remain confirmable.
+5. Test missing/invalid references and Retry after installing a valid bank.
+   Do not interpret tracking readiness or offline tests as accuracy validation.

@@ -1,12 +1,12 @@
 {
-  "name": "signloop-mobile",
+  "name": "honk-and-tell-mobile",
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
     "@expo-google-fonts/dm-sans": "^0.4.2",
     "@expo-google-fonts/fredoka": "^0.4.1",
     "@gorhom/bottom-sheet": "^5.2.14",
-    "@react-three/fiber": "^9.7.0",
+    "@react-three/fiber": "9.7.0",
     "base64-js": "^1.5.1",
     "expo": "^55.0.31",
     "expo-asset": "~55.0.20",
@@ -31,7 +31,7 @@
     "react-native-svg": "15.15.3",
     "react-native-url-polyfill": "^4.0.0",
     "react-native-worklets": "0.7.4",
-    "three": "^0.186.0"
+    "three": "0.186.0"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
@@ -41,7 +41,8 @@
   "scripts": {
     "postinstall": "node scripts/patch-rn-paths.cjs",
     "start": "expo start --dev-client",
-    "camera:assets": "bash ../ios/scripts/fetch-hand-model.sh",
+    "camera:assets": "bash ../ios/scripts/fetch-skeleton-models.sh",
+    "camera:references": "bash scripts/provision-sign-references.sh",
     "preios": "npm run camera:assets",
     "ios": "expo run:ios",
     "android": "expo run:android",

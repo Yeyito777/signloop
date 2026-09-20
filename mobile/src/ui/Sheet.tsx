@@ -3,7 +3,7 @@ import { BackHandler, Pressable, StyleSheet, View, useWindowDimensions } from 'r
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView, useBottomSheetSpringConfigs, type BottomSheetBackdropProps, type BottomSheetBackgroundProps } from '@gorhom/bottom-sheet';
 import Animated, { ReduceMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Copy, IconButton } from './primitives';
+import { Copy, IconButton, InverseSurface } from './primitives';
 import { motion, useMotion } from './motion';
 import { tokens } from './theme';
 
@@ -38,13 +38,13 @@ export function Sheet({ title, contentKey, children, onClose, visible, closing, 
     onAnimate={(_, toIndex) => { if (toIndex === -1) onClose(); }} onDismiss={onDismiss}>
     <BottomSheetScrollView key={contentKey} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}
       contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 12 }}>
-      <Animated.View entering={enter} pointerEvents={closing ? 'none' : 'auto'} accessibilityViewIsModal onAccessibilityEscape={onClose}>
+      <InverseSurface><Animated.View entering={enter} pointerEvents={closing ? 'none' : 'auto'} accessibilityViewIsModal onAccessibilityEscape={onClose}>
         <View style={styles.heading}>
           <Copy role="sheetTitle" accessibilityRole="header" style={styles.title}>{title}</Copy>
           <IconButton icon="close" label={`Close ${title.toLowerCase()}`} onPress={onClose} />
         </View>
         <View style={styles.content}>{children}</View>
-      </Animated.View>
+      </Animated.View></InverseSurface>
     </BottomSheetScrollView>
   </BottomSheetModal>;
 }
@@ -58,10 +58,10 @@ function SheetHandle() {
 }
 
 const styles = StyleSheet.create({
-  surface: { backgroundColor: tokens.color.paper, borderRadius: 28, borderWidth: 1, borderColor: tokens.color.line },
-  handle: { width: 38, height: 4, borderRadius: 2, backgroundColor: tokens.color.line, alignSelf: 'center' },
+  surface: { backgroundColor: tokens.color.ink, borderRadius: 32 },
+  handle: { width: 38, height: 4, borderRadius: 2, backgroundColor: `${tokens.color.paper}66`, alignSelf: 'center' },
   handleArea: { paddingTop: 12, paddingBottom: 16 },
   heading: { flexDirection: 'row', paddingLeft: 24, paddingRight: 16, alignItems: 'center', marginBottom: 12, gap: 8 },
-  title: { flex: 1 },
+  title: { flex: 1, fontSize: 36, lineHeight: 36, letterSpacing: -1 },
   content: { paddingHorizontal: 24, paddingTop: 4, gap: 16 },
 });

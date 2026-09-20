@@ -6,9 +6,10 @@ import QuartzCore
 
 final class SignloopCameraView: ExpoView {
     let onStatus = EventDispatcher()
-    let onSign = EventDispatcher()
     let onPrediction = EventDispatcher()
-    let tracker: CameraTracker
+    let tracker: SkeletonCameraTracker
+    private let recognition = BasicLiveRecognition(activeLabels: BasicSignScore.presentationVocabulary,
+        weMotionScale: BasicSignMatcher.compactWEMotionScale)
     var active = false
     var captureId = 0
     var showSkeleton = true
@@ -16,28 +17,36 @@ final class SignloopCameraView: ExpoView {
 
     private let preview = PreviewView()
     private let skeleton = CAShapeLayer()
-    private var subscription: AnyCancellable?
+    private var subscriptions: [AnyCancellable] = []
     private var observers: [NSObjectProtocol] = []
     private var appliedCaptureId = -1
+    private var captureStartedMS = 0
     private var lastStatus = ""
-    private var lastSign = ""
-    private var lastSignAt = 0.0
     private var renderScheduled = false
     private var expiryTimer: Timer?
+    private let missingModels: [String]
 
     required init(appContext: AppContext? = nil) {
-        let resourceURL = Bundle(for: SignloopCameraView.self).url(forResource: "SignloopCameraModels", withExtension: "bundle")
+        let url = Bundle(for: SignloopCameraView.self).url(forResource: "SignloopCameraModels", withExtension: "bundle")
             ?? Bundle.main.url(forResource: "SignloopCameraModels", withExtension: "bundle")
-        let resourceBundle = resourceURL.flatMap(Bundle.init(url:))
-        let model = resourceBundle?.path(forResource: "gesture_recognizer", ofType: "task")
-        // Optional on-device SignEngine package (policy + Core ML), present only if one was cleared and bundled.
-        tracker = CameraTracker(modelPath: model, signEngineDirectory: resourceBundle.flatMap(SignEngine.locate(in:)))
+        let modelBundle = url.flatMap(Bundle.init(url:)) ?? .main
+        missingModels = ["hand_landmarker", "pose_landmarker_lite"].filter {
+            modelBundle.path(forResource: $0, ofType: "task") == nil
+        }
+        tracker = SkeletonCameraTracker(modelBundle: modelBundle, faceTrackingEnabled: false)
         super.init(appContext: appContext)
-        tracker.onPrediction = { [weak self] prediction in self?.emitPrediction(prediction) }
+        tracker.onSkeletonFrame = { [weak self] frame in
+            guard let self, self.acceptsEvents, frame.timestampMS >= self.captureStartedMS else { return }
+            self.recognition.receive(frame)
+        }
+        tracker.onSkeletonReset = { [weak self] in self?.recognition.reset() }
+        recognition.onPrediction = { [weak self] in self?.emitPrediction($0) }
         clipsToBounds = true
         backgroundColor = .black
-        preview.previewLayer.session = tracker.session
-        preview.previewLayer.videoGravity = .resizeAspectFill
+        preview.mirrored = tracker.isFront
+        preview.attach(session: tracker.session)
+        // A short conversation tile must still show the whole signing area.
+        preview.previewLayer.videoGravity = .resizeAspect
         addSubview(preview)
         skeleton.strokeColor = UIColor(red: 1, green: 0.95, blue: 0.73, alpha: 1).cgColor
         skeleton.fillColor = UIColor.clear.cgColor
@@ -45,36 +54,37 @@ final class SignloopCameraView: ExpoView {
         skeleton.lineCap = .round
         skeleton.lineJoin = .round
         layer.addSublayer(skeleton)
-        // Coalesce all @Published changes from a frame and read the settled snapshot.
-        subscription = tracker.objectWillChange.sink { [weak self] _ in
-            guard let self, !self.renderScheduled else { return }
-            self.renderScheduled = true
-            DispatchQueue.main.async { [weak self] in
-                self?.renderScheduled = false
-                self?.renderTracking()
-            }
-        }
+        subscriptions = [tracker.objectWillChange.sink { [weak self] _ in self?.scheduleRender() },
+                         recognition.objectWillChange.sink { [weak self] _ in self?.scheduleRender() }]
         for name in [UIApplication.didEnterBackgroundNotification, UIApplication.willResignActiveNotification] {
             observers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 self?.stop()
             })
         }
-        observers.append(NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
-            self?.synchronize()
-        })
+        observers.append(NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification,
+            object: nil, queue: .main) { [weak self] _ in self?.synchronize() })
     }
 
     deinit {
         expiryTimer?.invalidate()
-        subscription?.cancel()
+        subscriptions.forEach { $0.cancel() }
         observers.forEach(NotificationCenter.default.removeObserver)
         tracker.pause()
+        recognition.reset()
     }
 
-    override func didMoveToWindow() {
-        super.didMoveToWindow()
-        synchronize()
+    private var acceptsEvents: Bool { active && isCapturing && appliedCaptureId == captureId }
+
+    private func scheduleRender() {
+        guard !renderScheduled else { return }
+        renderScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            self?.renderScheduled = false
+            self?.renderTracking()
+        }
     }
+
+    override func didMoveToWindow() { super.didMoveToWindow(); synchronize() }
 
     override func layoutSubviews() {
         super.layoutSubviews()
@@ -84,28 +94,36 @@ final class SignloopCameraView: ExpoView {
     }
 
     func synchronize() {
-        guard active, window != nil, UIApplication.shared.applicationState == .active else {
-            stop()
-            return
-        }
+        guard active, window != nil, UIApplication.shared.applicationState == .active else { stop(); return }
         #if targetEnvironment(simulator)
-        emit("unavailable", message: "Camera preview needs a physical iPhone.")
+        emit("unavailable", message: "Camera recognition needs a physical iPhone.")
         return
         #else
-        guard !isCapturing || appliedCaptureId != captureId else {
-            renderTracking()
+        guard missingModels.isEmpty else {
+            emit("model-missing", message: "Missing tracking models: \(missingModels.joined(separator: ", ")). Rebuild the app.")
             return
         }
+        guard !isCapturing || appliedCaptureId != captureId else { renderTracking(); return }
+        let startCamera = !isCapturing
         isCapturing = true
         appliedCaptureId = captureId
+        captureStartedMS = Int(CaptureClock.now * 1000)
         lastStatus = ""
-        lastSign = ""
-        emit("starting")
-        tracker.start()
+        recognition.reset()
+        recognition.load() // Retries a failed load after the user chooses Retry.
+        // Hand loss changes the JS generation. Keep expensive trackers alive;
+        // discard pre-generation frames and matching jobs instead.
+        if startCamera { tracker.start() }
+        preview.mirrored = tracker.isFront
+        preview.attach(session: tracker.session)
+        preview.previewLayer.videoGravity = .resizeAspect
         expiryTimer?.invalidate()
-        expiryTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
             self?.tracker.expireLocalResult()
         }
+        expiryTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+        renderTracking()
         #endif
     }
 
@@ -113,9 +131,11 @@ final class SignloopCameraView: ExpoView {
         expiryTimer?.invalidate()
         expiryTimer = nil
         guard isCapturing else { return }
+        emitPrediction(.cleared())
         isCapturing = false
         skeleton.path = nil
         tracker.pause()
+        recognition.reset()
     }
 
     private func emit(_ status: String, handCount: Int = 0, message: String = "") {
@@ -123,78 +143,81 @@ final class SignloopCameraView: ExpoView {
         guard key != lastStatus else { return }
         lastStatus = key
         onStatus(["captureId": captureId, "status": status, "handCount": handCount, "message": message])
-        if status != "tracking" { emitSign(nil) }
+        if status != "tracking" { sendPrediction(.cleared(), observedAtMS: Date().timeIntervalSince1970 * 1000) }
     }
 
-    /// Completed attempts and state changes only. The payload is a decision, never landmarks or pixels;
-    /// the JS session flow still requires the user to confirm before anything becomes a caption.
-    private func emitPrediction(_ p: SignPrediction) {
-        guard isCapturing else { return }
-        onPrediction([
-            "captureId": captureId,
-            "label": p.label as Any? ?? NSNull(),
-            "confidence": p.confidence,
-            "state": p.state,
-            "trackingQuality": p.trackingQuality,
-            "tier": p.tier as Any? ?? NSNull(),
-            "reason": p.reason as Any? ?? NSNull(),
-            "observedAtMS": Date().timeIntervalSince1970 * 1000,
-        ])
+    private func emitPrediction(_ prediction: BasicLivePrediction) {
+        guard acceptsEvents else { return }
+        guard prediction.phase != .cleared, let timestamp = prediction.timestampMS,
+              timestamp >= captureStartedMS, recognition.ready,
+              let frame = tracker.skeleton, frame.hasSigningPose, !frame.hands.isEmpty else {
+            sendPrediction(.cleared(), observedAtMS: Date().timeIntervalSince1970 * 1000)
+            return
+        }
+        let ageMS = CaptureClock.now * 1000 - Double(timestamp)
+        guard ageMS >= 0, ageMS <= 1000 else {
+            sendPrediction(.cleared(), observedAtMS: Date().timeIntervalSince1970 * 1000)
+            return
+        }
+        renderTracking() // Publish readiness before the candidate on the same native queue.
+        sendPrediction(prediction,
+            observedAtMS: Date().timeIntervalSince1970 * 1000 - ageMS)
     }
 
-    private func emitSign(_ label: String?) {
-        let key = "\(captureId):\(label ?? "unknown")"
-        let now = Date().timeIntervalSince1970 * 1000
-        // Refresh candidate expiry while held, without flooding the JS bridge.
-        guard key != lastSign || (label != nil && now - lastSignAt >= 250) else { return }
-        lastSign = key
-        lastSignAt = now
-        let observed = now - Double(tracker.frameAgeMS ?? 0)
-        onSign(["captureId": captureId, "label": label as Any? ?? NSNull(), "observedAtMS": observed])
+    private func sendPrediction(_ prediction: BasicLivePrediction, observedAtMS: Double) {
+        let candidates: [[String: Any]] = prediction.candidates.compactMap { score in
+            guard let distance = score.measuredDistance else { return nil }
+            return ["label": score.label, "distance": distance]
+        }
+        onPrediction(["captureId": captureId, "engine": "basic-temporal-v3",
+                      "phase": prediction.phase.rawValue, "attemptId": prediction.attemptID as Any? ?? NSNull(),
+                      "candidates": candidates, "label": prediction.label as Any? ?? NSNull(),
+                      "matched": prediction.matched, "observedAtMS": observedAtMS])
     }
 
     private func renderTracking() {
-        guard isCapturing else { return }
-        if tracker.permissionDenied {
-            skeleton.path = nil
-            emit("denied")
-            return
-        }
-        if let error = tracker.errorMessage {
-            skeleton.path = nil
-            emit("error", message: error)
-            return
-        }
-        guard tracker.isRunning else {
-            skeleton.path = nil
-            emit("starting")
-            return
-        }
-
+        guard acceptsEvents else { return }
+        if tracker.permissionDenied { skeleton.path = nil; emit("denied"); return }
+        if let error = tracker.errorMessage { skeleton.path = nil; emit("error", message: error); return }
+        guard tracker.isRunning else { skeleton.path = nil; emit("starting"); return }
+        let frame = tracker.skeleton.flatMap { $0.timestampMS >= captureStartedMS ? $0 : nil }
         let path = UIBezierPath()
-        var visibleHands = 0
-        let chains = [[0, 1, 2, 3, 4], [0, 5, 6, 7, 8], [5, 9, 10, 11, 12],
-                      [9, 13, 14, 15, 16], [13, 17, 18, 19, 20], [0, 17]]
-        for hand in tracker.hands where hand.joints.count == 21 {
-            let points = hand.joints.map { joint -> CGPoint in
-                let point = overlayPoint(joint, sourceWidth: tracker.frameSize.width,
-                    sourceHeight: tracker.frameSize.height, viewWidth: bounds.width, viewHeight: bounds.height)
-                return CGPoint(x: point.0, y: point.1)
+        if let frame {
+            func points(_ source: [SkeletonPoint]) -> [Int: CGPoint] {
+                var result: [Int: CGPoint] = [:]
+                for point in source where point.usable {
+                    let xy = SkeletonGeometry.project(point, width: Double(frame.width), height: Double(frame.height),
+                        viewWidth: bounds.width, viewHeight: bounds.height, mirrored: tracker.isFront, aspectFill: false)
+                    result[point.id] = CGPoint(x: xy.0, y: xy.1)
+                }
+                return result
             }
-            // The split-screen crop can hide landmarks even when the full sensor sees them.
-            if points.allSatisfy({ bounds.contains($0) }) { visibleHands += 1 }
-            for chain in chains {
-                path.move(to: points[chain[0]])
-                for index in chain.dropFirst() { path.addLine(to: points[index]) }
+            func edge(_ a: Int, _ b: Int, in points: [Int: CGPoint]) {
+                guard let a = points[a], let b = points[b] else { return }
+                path.move(to: a); path.addLine(to: b)
             }
-            for point in points { path.append(UIBezierPath(ovalIn: CGRect(x: point.x - 2, y: point.y - 2, width: 4, height: 4))) }
+            for hand in frame.hands {
+                let mapped = points(hand.points)
+                for chain in SkeletonGeometry.handChains {
+                    for (a, b) in zip(chain, chain.dropFirst()) { edge(a, b, in: mapped) }
+                }
+                for point in mapped.values {
+                    path.append(UIBezierPath(ovalIn: CGRect(x: point.x - 2, y: point.y - 2, width: 4, height: 4)))
+                }
+            }
+            let body = points(frame.pose)
+            for (a, b) in SkeletonGeometry.poseEdges where a >= 11 { edge(a, b, in: body) }
         }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         skeleton.path = showSkeleton ? path.cgPath : nil
-        emitSign(visibleHands > 0 ? tracker.localSign : nil)
         CATransaction.commit()
-        // No face, distance, lighting, emotion, or sign-confidence inference here.
-        emit(visibleHands > 0 ? "tracking" : "searching", handCount: visibleHands)
+        if let failure = recognition.loadFailure {
+            emit(failure == .missing ? "references-missing" : "references-invalid", message: recognition.detail)
+        } else if !recognition.ready {
+            emit("recognizer-loading", message: recognition.detail)
+        } else if let frame, !frame.hands.isEmpty {
+            emit(frame.hasSigningPose ? "tracking" : "body-missing", handCount: frame.hands.count)
+        } else { emit("searching") }
     }
 }

@@ -1,77 +1,58 @@
-# Signloop frontend handoff
+# Honk & Tell frontend handoff
 
 Sunny · September 19, 2026 · `sunny`
 
-Keep design, screens, animation, and subsequent integration work together on `sunny`.
+The Expo app in `mobile/` uses the [Playroom design system](../design-system/README.md). Keep Sunny's design and integration work on `sunny`. The selected Go big direction uses “You were saying?”, a large shared goose, open captions, and dark sheets.
 
-The initial Expo app is in `mobile/`. It uses the approved [Playroom design system](../design-system/README.md). Screen layouts are ready for native review, not final approval. The older HTML board includes explorations outside the current MVP.
-
-## Two routes
+## Routes and sheets
 
 | Route | Contents |
 |---|---|
-| `/` | Home, temporary goose, one Start conversation action. No camera capture. |
-| `/conversation` | Stable vertical split: camera above, goose and captions below. |
+| `/` | Home, shared 3D goose, Start conversation, Voice settings. No camera capture. |
+| `/conversation` | Stable camera/goose/caption regions; native scanner by default. |
+| `/settings` | Main's optional backend voice configuration and session consent. |
 
-Transcript, correction, the conversation menu, and end confirmation are local sheets within Conversation. Framing feedback belongs in the camera view. There is no preferences route, tutorial sequence, account, saved-history dashboard, or goodbye screen.
+Transcript, correction, the conversation menu, and end confirmation remain local sheets within Conversation. Framing feedback belongs in the camera view. System text size and Reduce Motion are respected without duplicating those controls. There are no accounts, saved-history screens, tutorials, or goodbye screens.
 
-The menu contains transcript, correction, voice on/off, and end conversation. System text size and Reduce Motion are respected without duplicating them in a settings screen.
+Home retains one primary Start action. `/conversation?demo=1` explicitly selects the finite sample: framing → ready → draft → thinking → accepted sample caption → silent speech preview. Simulator camera guidance links to this demo. “Demo · try states” provides manual framing, emotion, and caption scenarios without making network requests.
 
-## Behavior implemented for review
+## Conversation behavior
 
-- Home has one Start conversation action, entering Conversation with native hand tracking. For UI testing, `/conversation?demo=1` explicitly selects the demo: framing → ready → draft → thinking → accepted caption → silent speech preview.
-- Pause stops capture, recognition callbacks, current speech, and queued speech. Resume starts a fresh framing check. Backgrounding the app pauses it; returning requires Resume.
-- Opening a sheet temporarily stops capture and playback. Closing it resumes through framing if the user had been active; an explicit prior pause is preserved. This resumption behavior is a UX choice for review.
-- Only accepted phrases enter the transcript and automatic speech. Drafts and uncertain phrases are never spoken. Stable phrase IDs suppress duplicate acceptance events.
-- Correction edits the latest accepted phrase. Save & speak makes the change and requests playback; with voice off it becomes Save correction. The first original caption is retained. Sign it again restarts framing; the existing accepted transcript entry stays.
-- Transcript is in memory for this conversation. End confirmation clearly says it will be cleared; End releases the session and returns Home. No disk storage or export yet.
-- Losing framing invalidates unfinished recognition. An already accepted phrase may finish playing. Network failure cancels playback and requires retry; voice failure leaves readable text.
-- Capture generations and playback IDs reject callbacks from stopped work. Accepted phrases play in order. The current queue is suitable for the finite demo; a live adapter needs an explicit latency/backlog policy before continuous use.
+- Pause stops capture and current/queued speech. Resume starts a fresh framing generation. Backgrounding pauses the conversation and revokes voice-upload consent; returning requires Resume.
+- Sheets temporarily stop capture and playback. Dismissal resumes framing if the conversation was previously active; an explicit pause remains paused. Correction playback waits for dismissal.
+- Drafts and tentative candidates are never spoken. Live ILY estimates require explicit confirmation before becoming a caption. Holding a confirmed gesture does not repeat it; release permits a new confirmation.
+- Correction edits the most recent accepted phrase and retains its original wording. Save & speak requests playback; with voice off, Save correction changes text only. Sign it again restarts framing.
+- The transcript stays in memory. End clears it, releases capture, and returns Home.
+- Capture generations, candidate expiry, and playback IDs reject stale callbacks. Accepted phrases play in order. Continuous ASL translation still needs a defined phrase-boundary and speech-backlog policy.
 
-## Integration boundary
+## Camera and recognition
 
-See [contracts.ts](../mobile/src/integrations/contracts.ts). `cameraKit` supplies the native camera, temporary avatar, and unconnected translation/voice adapters. `demoKit` supplies four simulated pieces for explicit sample review. Screens know their contracts, not their implementation.
+[`CameraProps`](../mobile/src/integrations/contracts.ts) includes `active`, `captureId`, framing state, `onFraming`, and `onTranslation`. A native preview owns capture and processing together. Never open a second Expo camera over it.
 
-### Native camera / scanner
+The [Expo camera module](../mobile/modules/signloop-camera/README.md) compiles shared Swift sources from root `ios/Signloop/`. The merge retains `main`'s Gesture Recognizer, cadence/freshness checks, lifecycle handling, and tentative ILY events. A complete hand must be visible inside the actual crop for readiness. This does not establish lighting, distance, emotion, or full ASL confidence; unsupported diagnoses remain demo-only.
 
-`CameraProps` includes `active`, `captureId`, current `framing` presentation state, and `onFraming(framing, captureId)`. A native preview owns capture and processing together. Mount it in the existing camera slot; never open an extra Expo camera over it.
+Live recognition is a limited public-model ILY handshape preview: extend thumb, index, and pinky, then confirm the proposed English. It is not validated general ASL translation. The separate native five-sign research engine and private weights are not compiled into the Expo camera pod. The camera view makes no network requests.
 
-Implemented in [`mobile/modules/signloop-camera/`](../mobile/modules/signloop-camera/README.md). The local Expo view compiles the existing Swift scanner directly through the root podspec. It honors `active=false`, unmount, and application lifecycle; late permission replies and inference publications are rejected after pause. Preview, MediaPipe inference, and the skeleton stay native. JS receives deduplicated status changes tagged with `captureId`.
+Expo generates its own `mobile/ios/`; preserve the root native project. Changes to Swift, podspecs, native dependencies, or Expo config require rebuilding the development app.
 
-The scanner uses **MediaPipe Hand Landmarker**, not an ASL classifier. A complete hand must be visible inside the actual split-screen crop to emit ready. That does not establish face visibility, lighting quality, distance, emotion, or sign confidence. Unsupported framing diagnoses remain demo-only. Camera permission, denied/Settings, startup failure/retry, and Simulator/unavailable states are implemented. The demo requests no permission.
+## Layout and animation
 
-Expo builds its own project under `mobile/ios/`. Preserve the root `ios/` scanner scaffold. Swift/native processing plus React Native UI is the intended division of work.
+`SharedStage.tsx` renders one avatar above Home/Conversation and below sheets. `StageSlot` publishes measured bounds; transitions move the outer container while retaining the character. The stage is hidden on Voice settings. Its logical size stays 320 × 440, with a smaller drawing surface on software GL. Home clips scrolling artwork away from controls. Direct entry and Reduce Motion skip travel.
 
-Merged `origin/main` at `66d403b`, including `BackendClient.swift`, `RemoteRecognition.swift`, and the Python backend. The Expo camera wrapper currently makes no network requests. The module exposes `getRecentFrames()` on its native view ref for the next recognition integration; the shared Swift `recentFrames()` remains available for a native adapter. The backend's “possible sign” is a tentative label, not a completed English phrase eligible for speech. Phrase boundaries/acceptance and the caption endpoint still need wiring. Validate recognition on a physical phone.
+The conversation reserves roughly 45% camera, 30% goose, and 25% captions. Larger system text claims more caption space without shrinking the goose. Long captions, tentative confirmation, notices, and recovery actions scroll inside that region; edit/replay remain in its header. Candidate confirmation does not expand the region or overlay the character.
 
-### Translation
+Framing presentation waits for 300 ms of stable readiness and 450 ms before changing other guidance; native/permission failures appear immediately. Raw scanner events still control recognition without this visual delay. Accepted captions stay visible through later drafts, framing loss, pause, and errors. Delivery labels distinguish preparing voice, actual speech, silent demo playback, interruption, and failure.
 
-`TranslationAdapter.start(captureId, emit)` returns a cancellation function. Events are draft, thinking, accepted phrase (stable ID, text, emotion), uncertain, or offline. Framing readiness is independent of language confidence. Connect the scanner/backend stream inside this layer, not inside screens.
+## Shared goose and voice
 
-On cancel, release sockets/subscriptions and discard unfinished work. The coordinator also ignores stale events. Backend secrets stay off the phone. Before live integration, agree on phrase boundaries, stable IDs, confidence rejection, and supported vocabulary.
+[`GooseAvatar`](../mobile/src/integrations/GooseAvatar.tsx) adapts the app's activity/emotion contract to the canonical character in `goose/src/`. Home, camera, and demo kits use the same component identity. Listening maps to watching, happy to joy; neutral/thoughtful do not assign an emotion. The mobile wrapper supplies transparency, the illustrated fallback, motion preferences, and `gooseLipSync`. See the [character handoff](../mobile/src/avatar/README.md).
 
-### Shared stage and presentation
+Metro keeps mobile on Expo SDK 55 even if the standalone goose app has its Expo 57 dependencies installed. Both source trees resolve Three to the same ESM instance. The software-renderer preview retains the idle fix while hardware keeps Sanvi's original materials.
 
-`src/ui/SharedStage.tsx` renders a single `Avatar` above the route contents and below the sheet portal. Home and Conversation reserve space using `StageSlot`; measured bounds animate the outer container. The render surface stays 240 × 240 logical points while its container moves/scales, so the transition does not remount the future 3D renderer or resize its drawing surface every frame. Both kits should use the same avatar component to preserve that continuity. The Home viewport clips scrolling artwork away from controls. Direct entry works without a source frame; Reduce Motion skips movement.
+`VoiceAdapter.speak(text, signal, onPlaybackStart)` resolves after playback and aborts local audio on cancellation. The live kit uses `main`'s authenticated `/v1/speech` backend; the demo uses a labelled silent timer. Backend credentials/provider selection remain server-side. Voice settings requires explicit upload consent; confirmed or edited English is uploaded, never camera images or landmarks. Consent is held in memory and revoked on backgrounding.
 
-`CameraGuidance` filters only displayed tracking status (300 ms stable ready, 450 ms changed guidance). Device/permission failures are immediate. Raw scanner events still control recognition cancellation without delay. The guidance only uses diagnoses emitted by the adapter; unsupported states remain explicit demo examples.
-
-`CaptionPanel` keeps the most recently accepted phrase readable during the next draft, framing loss, pause, or errors. A first draft is labeled unspoken. Delivery labels distinguish queued, playing, completed, interrupted, muted and failed playback; the demo always labels simulated playback. Caption height expands into the stage, while the camera keeps its size. Correction updates in place with a brief acknowledgment.
-
-### Goose
-
-`AvatarProps`: `mode` (idle, listening, thinking, speaking), `emotion` (placeholder vocabulary), `reducedMotion`, and layout style. Replace the illustration with a 3D renderer through this interface.
-
-Model format, renderer, expression vocabulary, clip names, and mouth synchronization remain open. Extend the contract together when assets arrive. The character is decorative for accessibility; text communicates meaning. Stop motion while paused/backgrounded. The placeholder does not implement facial emotions.
-
-### Voice
-
-`VoiceAdapter.speak(text, AbortSignal)` resolves after playback ends and rejects on failure. Abort must stop audio and outstanding requests. The current adapter is a **silent timer**, not ElevenLabs. Connect backend-generated ElevenLabs audio to a native player and drive speaking from actual playback. Add audio/viseme events when needed.
+The native MP3 player feeds its clock and alignment-based gesture cues to the goose. The beak currently uses procedural speech motion because no amplitude envelope is supplied. Native PCM streaming and general ASL translation remain future work. See [voice backend setup](voice-backend.md) and [combined branch status](branch-integration.md).
 
 ## Review
 
-See [run instructions](../mobile/README.md). “Demo · try states” opens framing, uncertainty, disconnection, and long-caption scenarios. This control belongs to the demo kit and disappears in live mode.
-
-Review Home → Start, automatic captions, pause/resume, correction with the keyboard, transcript, mute, end/cancel, background/foreground, long captions, larger text, and Reduce Motion. Reducer tests cover cancellation, late events, deduplication, queue ordering, correction, mute, and recovery.
-
-Camera/permission behavior and skeleton alignment need physical iPhone validation. Simulator and unsigned iPhone compilation are checked. Recognition, final 3D rendering, actual audio, and Android capture remain integration work. Hand tracking does not recognize ASL.
+Use the [mobile run instructions](../mobile/README.md). Check Home → Start, Voice settings → Back, the explicit demo, pause/resume, correction with keyboard, transcript, mute, end/cancel, lifecycle, long captions, larger text, and Reduce Motion. Automated tests cover tentative confirmation, freshness, cancellation, queue order, voice consent, and lip-sync ownership. Physical iPhone validation is required for camera, audio, and hardware GL together; Android capture is not implemented.

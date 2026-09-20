@@ -7,30 +7,107 @@ struct CameraPreview: UIViewRepresentable {
 
     func makeUIView(context: Context) -> PreviewView {
         let view = PreviewView()
-        view.previewLayer.session = session
         view.previewLayer.videoGravity = .resizeAspectFill
+        view.mirrored = mirrored
+        view.attach(session: session)
         return view
     }
 
     func updateUIView(_ view: PreviewView, context: Context) {
         view.mirrored = mirrored
-        view.setNeedsLayout()
+        view.attach(session: session)
     }
 }
 
 final class PreviewView: UIView {
     override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
     var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
-    var mirrored = true
+    var mirrored = true {
+        didSet { if mirrored != oldValue { applyConnection() } }
+    }
+
+    private var coordinator: AVCaptureDevice.RotationCoordinator?
+    private var rotationObservation: NSKeyValueObservation?
+    private var startObserver: NSObjectProtocol?
+    private weak var boundSession: AVCaptureSession?
+    private var boundDeviceID: String?
+
+    deinit {
+        if let startObserver { NotificationCenter.default.removeObserver(startObserver) }
+    }
+
+    func attach(session: AVCaptureSession) {
+        if previewLayer.session !== session {
+            previewLayer.session = session
+            previewLayer.videoGravity = .resizeAspectFill
+        }
+        if boundSession !== session {
+            boundSession = session
+            if let startObserver { NotificationCenter.default.removeObserver(startObserver) }
+            startObserver = NotificationCenter.default.addObserver(
+                forName: .AVCaptureSessionDidStartRunning, object: session, queue: .main
+            ) { [weak self] _ in
+                self?.refreshCoordinator()
+                self?.applyConnection()
+            }
+        }
+        refreshCoordinator()
+        applyConnection()
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        applyConnection()
+    }
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        guard let connection = previewLayer.connection else { return }
-        if connection.isVideoRotationAngleSupported(90) { connection.videoRotationAngle = 90 }
-        if connection.isVideoMirroringSupported {
-            connection.automaticallyAdjustsVideoMirroring = false
-            connection.isVideoMirrored = mirrored
+        applyConnection()
+    }
+
+    private func refreshCoordinator() {
+        let device = previewLayer.session?.inputs.compactMap { ($0 as? AVCaptureDeviceInput)?.device }.first
+        let deviceID = device?.uniqueID
+        guard deviceID != boundDeviceID else { return }
+        boundDeviceID = deviceID
+        rotationObservation = nil
+        coordinator = nil
+        guard let device else { return }
+        let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: previewLayer)
+        self.coordinator = coordinator
+        rotationObservation = coordinator.observe(\.videoRotationAngleForHorizonLevelPreview, options: []) { [weak self] _, _ in
+            DispatchQueue.main.async { self?.applyConnection() }
         }
+    }
+
+    private func applyConnection() {
+        guard let connection = previewLayer.connection else { return }
+        if let angle = coordinator?.videoRotationAngleForHorizonLevelPreview {
+            setRotation(angle, on: connection)
+            // Landmarks are computed from the video output. It must use the same
+            // rotation as the preview or the overlay is drawn sideways.
+            if let session = previewLayer.session {
+                for output in session.outputs {
+                    if let outputConnection = output.connection(with: .video) {
+                        setRotation(angle, on: outputConnection)
+                    }
+                }
+            }
+        }
+        if connection.isVideoMirroringSupported {
+            if connection.automaticallyAdjustsVideoMirroring {
+                connection.automaticallyAdjustsVideoMirroring = false
+            }
+            if connection.isVideoMirrored != mirrored {
+                connection.isVideoMirrored = mirrored
+            }
+        }
+    }
+
+    private func setRotation(_ angle: CGFloat, on connection: AVCaptureConnection) {
+        guard connection.isVideoRotationAngleSupported(angle),
+              connection.videoRotationAngle != angle else { return }
+        connection.videoRotationAngle = angle
     }
 }
 

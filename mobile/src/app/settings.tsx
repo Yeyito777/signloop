@@ -32,7 +32,7 @@ export default function Settings() {
     setTesting(true);
     setMessage('Requesting a short voice sample…');
     try {
-      await gooseVoice.speak('Hello from Signloop.', abort.signal, () => setMessage('Playing the voice sample…'));
+      await gooseVoice.speak('Hello from Honk & Tell.', abort.signal, () => setMessage('Playing the voice sample…'));
       if (!abort.signal.aborted) setMessage('Voice playback completed.');
     } catch {
       if (!abort.signal.aborted) setMessage('Voice failed. Check the backend, access token, and ElevenLabs configuration.');
@@ -45,7 +45,7 @@ export default function Settings() {
       <Copy role="label">Backend URL</Copy>
       <TextInput accessibilityLabel="Backend URL" value={url} onChangeText={setUrl} autoCapitalize="none" autoCorrect={false} placeholder="http://your-mac.local:8787" keyboardType="url" style={styles.input} />
       <Copy role="label">Backend access token</Copy>
-      <TextInput accessibilityLabel="Backend access token" value={token} onChangeText={setToken} autoCapitalize="none" autoCorrect={false} secureTextEntry placeholder="SIGNLOOP_BACKEND_TOKEN, not a provider key" style={styles.input} />
+      <TextInput accessibilityLabel="Backend access token" value={token} onChangeText={setToken} autoCapitalize="none" autoCorrect={false} secureTextEntry placeholder="Your backend access token" style={styles.input} />
       <Copy role="supporting">Settings remain in memory only. Use HTTPS outside a trusted development LAN. Configure ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID on the backend, never here.</Copy>
       <View style={styles.row}>
         <Copy style={{ flex: 1 }}>Allow confirmed text uploads for voice this session</Copy>

@@ -119,7 +119,7 @@ observations were transferred. The phone was locked at the preceding check;
 the launch command failed with a CoreDevice/Mercury connection error.
 **Successful installation/provisioning does not establish successful launch,
 on-phone model performance or live recognition accuracy.** Unlock and open
-Signloop to validate; no Mac or Wi-Fi connection is needed for this mode.
+Honk & Tell to validate; no Mac or Wi-Fi connection is needed for this mode.
 
 ### Camera pacing regression
 
