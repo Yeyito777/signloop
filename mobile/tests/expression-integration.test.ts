@@ -18,7 +18,8 @@ function offer(state: Session, emotion: Emotion, attemptId = 1, observedAtMS = D
   const event = translationFromPrediction({ engine: 'basic-temporal-v3', phase: 'completed',
     attemptId, captureId: state.captureId, observedAtMS, matched: false,
     label: 'HELLO', candidates: [{ label: 'HELLO', distance: 0.1 }], emotion }, true, state.captureId)!;
-  return reduce(state, { type: 'translation', captureId: state.captureId, event });
+  const draft = reduce(state, { type: 'translation', captureId: state.captureId, event });
+  return reduce(draft, { type: 'commit-sentence', draftId: draft.sentence.id, revision: draft.sentence.revision });
 }
 afterEach(() => setVoiceSettings({ url: '', token: '', enabled: false }));
 
@@ -47,7 +48,7 @@ test('all six native expression labels reach both the goose and the backend requ
   }
 });
 
-test('automatic recognition freezes the signing expression even if the face and later signs change', context => {
+test('committing a sentence freezes the signing expression even if the face and later signs change', context => {
   context.mock.timers.enable({ apis: ['Date'], now: Date.now() });
   let state = offer(ready(), 'joy');
   context.mock.timers.tick(500);

@@ -33,7 +33,9 @@ uses the shared `SkeletonCameraTracker`, `BasicLiveRecognition` and
 `AlphabetRecognition` in `ios/Signloop/`. The app renders
 the shared 3D goose and offers a complete
 limited flow: **offline 11-sign recognition → one best match per completed sign
-→ automatic caption and goose voice** (when voice is enabled). Voice uploads require foreground-session
+→ editable sentence draft → Speak sentence → one caption and goose utterance**
+(or Save sentence when voice is off). Undo, Clear, and Edit work before submission.
+Completed drafts survive pauses and tracking loss. Voice uploads require foreground-session
 consent in Settings. Names can also be explicitly composed in Spell name and
 confirmed for playback. Provider keys stay on the backend. This is not general ASL
 translation. An explicit sample-conversation mode still uses labeled sample data
@@ -84,7 +86,7 @@ can explicitly save/export a numeric personal calibration profile.
 Build 19 integrates both branches while retaining main's Honk & Tell Expo app,
 voice backend, SignEngine, camera orientation fixes and expression teaching/demo
 schemes. That merge retained separate recognition pipelines; the subsequent
-Expo adapter now connects the matcher to the automatic-caption flow. See
+Expo adapter now connects the matcher to the sentence-composition flow. See
 [the original merge notes](docs/main-detection-merge.md) and
 [the current Expo integration](mobile/modules/signloop-camera/README.md).
 

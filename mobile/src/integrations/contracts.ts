@@ -2,6 +2,7 @@ import type { ComponentType } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { EmoteProps } from '../../../goose/src/components/goose/emotes';
 import type { Emotion } from '../../../goose/src/emotion';
+import type { SignLabel } from './localSign';
 export type { Emotion } from '../../../goose/src/emotion';
 import type { ExpressionEvent } from '../../modules/signloop-camera/events';
 import type { DetectionEvent } from '../../modules/signloop-camera';
@@ -39,7 +40,7 @@ export type SignObservation = {
 };
 
 export type TranslationEvent =
-  | ({ type: 'recognized-sign'; emotion: Emotion } & SignObservation)
+  | ({ type: 'recognized-sign'; label: SignLabel; emotion: Emotion } & SignObservation)
   | ({ type: 'sign-preview' } & SignObservation)
   | { type: 'clear-preview' }
   | { type: 'draft'; text: string }

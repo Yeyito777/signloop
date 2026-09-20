@@ -2,7 +2,7 @@ import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { AbortController as RNAbortController } from 'abort-controller';
 import { translationFromPrediction } from '../src/integrations/localSign.ts';
-import { initialSession, sessionReducer as reduce } from '../src/session/model.ts';
+import { initialSession, sessionReducer as reduce, type Session } from '../src/session/model.ts';
 import { captionPresentation } from '../src/session/captionPresentation.ts';
 import { backendOrigin, disableVoiceUploads, getVoiceSettings, setVoiceSettings } from '../src/integrations/voiceSettings.ts';
 import { fetchSpeech, validateAlignment } from '../src/integrations/speechTransport.ts';
@@ -14,14 +14,18 @@ const clip = { audio_base64: 'SUQz', alignment: {
   characters: ['h', 'i'], character_start_times_seconds: [0, 0.1], character_end_times_seconds: [0.1, 0.2],
 } };
 afterEach(() => setVoiceSettings({ url: '', token: '', enabled: false }));
+const commit = (state: Session) => reduce(state, { type: 'commit-sentence', draftId: state.sentence.id, revision: state.sentence.revision });
 function ready() { return reduce(initialSession(), { type: 'framing', captureId: 1, framing: 'ready' }); }
 function prediction(attemptId = 1, phase: 'preview' | 'completed' = 'completed') {
   return translationFromPrediction({ engine: 'basic-temporal-v3', phase, attemptId, candidates: [{ label: 'ILOVEYOU', distance: 0.1 }], matched: true, captureId: 1, label: 'ILOVEYOU', observedAtMS: Date.now() }, true, 1)!;
 }
 
-test('native temporal prediction → automatic caption → backend audio → playback, without inventing a sentence', async () => {
+test('native temporal prediction → manual sentence commit → backend audio → playback', async () => {
   setVoiceSettings(configured);
   let state = reduce(ready(), { type: 'translation', captureId: 1, event: prediction() });
+  assert.equal(state.speech, null);
+  assert.equal(state.phrases.length, 0);
+  state = commit(state);
   assert.equal(state.phrases[0].text, 'I love you.');
   assert.equal(captionPresentation(state, 'live').delivery, 'Preparing voice…');
   let requests = 0;
@@ -60,14 +64,15 @@ test('unknown, stale, future and wrong-generation observations cannot produce ac
   }
 });
 
-test('holding a completed sign does not repeat it; a new gesture speaks automatically', () => {
+test('holding a completed sign does not repeat it; a new gesture appends to the draft', () => {
   let state = reduce(ready(), { type: 'translation', captureId: 1, event: prediction() });
   state = reduce(state, { type: 'translation', captureId: 1, event: prediction() });
   assert.equal(state.signPreview, null);
-  assert.equal(state.phrases.length, 1);
+  assert.equal(state.sentence.tokens.length, 1);
   state = reduce(state, { type: 'translation', captureId: 1, event: { type: 'clear-preview' } });
   state = reduce(state, { type: 'translation', captureId: 1, event: prediction(2) });
-  assert.equal(state.phrases.length, 2);
+  assert.equal(state.sentence.tokens.length, 2);
+  assert.equal(state.speech, null);
 });
 
 test('pause, sheets and framing loss invalidate previews and late completed signs', () => {
@@ -84,8 +89,8 @@ test('pause, sheets and framing loss invalidate previews and late completed sign
   }
 });
 
-test('captions-only mode accepts signs automatically without any voice request', () => {
-  const state = reduce({ ...ready(), muted: true }, { type: 'translation', captureId: 1, event: prediction() });
+test('captions-only mode saves the sentence without any voice request', () => {
+  const state = commit(reduce({ ...ready(), muted: true }, { type: 'translation', captureId: 1, event: prediction() }));
   assert.equal(state.phrases.length, 1);
   assert.equal(state.speech, null);
 });

@@ -23,22 +23,26 @@ export function conversationLayout(
   fontScale: number,
   focus: ConversationFocus = 'listening',
   availableWidth = 0,
+  composing = false,
 ) {
   const height = Math.max(0, availableHeight);
   const width = Math.max(0, availableWidth);
-  const caption = Math.min(height * 0.22, Math.max(height * 0.12, 88 * Math.max(1, fontScale)));
+  const caption = composing
+    ? Math.min(height * 0.5, Math.max(height * 0.4, 230 * Math.max(1, fontScale)))
+    : Math.min(height * 0.22, Math.max(height * 0.12, 88 * Math.max(1, fontScale)));
   const minGoose = Math.min(height * 0.28, 140);
-  let goose = height * GOOSE_SHARE[focus];
-  let camera = height - caption - goose - STAGE_CLEARANCE;
+  let goose = height * (composing ? 0.28 : GOOSE_SHARE[focus]);
+  const clearance = Math.min(height * 0.05, STAGE_CLEARANCE);
+  let camera = height - caption - goose - clearance;
   // 4:3 keeps a landscape strip without cropping the signing pose the way 16:9 does.
   const landscape = width > 0 ? width * 3 / 4 : camera;
-  if (camera > landscape) {
+  if (!composing && camera > landscape) {
     goose += camera - landscape;
     camera = landscape;
   }
   if (goose < minGoose) {
     goose = minGoose;
-    camera = Math.max(0, height - caption - goose - STAGE_CLEARANCE);
+    camera = Math.max(0, height - caption - goose - clearance);
   }
-  return { camera, goose, caption, clearance: STAGE_CLEARANCE };
+  return { camera, goose, caption, clearance };
 }

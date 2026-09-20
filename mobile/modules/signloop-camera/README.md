@@ -73,9 +73,10 @@ this module. Simulator can exercise UI but cannot recognize camera input.
 - The presentation vocabulary is HELLO, MY, NAME, TODAY, WE, SHOW, PHONE,
   PLEASE, SORRY, THANKYOU, ILOVEYOU. Spell name separately supports the AURELIO alphabet.
 - Fresh rolling guesses display one best match. Gesture completion automatically
-  adds the best match to the caption and voice queue; no selection or confirmation
-  is required. Delivery must be within one second of observation. Invalid labels,
-  stale events, old capture generations and repeated attempt IDs cannot add speech.
+  appends the best match to the sentence draft. Speak sentence submits the whole
+  draft as one caption and utterance; Save sentence stores it with voice off.
+  Delivery must be within one second of observation. Invalid labels, stale events,
+  old capture generations and repeated attempt IDs cannot append tokens.
   Live previews expire after one second without fresh input.
 - The shared SignSegmenter detects movement/rest and static holds. This adapter
   uses 200 ms of elapsed-time motion history and preserves the attempt's leading
@@ -85,20 +86,22 @@ this module. Simulator can exercise UI but cannot recognize camera input.
   bounded queue preserves completions while the worker is busy. Tracking loss
   immediately cancels the gesture rather than treating missing hands as its end.
 - The existing acceptance policy was calibrated on rolling windows, so native
-  completed events always carry `matched: false`. Automatic speech uses the
+  completed events always carry `matched: false`. Sentence tokens use the
   lowest-distance completed ranking, not that flag. These rankings are still
   uncalibrated experimental guesses. Rolling previews never speak; a held pose
   cannot repeat a completed attempt. Fresh movement begins the next attempt.
 - Pausing/backgrounding stops capture and resets recognition. A changed
   capture ID resets matching and rejects earlier frames/jobs without rebuilding
   the tracking models. Hand/body loss and camera stalls clear predictions.
+  The JS sentence draft retains completed tokens across interruptions and requires
+  explicit continuation before appending more. No interruption submits a sentence.
 - The full portrait preview uses aspect-fit with matching mirrored overlay
   geometry, so the goose's short camera tile does not crop away sign evidence.
 
 ## Validation
 
 Run `npm run typecheck`, `npm test`, and `bash ../ios/scripts/test-core.sh`.
-Tests cover the actual native vocabulary mapping to automatic captions, the
+Tests cover the actual native vocabulary mapping to sentence tokens, manual submission, the
 existing voice path, best-match selection, duplicate suppression,
 completed-gesture boundaries, stale/generation rejection, reference load/retry
 failures, worker reset callbacks, and fit/mirror geometry. Synthetic
@@ -110,12 +113,15 @@ On a physical phone with the private bank installed:
    shoulders are visible, with joints aligned to the selfie preview.
 2. Try the 11 supported signs, keeping hands and shoulders in view. One guess
    should update while signing. Pause briefly; the best completed match should
-   appear as a caption without tapping anything.
+   join the unspoken sentence draft without tapping anything.
 3. Repeat with voice disabled, then with configured voice enabled. Check caption,
    speech, goose animation, edit/replay, held-sign deduplication, and repeating a
-   sign with fresh movement. Consecutive completed signs should speak in order.
+   sign with fresh movement. Consecutive completed signs should accumulate in
+   order, then Speak sentence should play the entire sentence once. Check Undo,
+   Clear, draft editing, Save sentence with voice off, and the next draft during playback.
 4. Remove hands/shoulders, pause/resume, open a sheet, and background/return.
-   No old prediction may reappear or trigger speech.
+   No old prediction may reappear or trigger speech. Completed draft text should
+   remain, and Continue this sentence should explicitly resume appending.
 5. Test missing/invalid references and Retry after installing a valid bank.
    Do not interpret tracking readiness or offline tests as accuracy validation.
 6. With the checked personal expression profile installed, test all six labels,

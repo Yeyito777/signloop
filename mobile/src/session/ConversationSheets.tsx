@@ -8,6 +8,8 @@ import { textStyles, tokens } from '../ui/theme';
 import type { Action, Session } from './model';
 import { Switch } from 'react-native';
 import { router } from 'expo-router';
+import { MAX_SENTENCE_CHARACTERS, sentenceText } from './sentence';
+
 export type DetectionSettings = { showSkeleton: boolean; showPose: boolean; trackFace: boolean; showScores: boolean };
 
 export function ConversationSheets({ state, dispatch, onEnd, demo, detectionSettings, setDetectionSettings }: {
@@ -52,12 +54,14 @@ export function ConversationSheets({ state, dispatch, onEnd, demo, detectionSett
       <Button variant="secondary" onPress={close}>Back to conversation</Button>
     </>; break;
     case 'correction': title = 'Make a correction'; content = <><Correction key={state.phrases.at(-1)?.id} state={state} dispatch={commit} /></>; break;
+    case 'sentence-editor': title = 'Edit your sentence'; content = <SentenceEditor key={`${state.sentence.id}-${state.sentence.revision}`} state={state} dispatch={commit} />; break;
     case 'menu': title = 'Conversation'; content = <>
       {!demo && <MenuRow icon="frame" label="Detection settings" onPress={() => dispatch({ type: 'open-sheet', sheet: 'detector' })} />}
       {!demo && <MenuRow icon="info" label="Expression lab" onPress={() => dismiss(() => {
         dispatch({ type: 'close-sheet' }); dispatch({ type: 'pause' }); router.push('/expressions');
       })} />}
       <MenuRow icon="transcript" label="View transcript" onPress={() => dispatch({ type: 'open-sheet', sheet: 'transcript' })} />
+      {!demo && <MenuRow icon="edit" label="Edit sentence draft" onPress={() => dispatch({ type: 'open-sheet', sheet: 'sentence-editor' })} />}
       <MenuRow icon="edit" label="Correct last phrase" disabled={!state.phrases.length} onPress={() => dispatch({ type: 'open-sheet', sheet: 'correction' })} />
       <MenuRow icon={state.muted ? 'muted' : 'volume'} label={state.muted ? 'Turn voice on' : 'Turn voice off'} onPress={() => dispatch({ type: 'mute' })} />
       <MenuRow icon="exit" label="End conversation" onPress={() => dispatch({ type: 'open-sheet', sheet: 'end' })} />
@@ -75,7 +79,7 @@ export function ConversationSheets({ state, dispatch, onEnd, demo, detectionSett
       <Button onPress={close}>Done</Button>
     </>; break;
     case 'end': title = 'All done for now?'; content = <>
-      <Copy>End this conversation? Its transcript will be cleared.</Copy>
+      <Copy>End this conversation? Its transcript and any unfinished sentence will be cleared.</Copy>
       <Button icon="exit" onPress={end}>End conversation</Button>
       <Button variant="plain" onPress={close}>Keep going</Button>
     </>; break;
@@ -101,6 +105,18 @@ export function ConversationSheets({ state, dispatch, onEnd, demo, detectionSett
     </>; break;
   }
   return <Sheet title={title} contentKey={state.sheet ?? 'closed'} visible={!!state.sheet} closing={closing} onClose={close} onDismiss={onDismiss}>{content}</Sheet>;
+}
+
+function SentenceEditor({ state, dispatch }: { state: Session; dispatch: Dispatch<Action> }) {
+  const [text, setText] = useState(sentenceText(state.sentence));
+  return <>
+    <Copy role="label" nativeID="sentence-label">Your sentence</Copy>
+    <BottomSheetTextInput accessibilityLabel="Your sentence" accessibilityLabelledBy="sentence-label" value={text} onChangeText={setText}
+      multiline style={styles.input} textAlignVertical="top" selectionColor={tokens.color.coral} />
+    <Copy role="supporting" style={styles.muted}>{text.trim().length}/{MAX_SENTENCE_CHARACTERS} characters · {state.muted ? 'Save the draft, then tap Save sentence to add it to your transcript.' : 'Nothing is spoken until you tap Speak sentence.'}</Copy>
+    <Button icon="check" disabled={!text.trim() || text.trim().length > MAX_SENTENCE_CHARACTERS}
+      onPress={() => dispatch({ type: 'edit-sentence', draftId: state.sentence.id, revision: state.sentence.revision, text })}>Save draft</Button>
+  </>;
 }
 
 function Correction({ state, dispatch }: { state: Session; dispatch: Dispatch<Action> }) {

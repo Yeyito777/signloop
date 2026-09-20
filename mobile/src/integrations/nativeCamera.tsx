@@ -39,7 +39,7 @@ function Camera({ active, captureId, onFraming, onTranslation, onExpression, sty
 
 export const cameraKit: IntegrationKit = {
   mode: 'live', Camera, Avatar: GooseAvatar,
-  // Completed local signs arrive from the camera and automatically enter speech.
+  // Completed local signs arrive from the camera and enter the sentence draft.
   translation: { start: () => () => {} },
   voice: gooseVoice,
 };

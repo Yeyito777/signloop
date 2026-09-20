@@ -12,6 +12,7 @@ export const signText = {
   HELLO: 'Hello.', MY: 'My', NAME: 'Name', TODAY: 'Today', WE: 'We', SHOW: 'Show',
   PHONE: 'Phone', PLEASE: 'Please.', SORRY: 'Sorry.', THANKYOU: 'Thank you.', ILOVEYOU: 'I love you.',
 } as const;
+export type SignLabel = keyof typeof signText;
 
 export const SIGN_FRESH_MS = 1000;
 
@@ -22,7 +23,7 @@ export function isFreshSign(observation: SignObservation, now = Date.now()): boo
     && !!observation.text.trim() && observation.text.length <= 500;
 }
 
-/** Show one rolling guess; speak the best complete-gesture match automatically. */
+/** Show one rolling guess; append completed matches to the sentence draft. */
 export function translationFromPrediction(event: SignPredictionEvent, active: boolean, captureId: number,
   now = Date.now()): TranslationEvent | null {
   if (!active || event.captureId !== captureId) return null;
@@ -45,6 +46,6 @@ export function translationFromPrediction(event: SignPredictionEvent, active: bo
   // `matched` describes rolling-window calibration, not completion. Native
   // complete-gesture rankings currently always set it to false.
   return event.phase === 'completed'
-    ? { type: 'recognized-sign', ...observation, emotion: isEmotion(event.emotion) ? event.emotion : 'neutral' }
+    ? { type: 'recognized-sign', ...observation, label: event.label as SignLabel, emotion: isEmotion(event.emotion) ? event.emotion : 'neutral' }
     : { type: 'sign-preview', ...observation };
 }

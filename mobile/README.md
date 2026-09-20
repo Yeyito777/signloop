@@ -1,7 +1,7 @@
 # Honk & Tell mobile
 
 Expo SDK 55 / React Native Playroom app with the **shared 3D goose, native Swift
-camera, shared offline temporal matcher and name spelling, automatic best-match captions, and
+camera, shared offline temporal matcher and name spelling, editable sentence drafts, and
 optional server-proxied ElevenLabs voice and taught expression delivery**. A separate sample conversation
 preserves the UI review flow; real hand detection never generates sample captions.
 The goose is expressive animation, not an ASL signing avatar.
@@ -49,9 +49,17 @@ links to an explicitly labelled sample preview. Live capture now uses the shared
 compact-WE guard. Private references must be separately provisioned into this
 app's container. Without them, tracking and bundled AURELIO spelling still work,
 but word recognition reports that references are unavailable. One best guess updates as you sign. Pause briefly with hands and shoulders
-in view; the completed sign's best match becomes a caption and the goose speaks
-automatically when voice is enabled. A held pose speaks once; fresh movement
-can repeat the word. Edit and replay remain available. Best guesses can be wrong,
+in view; each completed sign adds one word or phrase to your sentence draft.
+Tap **Speak sentence** to send the whole sentence to the goose once, or **Save sentence**
+with voice off. **Undo**, **Clear**, and **Edit** work before submission. A held pose
+adds once; fresh movement can repeat the word. Replay and correction apply to the
+last submitted sentence. Drafts survive pauses, sheets, and tracking loss; tap
+**Continue this sentence** before appending more signs after an interruption.
+Edited drafts stay fixed until submitted or cleared. The final text is limited to
+500 characters; longer drafts stay visible for editing instead of being truncated.
+The exact sequence TODAY WE SHOW PHONE renders “Today we show the phone.” Other
+sequences retain their words and order; use Edit to supply a name or missing grammar.
+This is deterministic composition, not general ASL-to-English translation. Best guesses can be wrong,
 including on unsupported inputs; this is a limited research preview. Stale
 events and previous capture generations are rejected. Rebuild the native app;
 a Metro reload alone cannot update its recognition contract.
@@ -102,7 +110,7 @@ The selected Go big direction uses “You were saying?” on Home, oversized art
 
 Motion timings and springs come from `../design-system/tokens.json`; `src/ui/motion.tsx` owns the shared runtime policy. Use `Touch`, `Button`, `IconButton`, and `Sheet` for new controls. Keep the native camera and 3D avatar mounted when visual status changes. Adding these native animation/gesture/haptic packages requires a new development build once; later JS-only motion tuning uses Fast Refresh.
 
-Camera corner guides settle after 300 ms of stable readiness; transient framing changes wait 450 ms before changing the guidance. This filters presentation only: recognition still reacts immediately to raw scanner events, and permission/device failures appear immediately. Accepted captions remain visible while another phrase is processed or framing is lost. The conversation reserves roughly 45% camera, 30% goose, and 25% captions. Larger system text gets more caption space without shrinking the goose. Long captions and recovery actions scroll inside that region; edit/replay remain above them. Correction briefly shows “Correction saved.”
+Camera corner guides settle after 300 ms of stable readiness; transient framing changes wait 450 ms before changing the guidance. This filters presentation only: recognition still reacts immediately to raw scanner events, and permission/device failures appear immediately. Accepted captions remain visible while another phrase is processed or framing is lost. The live composer reserves 40–50% for sentence text and controls, 28% for the goose, and the remainder for the camera and stage clearance. Larger system text gets more composer space without changing the goose height. The camera and goose keep the same size during listening, thinking, and speaking. Draft text, the previous sentence, and recovery actions scroll; Edit, Undo, Clear, and Speak/Save remain available below them. Demo mode retains its compact caption layout. Correction briefly shows “Correction saved.”
 
 Manual demo scenarios stay selected until restarted. “Run sample conversation,” retry, or Resume starts a fresh finite example; opening sheets no longer silently starts another sample over a correction.
 
@@ -129,12 +137,14 @@ npm test
    deployed origin) and **SIGNLOOP_BACKEND_TOKEN**, never an ElevenLabs key.
 3. Enable text-upload consent, save, and tap Test voice. Provider keys and voice
    selection are configured on the backend. Settings are held in app memory only.
-4. Start a conversation. Sign, then pause briefly with your hands in view. The caption appears
-   immediately; optional speech follows. Corrections require explicit Save & speak.
+4. Start a conversation. Sign one word at a time, pausing briefly with your hands
+   in view between signs. Review the draft, then tap **Speak sentence**. The whole
+   sentence becomes one caption and voice request. Corrections require Save & speak.
 
 The live goose follows stable taught expressions while listening. Each completed
-sign freezes its own expression for automatic speech, replay, and
-correction. Voice uploads include the recognized text and that expression label.
+sign freezes its expression on its draft token. Submission uses the most frequent
+token expression (ties fall back to neutral) and freezes it for speech, replay,
+and correction. Voice uploads include the final sentence and that expression label.
 
 Backgrounding revokes upload consent and cancels local playback. Pause, mute,
 ending, and replacement speech also cancel local playback and clean temporary

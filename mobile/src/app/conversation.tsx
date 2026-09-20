@@ -8,6 +8,7 @@ import { cameraKit } from '../integrations/nativeCamera';
 import type { AvatarMode } from '../integrations/contracts';
 import { CameraGuidance } from '../session/CameraGuidance';
 import { CaptionPanel } from '../session/CaptionPanel';
+import { SentencePanel } from '../session/SentencePanel';
 import { ConversationSheets } from '../session/ConversationSheets';
 import { useConversation } from '../session/useConversation';
 import { conversationFocus, conversationLayout } from '../session/conversationLayout';
@@ -56,7 +57,7 @@ export default function Conversation() {
   const danceDisabled = reduced || paused || covered || mode === 'thinking' || mode === 'speaking';
   useEffect(() => { if (danceDisabled) dance.stop(); }, [danceDisabled, dance.stop]);
   const focus = conversationFocus(mode, reduced);
-  const regions = conversationLayout(available.height, fontScale, focus, available.width);
+  const regions = conversationLayout(available.height, fontScale, focus, available.width, kit.mode !== 'demo');
   const regionLayout = focus === 'speaking' ? sceneLayout : layout;
   const mood = moodPresentation(liveState);
   return <SafeAreaView style={styles.screen}>
@@ -92,7 +93,9 @@ export default function Conversation() {
         </View>
       </Animated.View>
       <Animated.View layout={regionLayout} style={[styles.captionRegion, { height: regions.caption }, entrance.caption]}>
-        <CaptionPanel state={state} mode={kit.mode} dispatch={dispatch} />
+        {kit.mode === 'demo'
+          ? <CaptionPanel state={state} mode={kit.mode} dispatch={dispatch} />
+          : <SentencePanel state={state} dispatch={dispatch} />}
       </Animated.View>
     </View>
     <ConversationSheets state={liveState} dispatch={dispatch} demo={kit.mode === 'demo'} onEnd={() => router.dismissTo('/')}
