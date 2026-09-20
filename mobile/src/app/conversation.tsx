@@ -15,11 +15,20 @@ import { Button, Copy, Icon, IconButton, Wordmark, Touch } from '../ui/primitive
 import { useMotion } from '../ui/motion';
 import { StageSlot, useConversationEntrance } from '../ui/SharedStage';
 import { tokens } from '../ui/theme';
+import { useIsFocused } from '@react-navigation/native';
+import type { DetectionEvent } from '../../modules/signloop-camera';
+import type { DetectionSettings } from '../session/ConversationSheets';
 
 export default function Conversation() {
   const { demo } = useLocalSearchParams<{ demo?: string }>();
   const kit = demo === '1' ? demoKit : cameraKit;
+  const focused = useIsFocused();
+  const [detection, setDetection] = useState<DetectionEvent | null>(null);
+  const [detectionSettings, setDetectionSettings] = useState<DetectionSettings>({
+    showSkeleton: true, showPose: true, trackFace: false, showScores: false,
+  });
   const { state: liveState, dispatch, captureActive, onFraming, onTranslation } = useConversation(kit);
+  useEffect(() => { if (!focused) dispatch({ type: 'pause' }); }, [focused]);
   const { reduced, enter, exit } = useMotion();
   const entrance = useConversationEntrance();
   const { height, fontScale } = useWindowDimensions();
@@ -48,7 +57,9 @@ export default function Conversation() {
     </View>
     <View onLayout={event => setAvailableHeight(Math.max(0, event.nativeEvent.layout.height - 36))} style={styles.split} pointerEvents={covered ? 'none' : 'auto'} accessibilityElementsHidden={covered} importantForAccessibility={covered ? 'no-hide-descendants' : 'auto'}>
       <Animated.View style={[styles.camera, { height: regions.camera }, entrance.camera]}>
-        <Camera active={captureActive} captureId={liveState.captureId} framing={liveState.framing} onFraming={onFraming} onTranslation={onTranslation} style={StyleSheet.absoluteFill} />
+        <Camera active={captureActive && focused} captureId={liveState.captureId} framing={liveState.framing}
+          recognitionMode={liveState.recognitionMode} detectionSettings={detectionSettings} onDetection={setDetection}
+          onFraming={onFraming} onTranslation={onTranslation} style={StyleSheet.absoluteFill} />
         {!paused && <CameraGuidance framing={state.framing} active={captureActive} mode={kit.mode} dispatch={dispatch} demo={kit.mode === 'demo'} />}
         {paused && <Animated.View entering={enter} exiting={exit} style={styles.pauseLayer}><ScrollView contentContainerStyle={styles.pauseContent}>
           <Icon name="pause" size={28} /><Copy role="sheetTitle">Paused</Copy><Copy>Camera and voice are paused.</Copy>
@@ -60,10 +71,12 @@ export default function Conversation() {
       </Animated.View>
       <StageSlot owner="conversation" Renderer={kit.Avatar} mode={mode} emotion={speakingPhrase?.emotion ?? phrase?.emotion ?? 'neutral'} reducedMotion={reduced || paused || covered} style={[styles.stage, { height: regions.goose }]} />
       <Animated.View style={[styles.captionRegion, { height: regions.caption }, entrance.caption]}>
-        <CaptionPanel state={state} mode={kit.mode} dispatch={dispatch} />
+        <CaptionPanel state={state} mode={kit.mode} dispatch={dispatch}
+          detection={detection} showScores={detectionSettings.showScores} />
       </Animated.View>
     </View>
-    <ConversationSheets state={liveState} dispatch={dispatch} demo={kit.mode === 'demo'} onEnd={() => router.dismissTo('/')} />
+    <ConversationSheets state={liveState} dispatch={dispatch} demo={kit.mode === 'demo'} onEnd={() => router.dismissTo('/')}
+      detectionSettings={detectionSettings} setDetectionSettings={setDetectionSettings} />
   </SafeAreaView>;
 }
 

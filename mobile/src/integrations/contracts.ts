@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
+import type { DetectionEvent } from '../../modules/signloop-camera';
 
 /** Emit only diagnoses supported by the scanner. Hand tracking is not ASL recognition. */
 export type Framing = 'finding' | 'ready' | 'hands-missing' | 'too-close' | 'too-far' | 'low-light' | 'away'
@@ -20,6 +21,9 @@ export type CameraProps = {
   framing: Framing;
   onFraming: (framing: Framing, captureId: number) => void;
   onTranslation: (event: TranslationEvent, captureId: number) => void;
+  recognitionMode?: 'signs' | 'spelling';
+  detectionSettings?: { showSkeleton: boolean; showPose: boolean; trackFace: boolean; showScores: boolean };
+  onDetection?: (event: DetectionEvent) => void;
   style?: StyleProp<ViewStyle>;
 };
 

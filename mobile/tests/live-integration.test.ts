@@ -53,7 +53,7 @@ test('local handshape → confirmation → backend audio → playback, without i
 
 test('unknown, stale, future and wrong-generation observations cannot produce accepted words', () => {
   const now = Date.now();
-  for (const label of ['Thumb_Up', 'HELLO', '', 'UNKNOWN']) {
+  for (const label of ['Thumb_Up', 'UNSUPPORTED', '', 'UNKNOWN', 'constructor']) {
     assert.deepEqual(candidateFromSign({ captureId: 1, label, observedAtMS: now }, true, 1), { type: 'clear-candidate' });
   }
   assert.equal(candidateFromSign({ captureId: 0, label: 'I_LOVE_YOU', observedAtMS: now }, true, 1), null);

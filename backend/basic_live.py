@@ -6,7 +6,7 @@ import math
 from pathlib import Path
 import subprocess
 from .basic_corpus import samples
-from .basic_signs import LABELS, DEMO_LABELS
+from .basic_signs import LABELS, DEMO_LABELS, PRESENTATION_LABELS
 
 
 def frames(a):
@@ -37,7 +37,7 @@ def export(folder, out):
     records = [dict(id=r["id"], label=r["label"], split=r["split"], signer=r["signer"],
                     frames=frames(a)) for r, a in samples(folder)]
     vocabulary = json.loads((Path(folder)/"plan.json").read_text())["labels"]
-    if vocabulary not in (list(LABELS), list(DEMO_LABELS)):
+    if vocabulary not in (list(LABELS), list(DEMO_LABELS), list(PRESENTATION_LABELS)):
         raise ValueError("Unsupported vocabulary")
     bank = dict(version=2, labels=vocabulary, maxDistance=0.0, minMargin=1.0,
                 references=[r for r in records if r["split"] == "train"])
@@ -114,7 +114,7 @@ def validate_deployment(bank_path, corpus):
         raise ValueError("Incomplete/unbound source corpus")
     training = {r["id"]: r for r in plan["samples"] if r["split"] == "train"}
     labels = plan.get("labels", list(LABELS))
-    if (b["version"] != 2 or labels not in (list(LABELS), list(DEMO_LABELS))
+    if (b["version"] != 2 or labels not in (list(LABELS), list(DEMO_LABELS), list(PRESENTATION_LABELS))
             or b["labels"] != labels or not 1 <= len(b["references"]) <= 256):
         raise ValueError("Unexpected reference schema/vocabulary")
     if len({r["id"] for r in b["references"]}) != len(b["references"]):
@@ -139,6 +139,7 @@ def main():
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--raw", type=Path)
     p.add_argument("--device")
+    p.add_argument("--bundle-id", choices=["com.yeyito.signloop", "com.signloop.mobile"], default="com.yeyito.signloop")
     p.add_argument("--accept-research-license", action="store_true")
     args = p.parse_args()
     if ".runtime" not in args.out.resolve().parts:
@@ -158,7 +159,7 @@ def main():
         packed = args.out/"basic-references-packed.json"
         b = validate_deployment(packed, args.corpus)
         subprocess.run(["xcrun", "devicectl", "device", "copy", "to", "--device", args.device,
-            "--domain-type", "appDataContainer", "--domain-identifier", "com.yeyito.signloop",
+            "--domain-type", "appDataContainer", "--domain-identifier", args.bundle_id,
             "--source", str(packed), "--destination", "Documents/basic-references.json", "--timeout", "60"],
             check=True)
         print(f"Provisioned {len(b['references'])} private training references; no app bundle or server involved.")

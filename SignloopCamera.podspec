@@ -13,14 +13,15 @@ Pod::Spec.new do |s|
   s.dependency 'ExpoModulesCore'
   s.dependency 'MediaPipeTasksVision', '0.10.21'
   s.source_files = 'mobile/modules/signloop-camera/ios/*.swift',
-    'ios/Signloop/{CameraTracker,CameraPreview,CaptureLifecycle,CaptureCadence,CaptureFreshness,Recognition,SignEngine,SignEngineFeatures,SignSegmenter}.swift'
-  # The optional SignEngine package (Core ML + policy.json + manifest.json, produced by
-  # recognition/export_coreml.py) rides along only if present; the app runs without it.
-  s.resource_bundles = { 'SignloopCameraModels' => ['ios/Signloop/Resources/gesture_recognizer.task',
-                                                    'ios/Signloop/Resources/SignEngine/**/*'] }
-  s.frameworks = 'AVFoundation', 'CoreMedia', 'CoreVideo', 'CoreML', 'QuartzCore', 'UIKit', 'Combine', 'SwiftUI'
+    'ios/Signloop/{CameraPreview,CaptureLifecycle,CaptureCadence,CaptureFreshness,Recognition,Skeleton,SkeletonPipeline,SkeletonCameraTracker,SkeletonOverlay,BasicSignMatcher,BasicLiveRecognition,AlphabetRecognition,ExpressionMeasurements,ExpressionCues,ExpressionTeacher,TaughtExpressionProfile,ExpressionTesterView}.swift'
+  # Only redistributable tracker/alphabet assets. The private word bank is
+  # generated per researcher and provisioned separately into Documents.
+  s.resource_bundles = { 'SignloopCameraModels' => ['ios/Signloop/Resources/{hand_landmarker,pose_landmarker_lite,face_landmarker}.task',
+                                                   'ios/Signloop/Resources/alphabet-static.json',
+                                                   'ios/Signloop/Resources/alphabet-license.txt'] }
+  s.frameworks = 'AVFoundation', 'CoreMedia', 'CoreVideo', 'Accelerate', 'QuartzCore', 'UIKit', 'Combine', 'SwiftUI'
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
-  unless File.exist?(File.join(__dir__, 'ios/Signloop/Resources/gesture_recognizer.task'))
-    raise 'Missing hand model. Run npm run camera:assets from mobile/ before installing pods.'
+  unless %w[hand_landmarker.task pose_landmarker_lite.task face_landmarker.task alphabet-static.json].all? { |f| File.exist?(File.join(__dir__, 'ios/Signloop/Resources', f)) }
+    raise 'Missing detector models. Run npm run camera:assets from mobile/ before installing pods.'
   end
 end

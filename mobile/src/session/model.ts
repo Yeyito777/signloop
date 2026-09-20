@@ -1,6 +1,6 @@
 import type { Emotion, Framing, TranslationEvent } from '../integrations/contracts';
 
-export type Sheet = 'transcript' | 'correction' | 'menu' | 'end' | 'demo' | null;
+export type Sheet = 'transcript' | 'correction' | 'menu' | 'end' | 'demo' | 'detector' | null;
 export type Phase = 'framing' | 'listening' | 'signing' | 'thinking' | 'speaking' | 'uncertain' | 'offline' | 'voice-error';
 export type Phrase = { id: string; text: string; original?: string; emotion: Emotion; status: 'caption' | 'playing' | 'played' | 'interrupted' | 'failed' };
 export type Speech = { id: number; phraseId: string; text: string; started: boolean };
@@ -18,11 +18,14 @@ export type Session = {
   phrases: Phrase[];
   speech: Speech | null;
   speechQueue: string[];
+  recognitionMode: 'signs' | 'spelling';
+  spellingDraft: string;
 };
 
 export const initialSession = (): Session => ({
   captureId: 1, speechId: 0, framing: 'finding', phase: 'framing',
   paused: false, sheet: null, muted: false, draft: '', candidate: null, confirmedCandidate: null, phrases: [], speech: null, speechQueue: [],
+  recognitionMode: 'signs', spellingDraft: '',
 });
 
 export type Action =
@@ -34,6 +37,9 @@ export type Action =
   | { type: 'speech-ended'; id: number; failed?: boolean }
   | { type: 'speech-started'; id: number }
   | { type: 'confirm-candidate' }
+  | { type: 'recognition-mode'; mode: 'signs' | 'spelling' }
+  | { type: 'add-letter'; letter: string }
+  | { type: 'delete-letter' | 'clear-spelling' | 'confirm-spelling' }
   | { type: 'demo-framing'; framing: Framing }
   | { type: 'demo-event'; event: TranslationEvent };
 
@@ -58,6 +64,7 @@ function speak(state: Session, phrase: Phrase): Session {
 function translate(state: Session, event: TranslationEvent): Session {
   switch (event.type) {
     case 'candidate':
+      if (state.recognitionMode !== 'signs') return state;
       if (!event.text.trim() || event.text.length > 500 || !Number.isFinite(event.expiresAtMS)
         || state.confirmedCandidate === event.label) return state;
       return { ...state, candidate: { label: event.label, text: event.text.trim(), expiresAtMS: event.expiresAtMS } };
@@ -79,6 +86,19 @@ function translate(state: Session, event: TranslationEvent): Session {
 
 export function sessionReducer(state: Session, action: Action): Session {
   switch (action.type) {
+    case 'recognition-mode':
+      if (!canCapture(state)) return state;
+      return { ...stopSpeech(state), recognitionMode: action.mode, captureId: state.captureId + 1,
+        candidate: null, confirmedCandidate: null, draft: '', framing: 'finding', phase: 'framing' };
+    case 'add-letter':
+      return state.recognitionMode === 'spelling' && canCapture(state) && /^[AURELIO]$/.test(action.letter) && state.spellingDraft.length < 40
+        ? { ...state, spellingDraft: state.spellingDraft + action.letter } : state;
+    case 'delete-letter': return { ...state, spellingDraft: state.spellingDraft.slice(0, -1) };
+    case 'clear-spelling': return { ...state, spellingDraft: '' };
+    case 'confirm-spelling':
+      if (!canCapture(state) || state.recognitionMode !== 'spelling' || !/^[AURELIO]{1,40}$/.test(state.spellingDraft)) return state;
+      return translate({ ...state, spellingDraft: '' }, { type: 'accepted',
+        id: `spelled-${state.captureId}-${state.phrases.length}`, text: state.spellingDraft, emotion: 'neutral' });
     case 'confirm-candidate':
       if (!state.candidate || !canCapture(state) || state.framing !== 'ready') return state;
       if (state.candidate.expiresAtMS < Date.now()) return { ...state, candidate: null };

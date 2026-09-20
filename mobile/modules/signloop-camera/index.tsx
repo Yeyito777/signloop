@@ -1,39 +1,19 @@
-import { forwardRef, type RefAttributes } from 'react';
 import type { NativeSyntheticEvent, ViewProps } from 'react-native';
 import { requireNativeView } from 'expo';
-
 export type CameraStatus = 'starting' | 'searching' | 'tracking' | 'denied' | 'unavailable' | 'error';
 export type CameraStatusEvent = { captureId: number; status: CameraStatus; handCount: number; message: string };
 export type LocalSignEvent = { captureId: number; label: string | null; observedAtMS: number };
-/** Decision from the on-device SignEngine. Only present when a cleared model is bundled. `label` is a
- * supported sign, 'UNKNOWN', or null for a state-only update. Nothing here is a caption until the user confirms. */
-export type SignPredictionEvent = {
-  captureId: number;
-  label: string | null;
-  confidence: number;
-  state: 'idle' | 'possible_sign' | 'sign_in_progress' | 'sign_complete' | 'prediction';
-  trackingQuality: number;
-  tier: 'show' | 'retry' | 'unknown' | 'low_tracking' | 'unusable' | null;
-  reason: string | null;
-  observedAtMS: number;
-};
-export type LandmarkFrame = {
-  timestampMS: number;
-  hands: { handedness: string; handednessScore: number; joints: { x: number; y: number; z: number }[] }[];
-};
-export type SignloopCameraHandle = {
-  getRecentFrames(): Promise<{ captureId: number; frames: LandmarkFrame[] }>;
+export type DetectionEvent = LocalSignEvent & {
+  mode: 'signs' | 'spelling'; letter: string | null; ready: boolean; detail: string;
+  scores: { label: string; distance: number | null }[];
+  fps: number; trackingMS: number; matchMS: number; expression: string;
 };
 export type SignloopCameraProps = ViewProps & {
-  active: boolean;
-  captureId: number;
-  showSkeleton?: boolean;
+  active: boolean; captureId: number; recognitionMode?: 'signs' | 'spelling';
+  showSkeleton?: boolean; showPose?: boolean; trackFace?: boolean; labMode?: boolean;
   onStatus: (event: NativeSyntheticEvent<CameraStatusEvent>) => void;
   onSign?: (event: NativeSyntheticEvent<LocalSignEvent>) => void;
-  onPrediction?: (event: NativeSyntheticEvent<SignPredictionEvent>) => void;
+  onDetection?: (event: NativeSyntheticEvent<DetectionEvent>) => void;
+  onClose?: () => void;
 };
-
-const NativeView = requireNativeView<SignloopCameraProps & RefAttributes<SignloopCameraHandle>>('SignloopCamera');
-export const SignloopCamera = forwardRef<SignloopCameraHandle, SignloopCameraProps>((props, ref) =>
-  <NativeView {...props} ref={ref} />,
-);
+export const SignloopCamera = requireNativeView<SignloopCameraProps>('SignloopCamera');

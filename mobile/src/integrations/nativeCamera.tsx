@@ -11,16 +11,21 @@ import { framingFromCamera } from './cameraStatus';
 const NativeCamera: typeof CameraView | null = Platform.OS === 'ios' && requireOptionalNativeModule('SignloopCamera')
   ? require('../../modules/signloop-camera').SignloopCamera : null;
 
-function Camera({ active, captureId, onFraming, onTranslation, style }: CameraProps) {
+function Camera({ active, captureId, onFraming, onTranslation, style, recognitionMode = 'signs', detectionSettings, onDetection }: CameraProps) {
   useEffect(() => {
     if (!NativeCamera && active) onFraming('camera-unavailable', captureId);
   }, [active, captureId, onFraming]);
   if (!NativeCamera) return <View style={style} />;
-  return <NativeCamera active={active} captureId={captureId} showSkeleton style={style}
+  return <NativeCamera active={active} captureId={captureId} recognitionMode={recognitionMode}
+    showSkeleton={detectionSettings?.showSkeleton ?? true} showPose={detectionSettings?.showPose ?? true}
+    trackFace={detectionSettings?.trackFace ?? false} style={style}
     accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
     onSign={({ nativeEvent }) => {
-      const event = candidateFromSign(nativeEvent, active, captureId);
+      const event = candidateFromSign(nativeEvent, active && recognitionMode === 'signs', captureId);
       if (event) onTranslation(event, captureId);
+    }}
+    onDetection={({ nativeEvent }) => {
+      if (active && nativeEvent.captureId === captureId && nativeEvent.mode === recognitionMode) onDetection?.(nativeEvent);
     }}
     onStatus={({ nativeEvent }) => {
       const framing = framingFromCamera(nativeEvent, active, captureId);

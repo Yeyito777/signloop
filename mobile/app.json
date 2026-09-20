@@ -10,10 +10,11 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "ios": {
+      "buildNumber": "21",
       "supportsTablet": false,
       "bundleIdentifier": "com.signloop.mobile",
       "infoPlist": {
-        "NSCameraUsageDescription": "Honk & Tell uses your camera to track your hands on this device. No camera images or video are saved or uploaded.",
+        "NSCameraUsageDescription": "Honk & Tell tracks your hands, upper body and optional facial movements on this device. No camera images or video are saved or uploaded.",
         "NSLocalNetworkUsageDescription": "Connect to your own development backend for optional text-to-voice.",
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true

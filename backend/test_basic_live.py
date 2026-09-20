@@ -3,11 +3,25 @@ import hashlib
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 from .basic_live import accepted_events, calibrate, metrics, validate_deployment
 from .basic_signs import LABELS
 
 
 class BasicLiveTests(unittest.TestCase):
+    def test_private_provisioning_targets_explicit_expo_container(self):
+        from .basic_live import main
+        args = ["basic_live", "provision", "--out", ".runtime/bank", "--corpus", ".runtime/corpus",
+                "--device", "test-device", "--bundle-id", "com.signloop.mobile", "--accept-research-license"]
+        with mock.patch("sys.argv", args), mock.patch("backend.basic_live.validate_deployment", return_value={"references": []}) as validate, \
+             mock.patch("backend.basic_live.subprocess.run") as run:
+            main()
+        validate.assert_called_once()
+        command = run.call_args.args[0]
+        self.assertEqual(command[command.index("--domain-identifier")+1], "com.signloop.mobile")
+        self.assertEqual(command[command.index("--destination")+1], "Documents/basic-references.json")
+        self.assertNotIn("com.yeyito.signloop", command)
+
     def test_stability_and_unknown(self):
         def event(label, d=.04, m=.3):
             return dict(label=label, distance=d, margin=m)

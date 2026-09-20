@@ -1,10 +1,19 @@
 # Honk & Tell mobile
 
 Expo SDK 55 / React Native Playroom app with the **shared 3D goose, native Swift
-camera, offline ILY handshape preview, explicit confirmation, captions, and
+camera, shared offline temporal matcher and name spelling, explicit confirmation, captions, and
 optional server-proxied ElevenLabs voice**. A separate sample conversation
 preserves the UI review flow; real hand detection never generates sample captions.
 The goose is expressive animation, not an ASL signing avatar.
+
+> **The word-reference bank is intentionally excluded from Git.** A fresh clone
+> can track hands/body and spell AURELIO, but cannot recognize words until each
+> researcher generates and provisions their own local bank. Do not share a bank
+> through GitHub, releases, chat, or a bundled app: the source license prohibits
+> redistribution of data and modifications. From the repository root, after
+> reading and accepting the research-only terms:
+> `bash scripts/dev/setup-expo-references --accept-research-license`.
+> [Full setup, license and phone instructions](../docs/expo-detection.md#private-word-references-required).
 
 ## Run on iOS
 
@@ -17,8 +26,8 @@ npm ci
 npm run ios
 ```
 
-`preios` downloads Google's public Hand Landmarker and checksum-verified Gesture
-Recognizer models. CocoaPods installs MediaPipe 0.10.21. Expo generates `mobile/ios/`,
+`preios` downloads Google's checksum-verified hand, pose-lite and face models.
+CocoaPods installs MediaPipe 0.10.21. Expo generates `mobile/ios/`,
 builds a development app, opens Simulator, and starts Metro. Native folders are
 generated and ignored by Git. The camera requires iOS 17+.
 
@@ -35,11 +44,25 @@ For an existing checkout upgrading to **Honk & Tell**, run `npx expo prebuild --
 Start conversation requests camera permission on iPhone and shows a mirrored preview, native joint overlay, and hand visibility feedback. Permission denial offers Settings. Simulator and platforms without the module show an unavailable state with an explicit UI demo option.
 
 Home offers Start conversation and Voice settings. Simulator camera guidance
-links to an explicitly labelled sample preview. Live capture recognizes only the public model's ILY handshape: extend
-thumb, index, and pinky; fold the other two fingers. A tentative result is **not**
-spoken until Confirm. Unknown gestures and expired results produce no words.
-Release the handshape before repeating it. This is not validated general ASL
-translation; private five-sign research weights are not included.
+links to an explicitly labelled sample preview. Live capture now uses the shared
+11-sign temporal matcher (including ILOVEYOU), body-relative hand geometry and
+compact-WE guard. Private references must be separately provisioned into this
+app's container. Without them, tracking and bundled AURELIO spelling still work,
+but word recognition reports that references are unavailable. Best guesses can
+be wrong, including on unsupported inputs; they are **never** captions or voice
+until Confirm. Stale events and previous capture generations are rejected.
+
+Use **Spell name**, hold one of A/U/R/E/L/I/O, then **Add letter**. Manual letters,
+delete and clear are also available. **Confirm spelled name** sends only the
+explicitly composed name into the existing caption/voice flow. The draft is not
+persisted. This is not automatic sentence translation.
+
+Conversation menu → **Detection settings** controls hand/body overlays, optional
+face tracking and all 11 geometric distances (not probabilities). **Expression
+lab** opens the existing native teaching/import/export screen inside Expo. The
+conversation is paused before entry; tap Resume after returning. Facial labels
+are personal taught patterns, not inferred feelings or ASL grammar.
+See [provisioning, build and test instructions](../docs/expo-detection.md).
 
 For UI testing, `/conversation?demo=1` runs a finite sample: framing → ready → draft
 → thinking → accepted phrase → silent voice preview. “Demo · try states” opens

@@ -57,8 +57,10 @@ final class SkeletonCameraTracker: NSObject, ObservableObject, AVCaptureVideoDat
     private var rateFrames = 0
     private var observers: [NSObjectProtocol] = []
     private let lifecycle = CaptureLifecycle()
+    private let modelBundle: Bundle
 
-    override init() {
+    init(modelBundle: Bundle = .main) {
+        self.modelBundle = modelBundle
         super.init()
         observers.append(NotificationCenter.default.addObserver(
             forName: .AVCaptureSessionWasInterrupted, object: session, queue: .main
@@ -173,7 +175,7 @@ final class SkeletonCameraTracker: NSObject, ObservableObject, AVCaptureVideoDat
         do {
             if session.isRunning { session.stopRunning() }
             pipeline = nil
-            pipeline = try SkeletonPipeline(trackFace: faceEnabledOnQueue)
+            pipeline = try SkeletonPipeline(trackFace: faceEnabledOnQueue, modelBundle: modelBundle)
             if !configured {
                 session.beginConfiguration()
                 session.sessionPreset = .hd1280x720

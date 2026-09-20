@@ -2,6 +2,16 @@
 
 Hack the North · limited-vocabulary ASL-to-English prototype.
 
+> **Fresh clone? Word recognition needs local reference data.** The Swift detector
+> and alphabet model are in Git; the ASL Citizen-derived word coordinates are
+> **intentionally not in Git or the app bundle**. Microsoft's license prohibits
+> redistribution, including modifications. Each researcher must obtain the
+> source and generate their own bank; do not upload or send someone else's bank.
+> After reading the [research-only license](https://www.microsoft.com/en-us/research/project/asl-citizen/dataset-license/),
+> run `bash scripts/dev/setup-expo-references --accept-research-license`
+> from the repo root. See [setup and phone provisioning](docs/expo-detection.md#private-word-references-required).
+> Without this step, tracking/spelling work but word recognition does not.
+
 The app is now **Honk & Tell**. The standalone Xcode project and scheme are
 `HonkAndTell`. Existing bundle IDs, saved-data keys, native module names, and
 `ios/Signloop/` source paths remain stable so installed apps and integrations keep
@@ -19,15 +29,22 @@ rendering and animation assets replaceable.
 
 The Expo app lives in [`mobile/`](mobile/README.md): Home, Conversation, and local
 transcript/correction sheets in the Playroom style. The native Expo camera module
-uses the gesture tracker in `ios/Signloop/CameraTracker.swift`. The app renders
+uses the shared `SkeletonCameraTracker`, `BasicLiveRecognition` and
+`AlphabetRecognition` in `ios/Signloop/`. The app renders
 the shared 3D goose and offers a complete
-limited flow: **offline ILY handshape estimate → explicit confirmation → caption
+limited flow: **offline temporal sign or explicitly composed name → confirmation → caption
 → optional backend-generated goose voice**. Voice uploads require foreground-session
 consent in Settings. Provider keys stay on the backend. This is not general ASL
 translation. An explicit sample-conversation mode still uses labeled sample data
 and silent playback.
 See [voice setup](docs/voice-backend.md) and [integration checks](docs/branch-integration.md).
 See the [frontend integration handoff](docs/frontend-flow-and-handoff.md).
+
+Expo build 21 uses the same 11-sign presentation matcher, guarded WE tolerance,
+AURELIO spelling, match-distance inspector and optional face tracking as the
+native scanner. Expression lab is accessible inside Expo. The private reference
+bank must be provisioned to **`com.signloop.mobile`**, not the standalone app.
+See [unified detector setup and checks](docs/expo-detection.md).
 
 ```sh
 cd mobile

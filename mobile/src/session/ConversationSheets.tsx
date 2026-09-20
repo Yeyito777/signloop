@@ -6,8 +6,14 @@ import { Button, Copy, Icon, Touch, type IconName } from '../ui/primitives';
 import { Sheet } from '../ui/Sheet';
 import { textStyles, tokens } from '../ui/theme';
 import type { Action, Session } from './model';
+import { Switch } from 'react-native';
+import { router } from 'expo-router';
+export type DetectionSettings = { showSkeleton: boolean; showPose: boolean; trackFace: boolean; showScores: boolean };
 
-export function ConversationSheets({ state, dispatch, onEnd, demo }: { state: Session; dispatch: Dispatch<Action>; onEnd: () => void; demo: boolean }) {
+export function ConversationSheets({ state, dispatch, onEnd, demo, detectionSettings, setDetectionSettings }: {
+  state: Session; dispatch: Dispatch<Action>; onEnd: () => void; demo: boolean;
+  detectionSettings?: DetectionSettings; setDetectionSettings?: (settings: DetectionSettings) => void;
+}) {
   const [closing, setClosing] = useState(false);
   const dismissing = useRef(false);
   const afterDismiss = useRef<(() => void) | null>(null);
@@ -47,10 +53,26 @@ export function ConversationSheets({ state, dispatch, onEnd, demo }: { state: Se
     </>; break;
     case 'correction': title = 'Make a correction'; content = <><Correction key={state.phrases.at(-1)?.id} state={state} dispatch={commit} /></>; break;
     case 'menu': title = 'Conversation'; content = <>
+      {!demo && <MenuRow icon="frame" label="Detection settings" onPress={() => dispatch({ type: 'open-sheet', sheet: 'detector' })} />}
+      {!demo && <MenuRow icon="info" label="Expression lab" onPress={() => dismiss(() => {
+        dispatch({ type: 'close-sheet' }); dispatch({ type: 'pause' }); router.push('/expressions');
+      })} />}
       <MenuRow icon="transcript" label="View transcript" onPress={() => dispatch({ type: 'open-sheet', sheet: 'transcript' })} />
       <MenuRow icon="edit" label="Correct last phrase" disabled={!state.phrases.length} onPress={() => dispatch({ type: 'open-sheet', sheet: 'correction' })} />
       <MenuRow icon={state.muted ? 'muted' : 'volume'} label={state.muted ? 'Turn voice on' : 'Turn voice off'} onPress={() => dispatch({ type: 'mute' })} />
       <MenuRow icon="exit" label="End conversation" onPress={() => dispatch({ type: 'open-sheet', sheet: 'end' })} />
+    </>; break;
+    case 'detector': title = 'On-device detection'; content = <>
+      <Copy>11 presentation signs · AURELIO spelling. Guesses need confirmation. Matching uses hands and shoulders; no camera data goes to the backend.</Copy>
+      {detectionSettings && ([
+        ['showSkeleton', 'Show hand joints'], ['showPose', 'Show upper-body pose'],
+        ['trackFace', 'Track facial features (slower)'], ['showScores', 'Show match distances'],
+      ] as [keyof DetectionSettings, string][]).map(([key, label]) => <View key={key} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <Copy style={{ flex: 1 }}>{label}</Copy><Switch accessibilityLabel={label} value={detectionSettings[key]}
+          onValueChange={value => setDetectionSettings?.({ ...detectionSettings, [key]: value })} />
+      </View>)}
+      <Copy role="supporting">Face labels compare a personal profile taught in Expression lab. They are not emotions or ASL meaning. Distances are not probabilities; lower is closer.</Copy>
+      <Button onPress={close}>Done</Button>
     </>; break;
     case 'end': title = 'All done for now?'; content = <>
       <Copy>End this conversation? Its transcript will be cleared.</Copy>

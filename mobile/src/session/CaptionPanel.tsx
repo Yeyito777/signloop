@@ -7,13 +7,25 @@ import { useMotion } from '../ui/motion';
 import { tokens } from '../ui/theme';
 import { captionPresentation } from './captionPresentation';
 import type { Action, Session } from './model';
+import type { DetectionEvent } from '../../modules/signloop-camera';
+import { freshObservation, nameLetters } from '../integrations/localSign';
+import { canCapture } from './model';
 
-export function CaptionPanel({ state, mode, dispatch }: { state: Session; mode: IntegrationKit['mode']; dispatch: Dispatch<Action> }) {
+export function CaptionPanel({ state, mode, dispatch, detection, showScores }: {
+  state: Session; mode: IntegrationKit['mode']; dispatch: Dispatch<Action>;
+  detection?: DetectionEvent | null; showScores?: boolean;
+}) {
   const { enter } = useMotion();
   const { phrase, text, label, delivery, activity, notice, draft } = captionPresentation(state, mode);
   const lastPhrase = useRef(phrase);
   const scroll = useRef<ScrollView>(null);
   const [corrected, setCorrected] = useState(false);
+  const [now, setNow] = useState(Date.now());
+  const [manual, setManual] = useState(false);
+  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 200); return () => clearInterval(timer); }, []);
+  const current = detection?.captureId === state.captureId && detection.mode === state.recognitionMode && canCapture(state) ? detection : null;
+  const fresh = current && freshObservation(current.observedAtMS, now);
+  const letter = fresh && current.letter && nameLetters.includes(current.letter) ? current.letter : null;
   useEffect(() => {
     const previous = lastPhrase.current;
     lastPhrase.current = phrase;
@@ -39,9 +51,43 @@ export function CaptionPanel({ state, mode, dispatch }: { state: Session; mode: 
       </View>}
     </View>
     <ScrollView ref={scroll} style={styles.textScroll} contentContainerStyle={styles.textContent} showsVerticalScrollIndicator keyboardShouldPersistTaps="handled">
+      {mode !== 'demo' && <>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {(['signs', 'spelling'] as const).map(value => <Button key={value}
+            variant={state.recognitionMode === value ? 'secondary' : 'plain'}
+            disabled={!canCapture(state)} onPress={() => dispatch({ type: 'recognition-mode', mode: value })}>
+            {value === 'signs' ? 'Signs' : 'Spell name'}
+          </Button>)}
+        </View>
+        {!!current && <Copy role="supporting">{current.detail}{current.expression ? ` · ${current.expression}` : ''}</Copy>}
+        {state.recognitionMode === 'spelling' && <>
+          <Copy role="caption">{state.spellingDraft || 'Spelling…'}</Copy>
+          <Copy>Letter guess: {letter ?? 'Watching…'} · verify before Add</Copy>
+          <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+            <Button disabled={!letter} onPress={() => {
+              if (letter && current && freshObservation(current.observedAtMS)) dispatch({ type: 'add-letter', letter });
+            }}>Add letter</Button>
+            <Button variant="plain" disabled={!state.spellingDraft} onPress={() => dispatch({ type: 'delete-letter' })}>Delete</Button>
+            <Button variant="plain" onPress={() => setManual(!manual)}>Manual letters</Button>
+          </View>
+          {manual && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {nameLetters.map(value => <Button key={value} variant="plain" disabled={!canCapture(state)}
+              onPress={() => dispatch({ type: 'add-letter', letter: value })}>{value}</Button>)}
+            <Button variant="plain" onPress={() => dispatch({ type: 'clear-spelling' })}>Clear</Button>
+          </View>}
+          <Button disabled={!state.spellingDraft || !canCapture(state)} onPress={() => dispatch({ type: 'confirm-spelling' })}>Confirm spelled name</Button>
+          <Copy role="supporting">A U R E L I O only · one hand · nothing is added or spoken automatically.</Copy>
+        </>}
+        {showScores && state.recognitionMode === 'signs' && <>
+          <Copy role="supporting">Geometric distance · lower is closer · not probability</Copy>
+          {current?.scores.slice().sort((a,b) => (a.distance ?? Infinity)-(b.distance ?? Infinity)).map(row =>
+            <Copy role="supporting" key={row.label}>{row.label}: {fresh && row.distance !== null ? row.distance.toFixed(3) : '—'}</Copy>)}
+          <Copy role="supporting">{current?.fps ?? 0} FPS · tracking {current?.trackingMS ?? 0} ms · matching {current?.matchMS ?? 0} ms</Copy>
+        </>}
+      </>}
       {state.candidate && !state.paused && <View style={styles.notice}>
         <View style={{ flex: 1, gap: 8 }}>
-          <Copy role="supporting">Possible ILY handshape · please confirm</Copy>
+          <Copy role="supporting">Best guess · uncertain · please confirm</Copy>
           <Copy role="caption">{state.candidate.text}</Copy>
           <Button icon="check" onPress={() => dispatch({ type: 'confirm-candidate' })}>Confirm these words</Button>
         </View>
@@ -53,7 +99,7 @@ export function CaptionPanel({ state, mode, dispatch }: { state: Session; mode: 
       {!!activity && <Animated.View key={activity} entering={enter} style={styles.activity}><View style={styles.dot} /><Copy role="supporting" accessibilityLiveRegion="polite" style={styles.muted}>{activity}</Copy></Animated.View>}
       {(state.phase === 'uncertain' || state.phase === 'offline') && <Button variant="plain" icon="repeat" onPress={() => dispatch({ type: 'retry' })}>{state.phase === 'offline' ? 'Try connection again' : 'Try that phrase again'}</Button>}
       {state.phase === 'voice-error' && <Button variant="plain" icon="volume" onPress={() => dispatch({ type: 'replay' })}>Try voice again</Button>}
-      {!phrase && !draft && !notice && !state.candidate && mode !== 'demo' && <Copy role="supporting" style={styles.muted}>Limited ILY handshape preview. Extend thumb, index and pinky, then confirm. Voice is optional in Settings.</Copy>}
+      {!phrase && !draft && !notice && !state.candidate && mode !== 'demo' && state.recognitionMode === 'signs' && <Copy role="supporting" style={styles.muted}>11-sign offline research preview. Keep hands and shoulders visible. Confirm guesses before captions or optional voice. No automatic sentence translation.</Copy>}
     </ScrollView>
   </View>;
 }
