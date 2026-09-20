@@ -68,6 +68,12 @@ test('drafts are visibly unspoken, while queue and demo states cannot claim comp
   assert.equal(captionPresentation(guess, 'live').text, 'Hello.');
   assert.equal(captionPresentation(guess, 'live').label, 'Reading…');
   const state = accepted();
+  assert.equal(captionPresentation(state, 'live').label, 'Preparing voice…');
+  assert.equal(captionPresentation(state, 'live').delivery, 'Preparing voice…');
+  const nextGuess = reduce(state, { type: 'translation', captureId: state.captureId, event: { type: 'sign-preview', text: 'Hello.', attemptId: 2, observedAtMS: Date.now() } });
+  assert.equal(captionPresentation(nextGuess, 'live').text, 'Could we sit by the window?');
+  assert.equal(captionPresentation(nextGuess, 'live').preview, 'Hello.');
+  assert.equal(captionPresentation(nextGuess, 'live').delivery, 'Preparing voice…');
   const queued = reduce(state, { type: 'translation', captureId: state.captureId, event: { type: 'accepted', id: 'two', text: 'Thank you.', emotion: 'neutral' } });
   assert.equal(captionPresentation(queued, 'live').delivery, 'Waiting to speak');
   assert.equal(captionPresentation(state, 'demo').delivery, 'Playing · silent preview');

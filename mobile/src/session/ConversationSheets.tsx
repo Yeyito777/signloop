@@ -61,7 +61,6 @@ export function ConversationSheets({ state, dispatch, onEnd, demo, detectionSett
         dispatch({ type: 'close-sheet' }); dispatch({ type: 'pause' }); router.push('/expressions');
       })} />}
       <MenuRow icon="transcript" label="View transcript" onPress={() => dispatch({ type: 'open-sheet', sheet: 'transcript' })} />
-      {!demo && <MenuRow icon="edit" label="Edit sentence draft" onPress={() => dispatch({ type: 'open-sheet', sheet: 'sentence-editor' })} />}
       <MenuRow icon="edit" label="Correct last phrase" disabled={!state.phrases.length} onPress={() => dispatch({ type: 'open-sheet', sheet: 'correction' })} />
       <MenuRow icon={state.muted ? 'muted' : 'volume'} label={state.muted ? 'Turn voice on' : 'Turn voice off'} onPress={() => dispatch({ type: 'mute' })} />
       <MenuRow icon="exit" label="End conversation" onPress={() => dispatch({ type: 'open-sheet', sheet: 'end' })} />

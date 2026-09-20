@@ -67,7 +67,8 @@ class VoiceAdapterTests(unittest.TestCase):
                     self.assertEqual(payload["text"], "Hello.")
                     self.assertEqual(payload["voice_settings"]["style"], 0)
                 if emotion == "disgust":
-                    self.assertEqual(payload["text"], "[disgusted] Hello.")
+                    self.assertEqual(payload["text"], "Hello.")
+                    self.assertEqual(payload["voice_settings"]["style"], 0.7)
                 self.assertEqual(payload["seed"], seed_for_speech_text("Hello.", emotion))
 
     def test_request_matches_frontend_contract_and_validates_response(self):
@@ -88,14 +89,18 @@ class VoiceAdapterTests(unittest.TestCase):
         self.assertEqual(request.get_header("Accept"), "application/json")
         self.assertEqual(request.get_header("Xi-api-key"), "provider-key-not-for-client")
         payload = json.loads(request.data)
-        self.assertEqual(payload["text"], "[worried] [nervously] Hello 😀")
-        self.assertEqual(payload["model_id"], "eleven_v3")
+        self.assertEqual(payload["text"], "Hello 😀")
+        self.assertEqual(payload["model_id"], "eleven_flash_v2_5")
         self.assertEqual(payload["seed"], seed_for_speech_text("Hello 😀", "fear"))
         self.assertEqual(payload["voice_settings"], {
             "stability": 0, "similarity_boost": .64, "style": .78, "speed": 1.2,
             "use_speaker_boost": True})
         self.assertEqual(result["alignment"], alignment)
         self.assertNotIn("provider-key-not-for-client", json.dumps(result))
+        with mock.patch("backend.voice._PROVIDER_OPENER.open", return_value=FakeResponse(provider_body())) as replay:
+            again = voice.speak("  Hello 😀  ", "fear")
+        replay.assert_not_called()
+        self.assertEqual(again["audio_base64"], result["audio_base64"])
 
     def test_rejects_invalid_input_before_any_provider_request(self):
         voice = ElevenLabsVoice("key", "voice")

@@ -49,8 +49,9 @@ export function moodPresentation(state: Session, now = Date.now()) {
   const mood = moodNames[conversationEmotion(state, now)];
   if (state.paused || state.sheet) return { mood: 'Neutral', detail: 'Paused' };
   if (state.speech) {
-    return { mood, detail: state.speech.started ? 'Speaking this phrase' : 'Voice for this phrase' };
+    return { mood, detail: state.speech.started ? 'Speaking this phrase' : 'Got it · preparing voice' };
   }
+  if (state.signPreview) return { mood, detail: 'Reading a sign' };
   const event = state.expression;
   if (!event || event.captureId !== state.captureId) return { mood: 'Neutral', detail: 'Waiting for face' };
   const setup = expressionNotice(event);

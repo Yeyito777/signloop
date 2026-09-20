@@ -2,8 +2,8 @@ import type { Emotion, Framing, SignObservation, TranslationEvent } from '../int
 import type { ExpressionEvent } from '../../modules/signloop-camera/events';
 import { expressionFromCamera, EXPRESSION_FRESH_MS } from '../integrations/expression.ts';
 import { isEmotion } from '../../../goose/src/emotion.ts';
-import { isFreshSign, SIGN_FRESH_MS, signText } from '../integrations/localSign.ts';
-import { canAppendSentence, emptySentence, MAX_SENTENCE_CHARACTERS, sentenceEmotion, sentenceText, suspendSentence,
+import { isFreshSign, SIGN_FRESH_MS } from '../integrations/localSign.ts';
+import { emptySentence, MAX_SENTENCE_CHARACTERS, sentenceEmotion, sentenceText, suspendSentence,
   type SentenceDraft, type SentenceToken } from './sentence.ts';
 
 export type Sheet = 'transcript' | 'correction' | 'sentence-editor' | 'menu' | 'end' | 'demo' | 'detector' | null;
@@ -87,20 +87,15 @@ function translate(state: Session, event: TranslationEvent): Session {
   switch (event.type) {
     case 'recognized-sign': {
       if (state.recognitionMode !== 'signs') return state;
-      if (!canAppendSentence(state.sentence) || !isFreshSign(event)
-        || !Object.hasOwn(signText, event.label) || event.text !== signText[event.label]
-        || event.attemptId <= (state.recognizedAttempt ?? 0)) return state;
-      const token: SentenceToken = { label: event.label, text: event.text, captureId: state.captureId,
-        attemptId: event.attemptId, observedAtMS: event.observedAtMS, emotion: isEmotion(event.emotion) ? event.emotion : 'neutral' };
-      const next = { ...state, recognizedAttempt: event.attemptId,
-        sentence: { ...state.sentence, revision: state.sentence.revision + 1, tokens: [...state.sentence.tokens, token] } };
-      // A completed match may arrive while the next sign is already being previewed.
+      if (!isFreshSign(event) || event.attemptId <= (state.recognizedAttempt ?? 0)) return state;
+      const next = translate({ ...state, recognizedAttempt: event.attemptId }, { type: 'accepted',
+        id: `sign-${state.captureId}-${event.attemptId}`, text: event.text, emotion: event.emotion });
       return { ...next, signPreview: state.signPreview && state.signPreview.attemptId > event.attemptId
         ? state.signPreview : null };
     }
     case 'sign-preview': {
       if (state.recognitionMode !== 'signs') return state;
-      if (!canAppendSentence(state.sentence) || !isFreshSign(event) || event.attemptId <= (state.recognizedAttempt ?? 0)
+      if (!isFreshSign(event) || event.attemptId <= (state.recognizedAttempt ?? 0)
         || (state.signPreview && (event.attemptId < state.signPreview.attemptId
           || (event.attemptId === state.signPreview.attemptId && event.observedAtMS <= state.signPreview.observedAtMS)))) return state;
       const { type: _, ...signPreview } = event;

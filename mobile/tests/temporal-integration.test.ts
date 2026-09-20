@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { translationFromPrediction, signText } from '../src/integrations/localSign.ts';
 import { initialSession, sessionReducer as reduce } from '../src/session/model.ts';
 
-test('all 11 native temporal labels preview silently and join the sentence draft on completion', () => {
+test('all 11 native temporal labels preview silently and speak on completion', () => {
   assert.equal(Object.keys(signText).length, 11);
   for (const label of Object.keys(signText)) {
     const now = Date.now();
@@ -19,8 +19,7 @@ test('all 11 native temporal labels preview silently and join the sentence draft
       engine: 'basic-temporal-v3', phase: 'completed', attemptId: 1, matched: false,
       candidates: [{ label, distance: .1 }] }, true, 1)!;
     s = reduce(s, { type: 'translation', captureId: 1, event: completed });
-    assert.equal(s.sentence.tokens[0].text, signText[label as keyof typeof signText]);
-    assert.equal(s.phrases.length, 0);
+    assert.equal(s.phrases[0].text, signText[label as keyof typeof signText]);
     assert.equal(s.speech, null);
   }
 });
@@ -74,7 +73,7 @@ test('sign predictions cannot create captions or speech while spelling in the cu
   const event = translationFromPrediction({ captureId: ready.captureId, label: 'HELLO', observedAtMS: Date.now(),
     engine: 'basic-temporal-v3', phase: 'completed', attemptId: 1, matched: false,
     candidates: [{ label: 'HELLO', distance: .1 }] }, true, ready.captureId)!;
-  const draft = reduce(ready, { type: 'translation', captureId: ready.captureId, event });
-  assert.equal(draft.speech, null);
-  assert.equal(draft.sentence.tokens[0].text, 'Hello.');
+  const spoken = reduce(ready, { type: 'translation', captureId: ready.captureId, event });
+  assert.equal(spoken.speech?.text, 'Hello.');
+  assert.equal(spoken.phrases[0].text, 'Hello.');
 });

@@ -23,7 +23,7 @@ export function isFreshSign(observation: SignObservation, now = Date.now()): boo
     && !!observation.text.trim() && observation.text.length <= 500;
 }
 
-/** Show one rolling guess; append completed matches to the sentence draft. */
+/** Show one rolling guess; speak the best complete-gesture match automatically. */
 export function translationFromPrediction(event: SignPredictionEvent, active: boolean, captureId: number,
   now = Date.now()): TranslationEvent | null {
   if (!active || event.captureId !== captureId) return null;

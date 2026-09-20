@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { URL } from 'node:url';
 import { translationFromPrediction, signText, SIGN_FRESH_MS } from '../src/integrations/localSign.ts';
 import { cameraAvailability, framingFromCamera } from '../src/integrations/cameraStatus.ts';
-import { initialSession, sessionReducer as reduce, type Session } from '../src/session/model.ts';
+import { initialSession, sessionReducer as reduce } from '../src/session/model.ts';
 import type { SignPredictionEvent, CameraStatus } from '../modules/signloop-camera/events.ts';
 
 const event = (overrides: Partial<SignPredictionEvent> = {}): SignPredictionEvent => ({
@@ -12,24 +12,21 @@ const event = (overrides: Partial<SignPredictionEvent> = {}): SignPredictionEven
   candidates: [{ label: 'HELLO', distance: 0.08 }, { label: 'THANKYOU', distance: 0.09 }, { label: 'PLEASE', distance: 0.11 }],
   label: 'HELLO', matched: false, observedAtMS: Date.now(), ...overrides,
 });
-const commit = (state: Session) => reduce(state, { type: 'commit-sentence', draftId: state.sentence.id, revision: state.sentence.revision });
 const ready = () => reduce(initialSession(), { type: 'framing', framing: 'ready', captureId: 1 });
 function receive(state = ready(), native = event()) {
   const translation = translationFromPrediction(native, true, state.captureId);
   return translation ? reduce(state, { type: 'translation', captureId: state.captureId, event: translation }) : state;
 }
 
-test('every native presentation label enters an unspoken draft with its canonical label', () => {
+test('every native presentation label speaks its canonical caption on completion', () => {
   const swift = readFileSync(new URL('../../ios/Signloop/BasicSignMatcher.swift', import.meta.url), 'utf8');
   const vocabulary = swift.match(/static let presentationVocabulary = \[([^\]]+)\]/)![1];
   const nativeLabels = [...vocabulary.matchAll(/"([A-Z]+)"/g)].map(match => match[1]);
   assert.deepEqual(Object.keys(signText), nativeLabels, 'JS and the actual native vocabulary must agree');
   for (const label of nativeLabels) {
     const state = receive(ready(), event({ label, candidates: [{ label, distance: 0.1 }] }));
-    assert.equal(state.phrases.length, 0);
-    assert.equal(state.sentence.tokens[0].text, signText[label as keyof typeof signText]);
-    assert.equal(state.sentence.tokens[0].label, label);
-    assert.equal(state.speech, null);
+    assert.equal(state.phrases[0].text, signText[label as keyof typeof signText]);
+    assert.equal(state.speech?.text, signText[label as keyof typeof signText]);
     assert.equal(state.signPreview, null);
   }
 });
@@ -37,8 +34,8 @@ test('every native presentation label enters an unspoken draft with its canonica
 test('completion picks exactly the best match even when the native rolling-only matched flag is false', () => {
   for (const matched of [false, true]) {
     const state = receive(ready(), event({ matched }));
-    assert.deepEqual(state.sentence.tokens.map(p => p.text), ['Hello.']);
-    assert.equal(state.speech, null);
+    assert.deepEqual(state.phrases.map(p => p.text), ['Hello.']);
+    assert.equal(state.speech?.text, 'Hello.');
     assert.deepEqual(state.speechQueue, []);
   }
 });
@@ -49,8 +46,8 @@ test('rolling rankings show one live guess without speaking before gesture compl
   assert.equal(state.phrases.length, 0);
   assert.equal(state.speech, null);
   assert.equal(state.sentence.tokens.length, 0);
-  assert.equal(receive(state).sentence.tokens[0].text, 'Hello.');
-  assert.equal(receive(state).speech, null);
+  assert.equal(receive(state).phrases[0].text, 'Hello.');
+  assert.equal(receive(state).speech?.text, 'Hello.');
 });
 
 test('live guesses follow fresh input and reject older or duplicate previews', context => {
@@ -86,17 +83,17 @@ test('duplicates and late previews cannot repeat a completed attempt; a new atte
   const cleared = reduce(spoken, { type: 'translation', captureId: 1, event: { type: 'clear-preview' } });
   assert.equal(receive(cleared), cleared);
   const repeated = receive(cleared, event({ attemptId: 2 }));
-  assert.deepEqual(repeated.sentence.tokens.map(p => p.text), ['Hello.', 'Hello.']);
+  assert.deepEqual(repeated.phrases.map(p => p.text), ['Hello.', 'Hello.']);
   assert.equal(repeated.speech, spoken.speech);
-  assert.deepEqual(repeated.speechQueue, []);
+  assert.equal(repeated.speechQueue.length, 1);
   assert.equal(receive(repeated, event({ attemptId: 1 })), repeated);
 });
 
 test('completed gestures preserve a newer live preview and queue speech in order', () => {
   const preview = receive(ready(), event({ phase: 'preview', attemptId: 2, label: 'PLEASE', candidates: [{ label: 'PLEASE', distance: 0.1 }] }));
-  const first = commit(receive(preview));
+  const first = receive(preview);
   assert.equal(first.signPreview?.text, 'Please.');
-  const second = commit(receive(first, event({ attemptId: 2, label: 'PLEASE', candidates: [{ label: 'PLEASE', distance: 0.1 }] })));
+  const second = receive(first, event({ attemptId: 2, label: 'PLEASE', candidates: [{ label: 'PLEASE', distance: 0.1 }] }));
   assert.equal(second.signPreview, null);
   assert.equal(second.speech?.text, 'Hello.');
   const finished = reduce(second, { type: 'speech-ended', id: second.speech!.id });
@@ -124,7 +121,7 @@ test('native invalidations, malformed rankings and stale observations clear only
     { candidates: [{ label: 'HELLO', distance: 1 }, { label: 'PLEASE', distance: 0 }] },
     { candidates: [{ label: 'PLEASE', distance: 0 }] }, { candidates: Array(4).fill({ label: 'HELLO', distance: 0 }) },
   ];
-  const speaking = commit(receive());
+  const speaking = receive();
   for (const changes of invalid) {
     assert.deepEqual(translationFromPrediction(event(changes), true, 1), { type: 'clear-preview' });
     const next = receive(speaking, event(changes));
@@ -163,11 +160,11 @@ test('setup failures and missing shoulders clear guesses and invalidate late com
 });
 
 test('resuming uses a fresh capture generation and permits a new completed sign', () => {
-  const spoken = commit(receive());
+  const spoken = receive();
   const resumed = reduce(reduce(spoken, { type: 'pause' }), { type: 'resume' });
   const state = reduce(resumed, { type: 'framing', captureId: resumed.captureId, framing: 'ready' });
   assert.equal(receive(state, event()), state);
-  const next = commit(receive(state, event({ captureId: state.captureId })));
+  const next = receive(state, event({ captureId: state.captureId }));
   assert.equal(next.phrases.length, 2);
   assert.notEqual(next.phrases[0].id, next.phrases[1].id);
 });

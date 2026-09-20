@@ -18,8 +18,7 @@ function offer(state: Session, emotion: Emotion, attemptId = 1, observedAtMS = D
   const event = translationFromPrediction({ engine: 'basic-temporal-v3', phase: 'completed',
     attemptId, captureId: state.captureId, observedAtMS, matched: false,
     label: 'HELLO', candidates: [{ label: 'HELLO', distance: 0.1 }], emotion }, true, state.captureId)!;
-  const draft = reduce(state, { type: 'translation', captureId: state.captureId, event });
-  return reduce(draft, { type: 'commit-sentence', draftId: draft.sentence.id, revision: draft.sentence.revision });
+  return reduce(state, { type: 'translation', captureId: state.captureId, event });
 }
 afterEach(() => setVoiceSettings({ url: '', token: '', enabled: false }));
 
@@ -120,6 +119,15 @@ test('missing taught profile still reports a live mood instead of sending people
 test('live smiles show Joy on the testing mood chip', () => {
   const state = reduce(ready(), { type: 'expression', event: expression('joy') });
   assert.deepEqual(moodPresentation(state), { mood: 'Joy', detail: 'Live face' });
+});
+
+test('a completed sign is acknowledged before audio starts', () => {
+  const state = offer(ready(), 'joy');
+  assert.deepEqual(moodPresentation(state), { mood: 'Joy', detail: 'Got it · preparing voice' });
+  const reading = reduce(ready(), { type: 'translation', captureId: 1, event: {
+    type: 'sign-preview', text: 'Hello.', attemptId: 1, observedAtMS: Date.now(),
+  } });
+  assert.deepEqual(moodPresentation(reading), { mood: 'Neutral', detail: 'Reading a sign' });
 });
 
 test('missing blendshapes are not described as a relaxed face', () => {

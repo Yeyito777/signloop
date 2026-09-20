@@ -162,7 +162,7 @@ final class BasicLiveRecognition: ObservableObject {
             startNextSegment()
             return
         }
-        guard !busy, frame.timestampMS-lastRequest >= 100 else { return }
+        guard !busy, frame.timestampMS-lastRequest >= 250 else { return }
         start(Request(frames: frames, attemptID: currentAttemptID!, completed: false))
     }
 
