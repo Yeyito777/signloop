@@ -6,11 +6,13 @@ saved brow/eye/mouth measurements and stays fixed during normal use.
 
 ## On the training phone
 
-1. Install the **Signloop** scheme through Xcode. Build 14's Expression lab says
+1. Install the **Signloop** scheme through Xcode. Build 15's Expression lab says
    **Teach my expressions**; it no longer uses activation sliders as its primary
    recognizer. Merging source does not automatically reinstall a cable-built app.
 2. Tap the smile icon, then **Teach my expressions**.
 3. Capture your relaxed face, joy, anger, fear, sadness and disgust **twice each**.
+   For fear, **drop your jaw and open your mouth with the corners relaxed**.
+   Keep your eyes natural. A smile blocks fear, including an open-mouth smile.
    For disgust, **scrunch your nose as if something smells bad**, with your mouth
    relaxed and your head steady. Upper-lip raising is no longer its measurement.
    Each button starts a one-second preparation interval and two-second capture.
@@ -30,27 +32,29 @@ replacement in the lab. Cancellation, interruption or a failed save preserves
 the installed profile. An unfinished teaching session is temporary and is not
 restored after closing the lab/app.
 
-Build 14 retains the more sensitive brow/eye matching introduced in build 13. It can recognize a
-softer version of the same taught pattern, so use comfortable movements when
+Build 15 keeps the sensitive brow matching and uses a jaw drop instead of eye
+widening for fear. It can recognize a softer version of the same taught pattern
+when the mouth opening is still clear, so use comfortable movements when
 teaching; exaggerated poses are unnecessary. The lab's **Your facial
-movement** readout shows brow, eye and nose change from your relaxed face and percentage of your
+movement** readout shows brow, jaw and nose change from your relaxed face and percentage of your
 own taught change. A raw ratio such as 0.01 can be meaningful; neither it nor
 the percentage is a probability. 100% is the captured example, not a required
 activation score. Before teaching that expression, only the raw delta appears.
 
-Saved build-12/13 profiles are preserved with their original upper-lip measurement.
-The lab explicitly offers **Teach a nose-scrunch profile**. Complete one replacement
-setup for all six labels: their missing nose measurements cannot be reconstructed
-from the saved lip values. Until the replacement is saved, the old profile keeps
-running; cancellation and failed saves keep it intact. Nose readouts during
-teaching use the new capture stream, never the old profile's lip values.
+Saved build-12/13/14 profiles are preserved with their original eye/lip/nose
+measurements. The lab explicitly offers **Teach a jaw-drop profile**. Complete
+one replacement setup for all six labels: jaw measurements cannot be reconstructed
+from their saved eye values. Until the replacement is saved, the old profile keeps
+running; cancellation and failed saves keep it intact. Teaching readouts use the
+new capture stream, never an old profile's eye or lip values.
 
 Build-12 profiles use the more sensitive brow/eye matcher if
 their saved checks pass it. Otherwise, the original matcher stays active and
 the lab explains that teaching a replacement enables the sensitivity update.
-New nose exports include `matchingVersion: 2` and measurement version
-`face-geometry-nose-v2`. Old `face-geometry-mouth-v1` exports remain readable and
-are always matched against their original measurements. Re-export the new nose
+New exports include `matchingVersion: 2` and measurement version
+`face-geometry-jaw-nose-v3`. Old `face-geometry-mouth-v1` and
+`face-geometry-nose-v2` exports remain readable and are always matched against
+their original measurements. Re-export the new jaw-drop
 profile before bundling it into a demo; an old export still uses the old cue.
 
 This is one person's fixed expression reference. It is not face identification
@@ -99,14 +103,36 @@ and camera coordinates rather than interpreting the JSON as emotion probabilitie
 ## How it works
 
 `ExpressionMeasurements.swift` measures five dimensions from the synchronized
-face result: smile, brow height, eye opening, inner-versus-outer brow slope and
+face result: smile, brow height, jaw/mouth opening, inner-versus-outer brow slope and
 nose compression. Nose compression is the signed projected distance from the
 nasal wings (landmarks 98/327) to the nose root (168), normalized by the eye-corner
 span. As the wings move up toward the root, this negative ratio increases.
 This is a geometric proxy for the scrunch, not a detector of wrinkle texture.
-Eye/brow/nose ratios use aspect-correct image geometry and compensate for roll
+Mouth/brow/nose ratios use aspect-correct image geometry and compensate for roll
 and scale. Missing landmarks abstain; neither upper-lip coefficients nor the
 reported unreliable `noseSneer` coefficients substitute for nose geometry.
+
+The jaw feature is the lesser of `jawOpen` and the vertical inner-lip gap
+(landmarks 13/14) normalized by eye-corner spacing. Both signals must show
+opening: parted lips with a closed jaw, or a jaw score with a closed mouth, are
+insufficient. Eye widening has no role in the new fear measurement. Missing or
+invalid jaw signals abstain rather than falling back to an eye cue.
+Each new capture also retains the raw jaw coefficient's median and spread.
+This separate reference requires the raw jaw signal itself to change beyond
+its personal resting level, even if that resting coefficient is biased high.
+New-profile matching requires this reading; it cannot infer it from mouth gap.
+
+New fear captures must exceed the relaxed jaw by more than the measured noise
+and 0.04 in the combined feature, and stay below a smile threshold learned from
+the relaxed face and joy takes. Runtime requires a change greater than noise and
+0.03. Raw jaw movement must additionally exceed its relaxed baseline by more
+than captured variation and 0.08 during teaching, or 0.06 at runtime.
+Any detected smile crossing the learned smile threshold vetoes fear. Joy matching then
+ignores jaw opening, so opening an otherwise matching smile does not turn it
+into fear. Other facial measurements and the normal hold still apply. This
+prevents confusion at the classifier level; it cannot guarantee the camera
+detects every real smile, and sustained speech or yawning can still resemble a
+non-smiling jaw drop.
 
 `ExpressionTeacher.swift` temporarily collects two separate captures per label.
 Each stores a median vector and robust within-take variation (90th–10th percentile
@@ -115,10 +141,10 @@ rejects substantial head movement. Camera changes, missing tracking and gaps ove
 400 ms abort unfinished takes. A one-second preparation interval is excluded.
 
 `TaughtExpressionModel` scales mouth/brow-slope dimensions by learned range and
-variation. For brow height, eye opening and nose compression, it uses the smallest between-label
+variation. For brow height, jaw opening and nose compression, it uses the smallest between-label
 difference above measured variation and small geometry noise floors. Thus a
 large movement in another expression cannot drown out a repeatable small brow
-drop or eye widening. It compares the entire vector
+drop or mouth opening. It compares the taught vector
 with both examples of all six labels. It rejects near-identical classes,
 inconsistent repeated examples and excessive within-take variation. A match must
 fall inside a bounded radius relative to the nearest competing expression and
@@ -130,7 +156,7 @@ Unknown/intermediate movements can abstain; the model does
 not force every frame into an emotion.
 
 This replaces the previous one-cue-per-emotion classifier in the app. Upper-lip
-movement alone does not affect any new-profile measurement. Smiles can also
+coefficients are not used in new-profile matching. Smiles can also
 move the nose, so the complete taught pattern still distinguishes the labels.
 Both disgust takes must show positive nose compression beyond the captured noise;
 an unresponsive nose signal produces a retake message. Runtime also requires nose
@@ -152,12 +178,16 @@ by smile/disgust, personal neutral, unknown poses, holds/freshness,
 training versus independent checks, conflicting captures, persistence, import
 validation, failed saves and bundled-profile precedence. Existing geometry and
 native core checks also run. Optional private Core ML fixtures remain separate.
-Sensitivity regressions include a 0.01 brow drop, 0.006 eye-opening change,
+Sensitivity regressions include a 0.01 brow drop, a 0.006 eye-opening change in legacy profiles,
 softer/stronger patterns, reversed/mixed movements, neutral jitter, personal
 movement readouts and preservation of valid older profiles.
 Nose tests cover landmark-to-teaching-to-runtime behavior, lip-only movement,
 missing landmarks, flat/absent nose-sneer coefficients, geometric transforms,
 flat-nose teaching rejection, profile units and export/import.
+Jaw tests cover relaxed eyes, lip parting without a jaw drop, missing/invalid jaw
+signals, closed and open-mouth smiles, smile vetoes, immediate release of fear
+on smiling, rejection of smiling fear takes, biased resting jaw signals, and
+build-14 profile compatibility.
 
 Simulator UI checks cover lab-only setup, disabled capture without a face,
 export requiring a complete profile, cancellation/relaunch, and a dedicated

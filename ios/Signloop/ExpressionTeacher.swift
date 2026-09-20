@@ -94,13 +94,10 @@ struct ExpressionTeacher {
             message = "Your head moved during that take. Hold it steady and retry."; return
         }
         let example = ExpressionExample.summarize(samples)
-        if capture.step.label == .neutral && example.center[2] < 0.025 {
-            message = "Keep your eyes naturally open for your relaxed-face example."; return
-        }
         if capture.step.isValidation {
             guard let model else { return }
             let matches = samples.map { sample in
-                model.match(ExpressionCue.allCases.map { sample.values[$0]! }).label == capture.step.label
+                model.match(ExpressionCue.allCases.map { sample.values[$0]! }, jawOpening: sample.jawOpening).label == capture.step.label
             }
             let accepted = matches.filter { $0 }.count
             var since: Int?, longestHold = 0
@@ -111,7 +108,7 @@ struct ExpressionTeacher {
                 } else { since = nil }
             }
             guard longestHold >= 300, Double(accepted)/Double(samples.count) >= 0.8,
-                  model.match(example.center).label == capture.step.label else {
+                  model.match(example.center, jawOpening: example.jawOpening).label == capture.step.label else {
                 message = "That repeat did not consistently match \(capture.step.label.title.lowercased()). Try again, or retake its teaching examples below."; return
             }
             validation[capture.step.label] = ExpressionValidation(example: example, accepted: accepted, total: samples.count, longestHoldMS: longestHold)
