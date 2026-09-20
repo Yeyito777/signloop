@@ -37,12 +37,13 @@ Start conversation requests camera permission on iPhone and shows a mirrored pre
 Home offers Start conversation and Voice settings. Simulator camera guidance
 links to an explicitly labelled sample preview. The rebuilt native app runs the
 standalone recognizer's 11-word presentation vocabulary, with full-frame hand
-and shoulder tracking. Rolling guesses remain an unspoken preview. Finish a
-sign and hold briefly to see up to three uncertain choices; select the intended
-sign and **Confirm selected sign**, or choose **None of these**. Choices expire
-after ten seconds and clear on tracking loss. This is a limited research preview,
+and shoulder tracking. Up to three uncertain choices update as you sign, without
+waiting for gesture completion. Tap the intended choice to freeze it, then
+**Confirm selected sign**, or choose **None of these**. A selection keeps its
+original ten-second expiry and clears on tracking loss. **Review another sign**
+starts a fresh attempt after confirmation or rejection. This is a limited research preview,
 not validated general ASL translation. Rebuild the native app for recognition
-contract version 3; a Metro reload alone cannot add segmentation.
+contract version 4; a Metro reload alone cannot update native review behavior.
 
 Install the working recognizer's private reference bank in the goose app's own
 storage after rebuilding; the standalone scanner's file does not transfer:

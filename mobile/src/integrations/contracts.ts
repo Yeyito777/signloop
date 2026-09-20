@@ -27,6 +27,8 @@ export type CameraProps = {
 export type SignChoice = { label: string; text: string };
 export type SignCandidate = SignChoice & {
   attemptId: number;
+  observedAtMS: number;
+  selected: boolean;
   options: SignChoice[];
   expiresAtMS: number;
   uncertain: boolean;

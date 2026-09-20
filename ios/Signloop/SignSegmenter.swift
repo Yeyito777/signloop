@@ -10,6 +10,8 @@ struct SignSegmenter {
     struct Config: Codable, Equatable {
         var settleMS = 200
         var lagFrames = 5
+        // Opt-in for the basic matcher. Nil preserves trained-engine parity.
+        var lagMS: Int? = nil
         var shapeWeight = 1.0
         var eOn = 1.2
         var eOff = 0.4
@@ -25,7 +27,7 @@ struct SignSegmenter {
         var minGapMS = 500
         var maxFrameGapMS = 150
         enum CodingKeys: String, CodingKey {
-            case settleMS = "settle_ms", lagFrames = "lag_frames", shapeWeight = "shape_weight", eOn = "e_on"
+            case settleMS = "settle_ms", lagFrames = "lag_frames", lagMS = "lag_ms", shapeWeight = "shape_weight", eOn = "e_on"
             case eOff = "e_off", onsetMS = "onset_ms", holdMS = "hold_ms", lostMS = "lost_ms", minMS = "min_ms"
             case maxMS = "max_ms", prerollMS = "preroll_ms", tailMS = "tail_ms", dwellMS = "dwell_ms"
             case rearmAbsentMS = "rearm_absent_ms", minGapMS = "min_gap_ms", maxFrameGapMS = "max_frame_gap_ms"
@@ -157,9 +159,17 @@ struct SignSegmenter {
         lastT = t
         let o = Self.summarize(frame)
         var ref: Obs?
-        for back in cfg.lagFrames..<(cfg.lagFrames + 4) where obs.count >= back && obs[obs.count - back].present {
-            ref = obs[obs.count - back]
-            break
+        if let lag = cfg.lagMS {
+            // Compare the nearest observed frame to a fixed elapsed-time lag.
+            // Never invent samples or let a low camera FPS expand the horizon.
+            ref = obs.filter { $0.present && $0.t < t }.min {
+                abs($0.t - (t-lag)) < abs($1.t - (t-lag))
+            }
+        } else {
+            for back in cfg.lagFrames..<(cfg.lagFrames + 4) where obs.count >= back && obs[obs.count - back].present {
+                ref = obs[obs.count - back]
+                break
+            }
         }
         let e = o.present ? Self.energy(o, ref, maxGap: cfg.maxFrameGapMS, shapeWeight: cfg.shapeWeight) : nil
         obs.append(o)

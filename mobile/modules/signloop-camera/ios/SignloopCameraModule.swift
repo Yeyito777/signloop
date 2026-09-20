@@ -3,8 +3,8 @@ import ExpoModulesCore
 public final class SignloopCameraModule: Module {
     public func definition() -> ModuleDefinition {
         Name("SignloopCamera")
-        // Completed gestures and ranked choices require a rebuilt native binary.
-        Constant("recognitionVersion") { 3 }
+        // Rolling and completed rankings now share an attempt identity.
+        Constant("recognitionVersion") { 4 }
         View(SignloopCameraView.self) {
             Events("onStatus", "onPrediction")
             Prop("active") { (view, active: Bool) in view.active = active }

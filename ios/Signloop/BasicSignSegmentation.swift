@@ -3,15 +3,26 @@ import Foundation
 /// Reuse the SignEngine's time-based segmenter while retaining the complete
 /// hand/body observations needed by BasicSignMatcher. No landmarks leave native code.
 struct BasicSignSegmentation {
-    private var segmenter = SignSegmenter()
+    private var segmenter: SignSegmenter
     private var frames: [SkeletonFrame] = []
+    private var attemptStartMS: Int?
+    private(set) var startsAttempt = false
+
+    init() {
+        var config = SignSegmenter.Config()
+        config.lagMS = 200
+        segmenter = SignSegmenter(config)
+    }
 
     mutating func reset() {
         segmenter.reset()
         frames.removeAll(keepingCapacity: true)
+        attemptStartMS = nil
+        startsAttempt = false
     }
 
     mutating func update(_ frame: SkeletonFrame) -> [SkeletonFrame]? {
+        startsAttempt = false
         guard frame.width > 0, frame.height > 0, frame.hasSigningPose else {
             reset()
             return nil
@@ -35,8 +46,16 @@ struct BasicSignSegmentation {
         if frames.count > 300 { frames.removeFirst(frames.count - 300) }
         let observation = LandmarkFrame(timestampMS: frame.timestampMS, hands: hands,
             imageAspectRatio: Float(frame.width) / Float(frame.height), mirrored: false)
-        guard let segment = segmenter.update(observation) else { return nil }
-        let completed = frames.filter { $0.timestampMS >= segment.startMS && $0.timestampMS <= segment.endMS }
+        let wasArmed = segmenter.armed
+        let segment = segmenter.update(observation)
+        if attemptStartMS == nil || (!wasArmed && segmenter.armed) {
+            startsAttempt = true
+            // Keep onset evidence even before the motion threshold is crossed.
+            attemptStartMS = attemptStartMS == nil ? frame.timestampMS : frame.timestampMS - 200
+        }
+        guard let segment else { return nil }
+        let start = min(segment.startMS, attemptStartMS ?? segment.startMS)
+        let completed = frames.filter { $0.timestampMS >= start && $0.timestampMS <= segment.endMS }
         // Recognition may still be busy. Rearm at the gesture boundary so that
         // collecting the next sign never depends on a worker completing.
         segmenter.finish(frame.timestampMS)

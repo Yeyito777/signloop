@@ -61,10 +61,17 @@ function translate(state: Session, event: TranslationEvent): Session {
   switch (event.type) {
     case 'candidate': {
       if (!Number.isSafeInteger(event.attemptId) || event.attemptId <= 0
-        || event.attemptId <= Math.max(state.reviewedAttempt ?? 0, state.candidate?.attemptId ?? 0)
+        || event.attemptId <= (state.reviewedAttempt ?? 0)
+        || (state.candidate && (event.attemptId < state.candidate.attemptId
+          || (event.attemptId === state.candidate.attemptId && event.observedAtMS <= state.candidate.observedAtMS)))
+        || !Number.isFinite(event.observedAtMS)
         || !event.text.trim() || event.text.length > 500 || !Number.isFinite(event.expiresAtMS)
         || event.expiresAtMS <= Date.now() || event.options.length < 1 || event.options.length > 3
         || !event.options.some(option => option.label === event.label && option.text === event.text)) return state;
+      // A tap freezes the intended sign, including across later segment results.
+      // Expiration and tracking/lifecycle invalidations still clear it normally.
+      // Leave expiry to its action even if a fresh event wins the timer race.
+      if (state.candidate?.selected) return state;
       const { type: _, ...candidate } = event;
       return { ...state, candidate, signPreview: null };
     }
@@ -92,7 +99,7 @@ export function sessionReducer(state: Session, action: Action): Session {
       if (!state.candidate || state.candidate.attemptId !== action.attemptId
         || !canCapture(state) || state.framing !== 'ready' || state.candidate.expiresAtMS <= Date.now()) return state;
       const option = state.candidate.options.find(choice => choice.label === action.label);
-      return option ? { ...state, candidate: { ...state.candidate, ...option, uncertain: true } } : state;
+      return option ? { ...state, candidate: { ...state.candidate, ...option, selected: true, uncertain: true } } : state;
     }
     case 'reject-candidate':
     case 'expire-candidate':
@@ -100,7 +107,7 @@ export function sessionReducer(state: Session, action: Action): Session {
         || (action.type === 'expire-candidate' && state.candidate.expiresAtMS > Date.now())) return state;
       return { ...state, candidate: null, signPreview: null, reviewedAttempt: action.attemptId };
     case 'confirm-candidate':
-      if (!state.candidate || state.candidate.attemptId !== action.attemptId
+      if (!state.candidate || !state.candidate.selected || state.candidate.attemptId !== action.attemptId
         || !canCapture(state) || state.framing !== 'ready') return state;
       if (state.candidate.expiresAtMS <= Date.now()) {
         return { ...state, candidate: null, signPreview: null, reviewedAttempt: action.attemptId };

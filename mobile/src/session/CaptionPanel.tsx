@@ -15,6 +15,9 @@ export function CaptionPanel({ state, mode, dispatch }: { state: Session; mode: 
   const scroll = useRef<ScrollView>(null);
   const [corrected, setCorrected] = useState(false);
   useEffect(() => {
+    if (state.candidate) scroll.current?.scrollTo({ y: 0, animated: false });
+  }, [state.candidate?.attemptId]);
+  useEffect(() => {
     const previous = lastPhrase.current;
     lastPhrase.current = phrase;
     if (previous?.id !== phrase?.id || previous?.text !== phrase?.text) scroll.current?.scrollTo({ y: 0, animated: false });
@@ -41,24 +44,26 @@ export function CaptionPanel({ state, mode, dispatch }: { state: Session; mode: 
     <ScrollView ref={scroll} style={styles.textScroll} contentContainerStyle={styles.textContent} showsVerticalScrollIndicator keyboardShouldPersistTaps="handled">
       {state.candidate && !state.paused && <View style={styles.notice}>
         <View style={{ flex: 1, gap: 8 }}>
-          <Copy role="supporting">Which sign did you mean? These are uncertain matches.</Copy>
+          <Copy role="supporting">{state.candidate.selected
+            ? 'Choice held for you. Confirm it or choose another.'
+            : 'Uncertain matches update as you sign. Tap one to hold it, then confirm.'}</Copy>
           <View style={styles.choices}>
             {state.candidate.options.map(option => <Touch key={option.label} accessibilityRole="radio"
-              accessibilityLabel={option.text} accessibilityState={{ selected: option.label === state.candidate!.label }}
+              accessibilityLabel={option.text} accessibilityState={{ selected: state.candidate!.selected && option.label === state.candidate!.label }}
               onPress={() => dispatch({ type: 'select-candidate', attemptId: state.candidate!.attemptId, label: option.label })}
-              style={[styles.choice, option.label === state.candidate!.label && styles.selectedChoice]}>
+              style={[styles.choice, state.candidate!.selected && option.label === state.candidate!.label && styles.selectedChoice]}>
               <Copy role="label" style={{ flexShrink: 1 }}>{option.text}</Copy>
-              {option.label === state.candidate!.label && <Icon name="check" size={18} />}
+              {state.candidate!.selected && option.label === state.candidate!.label && <Icon name="check" size={18} />}
             </Touch>)}
           </View>
-          <Button icon="check" onPress={() => dispatch({ type: 'confirm-candidate', attemptId: state.candidate!.attemptId })}>Confirm selected sign</Button>
+          <Button icon="check" disabled={!state.candidate.selected} onPress={() => dispatch({ type: 'confirm-candidate', attemptId: state.candidate!.attemptId })}>Confirm selected sign</Button>
           <Button variant="plain" onPress={() => dispatch({ type: 'reject-candidate', attemptId: state.candidate!.attemptId })}>None of these</Button>
         </View>
       </View>}
       {!state.candidate && state.signPreview && !state.paused && <View style={styles.preview}>
         <Copy role="supporting" style={styles.muted}>Live guess · not ready to confirm</Copy>
         <Copy role="label">{state.signPreview}</Copy>
-        <Copy role="supporting" style={styles.muted}>Finish the sign and hold briefly to see your choices.</Copy>
+        <Copy role="supporting" style={styles.muted}>Keep signing with your hands and shoulders in view.</Copy>
       </View>}
       {(!state.candidate || phrase || draft) && <Animated.View key={draft ? 'draft' : phrase?.id ?? 'empty'} entering={enter}>
         <Copy role={phrase || draft ? 'featuredCaption' : 'captionLarge'} selectable accessibilityLiveRegion={draft ? 'none' : 'polite'} style={!phrase && !draft ? styles.empty : undefined}>{text}</Copy>
@@ -67,7 +72,8 @@ export function CaptionPanel({ state, mode, dispatch }: { state: Session; mode: 
       {!!activity && <Animated.View key={activity} entering={enter} style={styles.activity}><View style={styles.dot} /><Copy role="supporting" accessibilityLiveRegion="polite" style={styles.muted}>{activity}</Copy></Animated.View>}
       {(state.phase === 'uncertain' || state.phase === 'offline') && <Button variant="plain" icon="repeat" onPress={() => dispatch({ type: 'retry' })}>{state.phase === 'offline' ? 'Try connection again' : 'Try that phrase again'}</Button>}
       {state.phase === 'voice-error' && <Button variant="plain" icon="volume" onPress={() => dispatch({ type: 'replay' })}>Try voice again</Button>}
-      {!phrase && !draft && !notice && !state.candidate && !state.signPreview && mode !== 'demo' && <Copy role="supporting" style={styles.muted}>11-sign preview. Sign one word, then hold briefly with your hands and shoulders in view. Choose the intended sign and confirm. Voice is optional in Settings.</Copy>}
+      {!state.candidate && state.reviewedAttempt !== null && !state.paused && <Button variant="plain" icon="repeat" onPress={() => dispatch({ type: 'sign-again' })}>Review another sign</Button>}
+      {!phrase && !draft && !notice && !state.candidate && !state.signPreview && mode !== 'demo' && <Copy role="supporting" style={styles.muted}>11-sign preview. Sign with your hands and shoulders in view. Tap the intended choice to hold it, then confirm. Voice is optional in Settings.</Copy>}
     </ScrollView>
   </View>;
 }
