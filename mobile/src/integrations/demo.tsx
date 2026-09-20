@@ -24,7 +24,7 @@ export const demoKit: IntegrationKit = {
       const timers = [
         setTimeout(() => emit({ type: 'draft', text: 'Could we find somewhere…' }), 2400),
         setTimeout(() => emit({ type: 'thinking' }), 4300),
-        setTimeout(() => emit({ type: 'accepted', id: `demo-${captureId}`, text: 'Could we find somewhere a little quieter?', emotion: 'thoughtful' }), 5500),
+        setTimeout(() => emit({ type: 'accepted', id: `demo-${captureId}`, text: 'Could we find somewhere a little quieter?', emotion: 'neutral' }), 5500),
       ];
       return () => timers.forEach(clearTimeout);
     },

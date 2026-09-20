@@ -18,9 +18,13 @@ MAX_AUDIO_BYTES = 8 * 1024 * 1024
 MAX_AUDIO_BASE64_CHARACTERS = ((MAX_AUDIO_BYTES + 2) // 3) * 4
 # This admits a maximum-size audio field plus a bounded amount of timestamp data.
 MAX_UPSTREAM_RESPONSE_BYTES = MAX_AUDIO_BASE64_CHARACTERS + 1_000_000
-EMOTIONS = ("joy", "sadness", "anger", "fear")
+EMOTIONS = ("neutral", "joy", "sadness", "anger", "fear", "disgust")
 
 VOICE_SETTINGS = {
+    "neutral": {"stability": 0.5, "similarity_boost": 0.8, "style": 0, "speed": 1,
+                "use_speaker_boost": True},
+    "disgust": {"stability": 0.5, "similarity_boost": 0.72, "style": 0.7, "speed": 0.92,
+                "use_speaker_boost": True},
     "joy": {"stability": 0, "similarity_boost": 0.68, "style": 0.85, "speed": 1.16,
             "use_speaker_boost": True},
     "sadness": {"stability": 0.5, "similarity_boost": 0.84, "style": 0.55, "speed": 0.76,
@@ -31,6 +35,8 @@ VOICE_SETTINGS = {
              "use_speaker_boost": True},
 }
 EMOTION_TAGS = {
+    "neutral": (),
+    "disgust": ("disgusted",),
     "joy": ("happily", "excited"),
     "sadness": ("sad", "sighs", "slowly"),
     "anger": ("angry",),
@@ -62,7 +68,7 @@ def seed_for_speech_text(text: str, emotion: str) -> int:
     return value
 
 
-def validate_speech_input(text: object, emotion: object = "joy") -> tuple[str, str]:
+def validate_speech_input(text: object, emotion: object = "neutral") -> tuple[str, str]:
     if not isinstance(text, str):
         raise ServiceError("speech", "Speech text must be a string.")
     if len(text) > MAX_TEXT_CHARACTERS:
@@ -77,7 +83,7 @@ def validate_speech_input(text: object, emotion: object = "joy") -> tuple[str, s
     except UnicodeError:
         raise ServiceError("speech", "Speech text must contain valid Unicode.") from None
     if not isinstance(emotion, str) or emotion not in EMOTIONS:
-        raise ServiceError("speech", "Emotion must be joy, sadness, anger, or fear.")
+        raise ServiceError("speech", "Emotion must be neutral, joy, sadness, anger, fear, or disgust.")
     return text, emotion
 
 
@@ -118,11 +124,11 @@ class ElevenLabsVoice:
         self.voice_id = voice_id
         self.timeout = timeout
 
-    def speak(self, text: object, emotion: object = "joy") -> dict:
+    def speak(self, text: object, emotion: object = "neutral") -> dict:
         text, emotion = validate_speech_input(text, emotion)
         tags = " ".join(f"[{tag}]" for tag in EMOTION_TAGS[emotion])
         payload = {
-            "text": f"{tags} {text}",
+            "text": f"{tags} {text}" if tags else text,
             "model_id": MODEL_ID,
             "seed": seed_for_speech_text(text, emotion),
             "voice_settings": VOICE_SETTINGS[emotion],

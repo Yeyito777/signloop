@@ -32,7 +32,7 @@ export default function Settings() {
     setTesting(true);
     setMessage('Requesting a short voice sample…');
     try {
-      await gooseVoice.speak('Hello from Honk & Tell.', abort.signal, () => setMessage('Playing the voice sample…'));
+      await gooseVoice.speak({ text: 'Hello from Honk & Tell.', emotion: 'neutral' }, abort.signal, () => setMessage('Playing the voice sample…'));
       if (!abort.signal.aborted) setMessage('Voice playback completed.');
     } catch {
       if (!abort.signal.aborted) setMessage('Voice failed. Check the backend, access token, and ElevenLabs configuration.');
@@ -41,14 +41,14 @@ export default function Settings() {
   return <SafeAreaView style={styles.screen}>
     <View style={styles.header}><IconButton icon="back" label="Back" onPress={() => router.back()} /><Copy role="sectionTitle">Voice settings</Copy></View>
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <Copy>Recognition runs on your iPhone. Optional voice sends only confirmed or edited English text to your backend and ElevenLabs—not camera images or landmarks.</Copy>
+      <Copy>Recognition runs on your iPhone. Optional voice sends automatically recognized or edited English text and its expression label to your backend. ElevenLabs receives the text with delivery directions. Camera images and landmarks stay on your iPhone.</Copy>
       <Copy role="label">Backend URL</Copy>
       <TextInput accessibilityLabel="Backend URL" value={url} onChangeText={setUrl} autoCapitalize="none" autoCorrect={false} placeholder="http://your-mac.local:8787" keyboardType="url" style={styles.input} />
       <Copy role="label">Backend access token</Copy>
       <TextInput accessibilityLabel="Backend access token" value={token} onChangeText={setToken} autoCapitalize="none" autoCorrect={false} secureTextEntry placeholder="Your backend access token" style={styles.input} />
       <Copy role="supporting">Settings remain in memory only. Use HTTPS outside a trusted development LAN. Configure ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID on the backend, never here.</Copy>
       <View style={styles.row}>
-        <Copy style={{ flex: 1 }}>Allow confirmed text uploads for voice this session</Copy>
+        <Copy style={{ flex: 1 }}>Let the goose speak recognized signs automatically this session</Copy>
         <Switch accessibilityLabel="Allow text uploads for voice" value={consent} onValueChange={value => {
           setConsent(value);
           if (!value) setVoiceSettings({ ...getVoiceSettings(), enabled: false });

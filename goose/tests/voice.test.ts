@@ -34,10 +34,10 @@ test('speech request uses timestamps, the key header, and eleven v3', () => {
   assert.equal(request.headers['Content-Type'], 'application/json');
   assert.equal(request.headers.Accept, 'application/json');
   assert.deepEqual(JSON.parse(request.body), {
-    text: performanceText('Hi from Honk & Tell.', 'joy'),
+    text: performanceText('Hi from Honk & Tell.', 'neutral'),
     model_id: ELEVENLABS_MODEL_ID,
-    seed: seedForSpeechText('Hi from Honk & Tell.', 'joy'),
-    voice_settings: emotionVoice.joy,
+    seed: seedForSpeechText('Hi from Honk & Tell.', 'neutral'),
+    voice_settings: emotionVoice.neutral,
   });
 });
 

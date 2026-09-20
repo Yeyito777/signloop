@@ -62,12 +62,18 @@ Request:
 ```
 
 `text` is required, is trimmed, and must contain at most 500 characters.
-`emotion` is optional and is one of `joy`, `sadness`, `anger`, or `fear`
-(`joy` is the default). The backend adds the same Eleven v3 stage-direction
+`emotion` is optional and is one of `neutral`, `joy`, `sadness`, `anger`, `fear`,
+or `disgust` (`neutral` is the default). Neutral adds no performance tags. The
+backend adds the same Eleven v3 stage-direction
 tags and per-emotion voice settings used by `goose/src/voice/elevenlabs.ts`.
 It uses a fixed ElevenLabs HTTPS origin, a percent-encoded configured voice ID,
 `eleven_v3`, and `mp3_44100_128`; clients cannot select an origin, key, voice,
 or model.
+
+The mobile client sends the expression attached to the completed phrase, rather
+than reading the current face when requesting speech. Replay and text correction
+retain that phrase's expression. These labels describe the demonstrator's taught
+facial patterns; they are not estimates of inner feelings or ASL grammar.
 
 Success response:
 

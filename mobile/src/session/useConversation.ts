@@ -3,6 +3,9 @@ import { AppState } from 'react-native';
 import type { Framing, IntegrationKit, TranslationEvent } from '../integrations/contracts';
 import { canCapture, initialSession, sessionReducer, type Action } from './model';
 import { getVoiceSettings, subscribeVoiceSettings } from '../integrations/voiceSettings';
+import type { ExpressionEvent } from '../../modules/signloop-camera/events';
+import { EXPRESSION_FRESH_MS } from '../integrations/expression';
+import { SIGN_FRESH_MS } from '../integrations/localSign';
 
 export function useConversation(kit: IntegrationKit) {
   const [state, send] = useReducer(sessionReducer, undefined, () => ({
@@ -22,11 +25,20 @@ export function useConversation(kit: IntegrationKit) {
   const captureActive = canCapture(state);
 
   useEffect(() => {
-    if (!state.candidate) return;
-    const { attemptId, expiresAtMS } = state.candidate;
-    const timer = setTimeout(() => dispatch({ type: 'expire-candidate', attemptId }), Math.max(0, expiresAtMS - Date.now()));
+    if (!state.expression || state.expression.status === 'stale') return;
+    const observedAtMS = state.expression.observedAtMS;
+    const timer = setTimeout(() => dispatch({ type: 'expire-expression', observedAtMS }),
+      Math.max(0, observedAtMS + EXPRESSION_FRESH_MS - Date.now()));
     return () => clearTimeout(timer);
-  }, [state.candidate?.attemptId, state.candidate?.expiresAtMS, dispatch]);
+  }, [state.expression?.observedAtMS, state.expression?.status, dispatch]);
+
+  useEffect(() => {
+    if (!state.signPreview) return;
+    const { attemptId, observedAtMS } = state.signPreview;
+    const timer = setTimeout(() => dispatch({ type: 'expire-preview', attemptId, observedAtMS }),
+      Math.max(0, observedAtMS + SIGN_FRESH_MS - Date.now()));
+    return () => clearTimeout(timer);
+  }, [state.signPreview?.attemptId, state.signPreview?.observedAtMS, dispatch]);
 
   useEffect(() => {
     if (!captureActive || state.framing !== 'ready' || (kit.mode === 'demo' && !demoAutoplay)) return;
@@ -42,7 +54,7 @@ export function useConversation(kit: IntegrationKit) {
     if (!state.speech) return;
     const request = state.speech;
     const controller = new AbortController();
-    kit.voice.speak(request.text, controller.signal, () => {
+    kit.voice.speak({ text: request.text, emotion: request.emotion }, controller.signal, () => {
       if (!controller.signal.aborted) dispatch({ type: 'speech-started', id: request.id });
     }).then(
       () => { if (!controller.signal.aborted) dispatch({ type: 'speech-ended', id: request.id }); },
@@ -67,5 +79,6 @@ export function useConversation(kit: IntegrationKit) {
     dispatch({ type: 'translation', event, captureId });
   }, [dispatch]);
 
-  return { state, dispatch, captureActive, onFraming, onTranslation };
+  const onExpression = useCallback((event: ExpressionEvent) => dispatch({ type: 'expression', event }), [dispatch]);
+  return { state, dispatch, captureActive, onFraming, onTranslation, onExpression };
 }

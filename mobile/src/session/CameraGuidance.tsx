@@ -12,7 +12,7 @@ import { tokens } from '../ui/theme';
 const copy: Record<Framing, { title: string; hint: string; icon: IconName }> = {
   finding: { title: 'Find your frame', hint: 'Keep your face and both hands in view.', icon: 'frame' },
   ready: { title: 'You’re in view', hint: '', icon: 'check' },
-  'hands-missing': { title: 'Hands out of view', hint: 'Bring both hands inside the corners.', icon: 'hand' },
+  'hands-missing': { title: 'Keep hands and shoulders visible', hint: 'Include your upper chest; spelling uses one hand.', icon: 'hand' },
   'too-close': { title: 'A little more room', hint: 'Move a little farther back.', icon: 'frame' },
   'too-far': { title: 'A little closer', hint: 'Move closer so your hands are clear.', icon: 'frame' },
   'low-light': { title: 'More light needed', hint: 'Try facing a window or a light.', icon: 'sun' },

@@ -5,7 +5,7 @@ import Foundation
 struct BasicSignSegmentation {
     private var segmenter: SignSegmenter
     private var frames: [SkeletonFrame] = []
-    private var attemptStartMS: Int?
+    private(set) var attemptStartMS: Int?
     private(set) var startsAttempt = false
 
     init() {

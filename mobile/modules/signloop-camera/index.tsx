@@ -1,15 +1,20 @@
 import type { NativeSyntheticEvent, ViewProps } from 'react-native';
 import { requireNativeView } from 'expo';
-import type { CameraStatusEvent, SignPredictionEvent } from './events';
-export type { CameraStatus, CameraStatusEvent, SignPredictionEvent } from './events';
-
-export type SignloopCameraProps = ViewProps & {
-  active: boolean;
-  captureId: number;
-  showSkeleton?: boolean;
-  onStatus: (event: NativeSyntheticEvent<CameraStatusEvent>) => void;
-  onPrediction: (event: NativeSyntheticEvent<SignPredictionEvent>) => void;
+import type { CameraStatusEvent, SignPredictionEvent, ExpressionEvent } from './events';
+export type { CameraStatus, CameraStatusEvent, SignPredictionEvent, ExpressionEvent } from './events';
+export type LocalSignEvent = { captureId: number; label: string | null; observedAtMS: number };
+export type DetectionEvent = LocalSignEvent & {
+  mode: 'signs' | 'spelling'; letter: string | null; ready: boolean; detail: string;
+  scores: { label: string; distance: number | null }[];
+  fps: number; trackingMS: number; matchMS: number; expression: string;
 };
-
-// Images and landmark buffers remain native; only status and predictions cross the bridge.
+export type SignloopCameraProps = ViewProps & {
+  active: boolean; captureId: number; recognitionMode?: 'signs' | 'spelling';
+  showSkeleton?: boolean; showPose?: boolean; trackFace?: boolean; labMode?: boolean;
+  onStatus: (event: NativeSyntheticEvent<CameraStatusEvent>) => void;
+  onPrediction?: (event: NativeSyntheticEvent<SignPredictionEvent>) => void;
+  onExpression?: (event: NativeSyntheticEvent<ExpressionEvent>) => void;
+  onDetection?: (event: NativeSyntheticEvent<DetectionEvent>) => void;
+  onClose?: () => void;
+};
 export const SignloopCamera = requireNativeView<SignloopCameraProps>('SignloopCamera');

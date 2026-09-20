@@ -1,11 +1,11 @@
-/** Verify the Python benchmark's review metric through the real JS adapter and
+/** Replay automatic best-match captions through the real JS adapter and
  * session reducer. Input contains rankings/times, never images or landmarks.
  * Run with Node: node --experimental-strip-types scripts/replay-sign-reviews.ts
  * ../.runtime/gesture-experiments/revised.json
  */
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { candidateFromPrediction, signText } from '../src/integrations/localSign.ts';
+import { translationFromPrediction, signText } from '../src/integrations/localSign.ts';
 import { initialSession, sessionReducer } from '../src/session/model.ts';
 
 const file = process.argv[2];
@@ -14,7 +14,7 @@ const summary = JSON.parse(readFileSync(file.replace(/\.json$/, '.summary.json')
 const names = Object.keys(signText);
 const canonical = (label: string): string => names[report.labels.indexOf(label)];
 const realNow = Date.now;
-let known = 0, correct = 0;
+let known = 0, captioned = 0, correct = 0;
 try {
   for (const row of report.rows) {
     if (row.policy !== 'hybrid' || row.repetition !== 0 || row.endMS === undefined
@@ -24,7 +24,7 @@ try {
     for (const event of row.events) {
       if (event.readyMS > row.endMS + 600) break;
       Date.now = () => 1_000_000 + event.readyMS;
-      const translation = candidateFromPrediction({
+      const translation = translationFromPrediction({
         engine: 'basic-temporal-v3', captureId: 1, phase: event.phase,
         observedAtMS: 1_000_000 + event.observedMS, matched: false,
         attemptId: event.attemptID ?? null,
@@ -32,12 +32,12 @@ try {
         candidates: event.choices.map((label: string, index: number) => ({ label: canonical(label), distance: index * 0.1 })),
       }, true, 1);
       if (translation) state = sessionReducer(state, { type: 'translation', event: translation, captureId: 1 });
-      assert.equal(state.phrases.length, 0, 'replay must never auto-confirm');
-      assert.equal(state.speech, null, 'replay must never auto-speak');
+      assert.equal(new Set(state.phrases.map(phrase => phrase.id)).size, state.phrases.length,
+        'a completed attempt must never be added twice');
     }
-    correct += Number(state.candidate?.options.some(option => option.label === canonical(row.label)) ?? false);
+    captioned += Number(state.phrases.length > 0);
+    correct += Number(state.phrases.at(-1)?.text === signText[canonical(row.label) as keyof typeof signText]);
   }
 } finally { Date.now = realNow; }
 assert.equal(known, summary.summaries['all/hybrid'].known);
-assert.equal(correct, summary.summaries['all/hybrid'].deadline_top3);
-console.log(`Actual JS adapter/reducer agree with replay: ${correct}/${known} correct options at deadline; no automatic captions or speech.`);
+console.log(`Automatic captions at deadline: ${captioned}/${known} captioned, ${correct}/${known} correct best matches. Historical top-three review scores are not comparable.`);

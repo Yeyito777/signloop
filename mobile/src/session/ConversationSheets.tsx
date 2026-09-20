@@ -6,8 +6,14 @@ import { Button, Copy, Icon, Touch, type IconName } from '../ui/primitives';
 import { Sheet } from '../ui/Sheet';
 import { textStyles, tokens } from '../ui/theme';
 import type { Action, Session } from './model';
+import { Switch } from 'react-native';
+import { router } from 'expo-router';
+export type DetectionSettings = { showSkeleton: boolean; showPose: boolean; trackFace: boolean; showScores: boolean };
 
-export function ConversationSheets({ state, dispatch, onEnd, demo }: { state: Session; dispatch: Dispatch<Action>; onEnd: () => void; demo: boolean }) {
+export function ConversationSheets({ state, dispatch, onEnd, demo, detectionSettings, setDetectionSettings }: {
+  state: Session; dispatch: Dispatch<Action>; onEnd: () => void; demo: boolean;
+  detectionSettings?: DetectionSettings; setDetectionSettings?: (settings: DetectionSettings) => void;
+}) {
   const [closing, setClosing] = useState(false);
   const dismissing = useRef(false);
   const afterDismiss = useRef<(() => void) | null>(null);
@@ -47,10 +53,26 @@ export function ConversationSheets({ state, dispatch, onEnd, demo }: { state: Se
     </>; break;
     case 'correction': title = 'Make a correction'; content = <><Correction key={state.phrases.at(-1)?.id} state={state} dispatch={commit} /></>; break;
     case 'menu': title = 'Conversation'; content = <>
+      {!demo && <MenuRow icon="frame" label="Detection settings" onPress={() => dispatch({ type: 'open-sheet', sheet: 'detector' })} />}
+      {!demo && <MenuRow icon="info" label="Expression lab" onPress={() => dismiss(() => {
+        dispatch({ type: 'close-sheet' }); dispatch({ type: 'pause' }); router.push('/expressions');
+      })} />}
       <MenuRow icon="transcript" label="View transcript" onPress={() => dispatch({ type: 'open-sheet', sheet: 'transcript' })} />
       <MenuRow icon="edit" label="Correct last phrase" disabled={!state.phrases.length} onPress={() => dispatch({ type: 'open-sheet', sheet: 'correction' })} />
       <MenuRow icon={state.muted ? 'muted' : 'volume'} label={state.muted ? 'Turn voice on' : 'Turn voice off'} onPress={() => dispatch({ type: 'mute' })} />
       <MenuRow icon="exit" label="End conversation" onPress={() => dispatch({ type: 'open-sheet', sheet: 'end' })} />
+    </>; break;
+    case 'detector': title = 'On-device detection'; content = <>
+      <Copy>11 presentation signs · AURELIO spelling. Guesses need confirmation. Matching uses hands and shoulders; no camera data goes to the backend.</Copy>
+      {detectionSettings && ([
+        ['showSkeleton', 'Show hand joints'], ['showPose', 'Show upper-body pose'],
+        ['trackFace', 'Track facial features (slower)'], ['showScores', 'Show match distances'],
+      ] as [keyof DetectionSettings, string][]).map(([key, label]) => <View key={key} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <Copy style={{ flex: 1 }}>{label}</Copy><Switch accessibilityLabel={label} value={detectionSettings[key]}
+          onValueChange={value => setDetectionSettings?.({ ...detectionSettings, [key]: value })} />
+      </View>)}
+      <Copy role="supporting">Face labels compare a personal profile taught in Expression lab. They are not emotions or ASL meaning. Distances are not probabilities; lower is closer.</Copy>
+      <Button onPress={close}>Done</Button>
     </>; break;
     case 'end': title = 'All done for now?'; content = <>
       <Copy>End this conversation? Its transcript will be cleared.</Copy>
@@ -66,11 +88,12 @@ export function ConversationSheets({ state, dispatch, onEnd, demo }: { state: Se
       ] as [Framing, IconName, string][]).map(([framing, icon, label]) => <MenuRow key={framing} icon={icon} label={label} onPress={() => commit({ type: 'demo-framing', framing })} />)}
       {([
         ['Goose thinking', 'info', { type: 'thinking' }],
-        ['Goose speaking zoom', 'play', { type: 'accepted', id: `zoom-${state.captureId}`, text: 'I’m right here with you.', emotion: 'happy' }],
-        ['Goose joy', 'play', { type: 'accepted', id: `joy-${state.captureId}`, text: 'I’m so glad you’re here!', emotion: 'happy' }],
+        ['Goose speaking zoom', 'play', { type: 'accepted', id: `zoom-${state.captureId}`, text: 'I’m right here with you.', emotion: 'joy' }],
+        ['Goose joy', 'play', { type: 'accepted', id: `joy-${state.captureId}`, text: 'I’m so glad you’re here!', emotion: 'joy' }],
         ['Goose sadness', 'play', { type: 'accepted', id: `sadness-${state.captureId}`, text: 'I wish we had more time together.', emotion: 'sadness' }],
         ['Goose anger', 'play', { type: 'accepted', id: `anger-${state.captureId}`, text: 'That was really frustrating.', emotion: 'anger' }],
         ['Goose fear', 'play', { type: 'accepted', id: `fear-${state.captureId}`, text: 'That gave me a fright!', emotion: 'fear' }],
+        ['Goose disgust', 'play', { type: 'accepted', id: `disgust-${state.captureId}`, text: 'That smells awful.', emotion: 'disgust' }],
         ['Uncertain translation', 'info', { type: 'uncertain' }],
         ['Connection lost', 'offline', { type: 'offline' }],
         ['Long caption', 'transcript', { type: 'accepted', id: `long-${state.captureId}`, text: 'Could we find somewhere a little quieter? I would love to hear more about your project, and it would be easier to have a conversation by the window.', emotion: 'neutral' }],

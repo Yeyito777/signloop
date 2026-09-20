@@ -63,4 +63,6 @@ export const emotionOffset = {
   sadness: { pitch: 0.16, eyes: -0.38, breath: -0.012, bob: -0.012 },
   anger: { pitch: 0.1, eyes: -0.42, wing: 0.055, tilt: -0.06 },
   fear: { eyes: 0.08, pitch: -0.1, yaw: 0.1 },
+  // Recoil and turn away, with narrowed eyes and one wing raised.
+  disgust: { pitch: -0.08, yaw: -0.22, tilt: 0.14, eyes: -0.28, leftWing: 0.16, breath: -0.006 },
 } as const;

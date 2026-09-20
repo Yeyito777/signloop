@@ -1,7 +1,8 @@
 import { emotionOffset, motion, poseLimits } from './settings.ts';
 
 export type GooseActivity = 'idle' | 'watching' | 'thinking' | 'speaking';
-export type GooseEmotion = 'joy' | 'sadness' | 'anger' | 'fear';
+export type { Emotion as GooseEmotion } from '../../emotion.ts';
+import { emotions, type Emotion as GooseEmotion } from '../../emotion.ts';
 export type GooseGesture = 'hello' | 'back' | 'you' | 'me' | 'there';
 
 export type GoosePose = {
@@ -23,7 +24,7 @@ export type GoosePose = {
 };
 
 export const gooseActivities = ['idle', 'watching', 'thinking', 'speaking'] as const satisfies readonly GooseActivity[];
-export const gooseEmotions = ['joy', 'sadness', 'anger', 'fear'] as const satisfies readonly GooseEmotion[];
+export const gooseEmotions = emotions;
 export const gooseGestures = ['hello', 'back', 'you', 'me', 'there'] as const satisfies readonly GooseGesture[];
 
 const emptyOffset: GoosePose = {
@@ -146,7 +147,7 @@ function hop(time: number, period: number) {
 }
 
 export function emotionTint(emotion: GooseEmotion | undefined, time: number): Partial<GoosePose> {
-  if (!emotion) return {};
+  if (!emotion || emotion === 'neutral') return {};
   if (emotion === 'fear') {
     const jump = hop(time, motion.fearJumpSeconds) * motion.fearJump;
     return {

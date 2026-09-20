@@ -5,8 +5,8 @@ import { conversationFocus, conversationLayout } from '../src/session/conversati
 
 test('processing does not assign an emotion to the signer', () => {
   assert.deepEqual(goosePresentation('thinking', 'neutral'), { activity: 'thinking', emotion: undefined });
-  assert.deepEqual(goosePresentation('listening', 'thoughtful'), { activity: 'watching', emotion: undefined });
-  assert.deepEqual(goosePresentation('speaking', 'happy'), { activity: 'speaking', emotion: 'joy' });
+  assert.deepEqual(goosePresentation('listening', 'neutral'), { activity: 'watching', emotion: undefined });
+  assert.deepEqual(goosePresentation('speaking', 'joy'), { activity: 'speaking', emotion: 'joy' });
   assert.deepEqual(goosePresentation('idle', 'fear'), { activity: 'idle', emotion: 'fear' });
 });
 

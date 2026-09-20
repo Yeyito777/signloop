@@ -11,6 +11,7 @@ struct BasicLivePrediction {
     var phase: Phase = .preview
     var candidates: [BasicSignScore] = []
     var attemptID: Int? = nil
+    var startTimestampMS: Int? = nil
 
     static func cleared(at timestamp: Int? = nil) -> BasicLivePrediction {
         BasicLivePrediction(label: nil, matched: false, timestampMS: timestamp, phase: .cleared)
@@ -172,6 +173,9 @@ final class BasicLiveRecognition: ObservableObject {
 
     private func start(_ request: Request) {
         guard let observed = request.frames.last else { return }
+        let windowStart = request.completed ? request.frames.first?.timestampMS
+            : max(request.frames.first?.timestampMS ?? observed.timestampMS,
+                  segmentation.attemptStartMS ?? observed.timestampMS)
         busy = true
         lastRequest = frames.last?.timestampMS ?? observed.timestampMS
         let token = generation
@@ -212,7 +216,7 @@ final class BasicLiveRecognition: ObservableObject {
                     candidates: Array(candidate.scores.filter { $0.measuredDistance != nil }
                         .sorted { a, b in
                             a.distance == b.distance ? a.label < b.label : a.distance! < b.distance!
-                        }.prefix(3)), attemptID: request.attemptID))
+                        }.prefix(3)), attemptID: request.attemptID, startTimestampMS: windowStart))
             }
         }
     }

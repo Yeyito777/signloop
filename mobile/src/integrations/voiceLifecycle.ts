@@ -8,7 +8,7 @@ export function createVoiceAdapter(
   play: (clip: SpeechClip, signal: AbortSignal, onStart?: () => void) => Promise<void>,
 ): VoiceAdapter {
   return {
-    async speak(text, signal, onStart) {
+    async speak(request, signal, onStart) {
       const controller = new AbortController();
       const cancel = () => controller.abort();
       signal.addEventListener('abort', cancel, { once: true });
@@ -17,7 +17,7 @@ export function createVoiceAdapter(
       try {
         if (signal.aborted) cancel();
         assertNotAborted(controller.signal);
-        const clip = await load(text, getVoiceSettings(), controller.signal);
+        const clip = await load(request, getVoiceSettings(), controller.signal);
         assertNotAborted(controller.signal);
         clearTimeout(timeout);
         await play(clip, controller.signal, onStart);

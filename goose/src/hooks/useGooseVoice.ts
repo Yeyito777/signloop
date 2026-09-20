@@ -192,7 +192,7 @@ export function useGooseVoice() {
     }
   }, [playMpeg, releaseClip]);
 
-  const speak = useCallback((text: string, emotion: GooseEmotion = 'joy') => {
+  const speak = useCallback((text: string, emotion: GooseEmotion = 'neutral') => {
     return receive({ text, emotion, ready: true });
   }, [receive]);
 
