@@ -2,7 +2,7 @@ import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { emotions, type Emotion } from '../../goose/src/emotion.ts';
 import { expressionFromCamera, conversationEmotion, EXPRESSION_FRESH_MS } from '../src/integrations/expression.ts';
-import { candidateFromPrediction } from '../src/integrations/localSign.ts';
+import { translationFromPrediction } from '../src/integrations/localSign.ts';
 import { goosePresentation } from '../src/integrations/goosePresentation.ts';
 import { initialSession, sessionReducer as reduce, type Session } from '../src/session/model.ts';
 import { createVoiceAdapter } from '../src/integrations/voiceLifecycle.ts';
@@ -15,21 +15,17 @@ const expression = (emotion: Emotion, at = Date.now(), captureId = 1): Expressio
   captureId, observedAtMS: at, emotion, status: emotion === 'neutral' ? 'neutral' : 'active',
 });
 function offer(state: Session, emotion: Emotion, attemptId = 1, observedAtMS = Date.now()) {
-  const event = candidateFromPrediction({ engine: 'basic-temporal-v3', phase: 'completed',
+  const event = translationFromPrediction({ engine: 'basic-temporal-v3', phase: 'completed',
     attemptId, captureId: state.captureId, observedAtMS, matched: false,
     label: 'HELLO', candidates: [{ label: 'HELLO', distance: 0.1 }], emotion }, true, state.captureId)!;
   return reduce(state, { type: 'translation', captureId: state.captureId, event });
-}
-function confirm(state: Session) {
-  const attemptId = state.candidate!.attemptId;
-  return reduce(reduce(state, { type: 'select-candidate', attemptId, label: 'HELLO' }), { type: 'confirm-candidate', attemptId });
 }
 afterEach(() => setVoiceSettings({ url: '', token: '', enabled: false }));
 
 test('all six native expression labels reach both the goose and the backend request unchanged', async () => {
   setVoiceSettings({ url: 'https://voice.example.test', token: 'test-token-with-at-least-24-characters', enabled: true });
   for (const emotion of emotions) {
-    let state = confirm(offer(ready(), emotion));
+    let state = offer(ready(), emotion);
     assert.equal(state.phrases[0].emotion, emotion);
     const speech = state.speech!;
     let calls = 0;
@@ -51,27 +47,26 @@ test('all six native expression labels reach both the goose and the backend requ
   }
 });
 
-test('selection freezes the signing expression even if the face and later rankings change before confirmation', context => {
+test('automatic recognition freezes the signing expression even if the face and later signs change', context => {
   context.mock.timers.enable({ apis: ['Date'], now: Date.now() });
   let state = offer(ready(), 'joy');
-  state = reduce(state, { type: 'select-candidate', attemptId: 1, label: 'HELLO' });
   context.mock.timers.tick(500);
   state = reduce(state, { type: 'expression', event: expression('sadness') });
   state = offer(state, 'sadness', 2);
-  assert.equal(state.candidate?.emotion, 'joy');
-  state = reduce(state, { type: 'confirm-candidate', attemptId: 1 });
+  assert.equal(state.phrases[0].emotion, 'joy');
+  assert.equal(state.phrases[1].emotion, 'sadness');
   assert.equal(state.speech?.emotion, 'joy');
 });
 
 test('new live expressions do not change or restart prepared speech, and queued phrases keep their own emotion', context => {
   context.mock.timers.enable({ apis: ['Date'], now: Date.now() });
-  let state = confirm(offer(ready(), 'anger'));
+  let state = offer(ready(), 'anger');
   const first = state.speech!;
   context.mock.timers.tick(50);
   state = reduce(state, { type: 'expression', event: expression('joy') });
   assert.equal(state.speech, first);
   assert.equal(conversationEmotion(state), 'anger');
-  state = confirm(offer(state, 'disgust', 2));
+  state = offer(state, 'disgust', 2);
   assert.equal(conversationEmotion(state), 'anger');
   state = reduce(state, { type: 'speech-ended', id: first.id });
   assert.equal(state.speech?.emotion, 'disgust');
@@ -81,7 +76,7 @@ test('new live expressions do not change or restart prepared speech, and queued 
 });
 
 test('replay and corrections retain the original expression', () => {
-  let state = confirm(offer(ready(), 'fear'));
+  let state = offer(ready(), 'fear');
   state = reduce(state, { type: 'speech-ended', id: state.speech!.id });
   state = reduce(state, { type: 'expression', event: expression('joy') });
   state = reduce(state, { type: 'replay' });

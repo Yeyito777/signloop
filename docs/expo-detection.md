@@ -8,8 +8,8 @@ same native engines used by the standalone scanner:
 Expo view → SkeletonCameraTracker → hands + pose (+ optional face)
          → BasicLiveRecognition / BasicSignMatcher (11 presentation signs)
          OR AlphabetRecognition (A U R E L I O)
-         → capture-tagged top-three review / diagnostics events
-         → explicit user confirmation → existing captions / optional voice
+         → capture-tagged completed signs / diagnostics events
+         → automatic best-match captions / optional voice
 ```
 
 No copied matcher, rewritten heuristic, softmax probability or zero-shot model.
@@ -95,10 +95,10 @@ Expo interface; legacy research implementations remain in the repository.
 
 ## UI and lifecycle
 
-- Caption area: Signs / Spell name. The recognition-version-5 bridge preserves rolling/completed
-  attempts, top-three choices, tap-to-hold selection, ten-second review expiry,
-  None of these and Review another sign are preserved. Word guesses require
-  selection followed by Confirm selected sign; name letters
+- Caption area: Signs / Spell name. The recognition-version-5 bridge supplies
+  rolling/completed attempts. Signs show one live guess and automatically caption
+  and speak the best match on completion, with duplicate-attempt suppression.
+  Stale previews expire after one second. Name letters
   require Add, followed by Confirm spelled name. No automatic name completion.
 - Conversation menu: Detection settings (hands, body, face, match distances).
 - Expression lab: existing SwiftUI teaching, six-expression checks, numeric
@@ -111,11 +111,12 @@ Expo interface; legacy research implementations remain in the repository.
   chest/hands needed for body-relative matching. Overlays use the same transform.
 - Face tracking starts enabled and can be turned off in Detection settings.
   Stable taught expression labels drive the listening goose and are attached to
-  selected signs for confirmed speech delivery. They do not infer feelings or
-  trigger speech automatically. See [expression integration](goose-expression-integration.md).
+  completed signs for automatic speech delivery. Expressions alone do not create
+  speech or infer feelings. See [expression integration](goose-expression-integration.md).
 
 Expo's goose, design tokens, caption correction, transcript, voice consent and
-server proxy remain. Only explicit confirmed text and its expression label reach optional voice.
+server proxy remain. Completed signs or confirmed spelled names and their expression
+labels reach optional voice.
 
 ## Regression checks
 

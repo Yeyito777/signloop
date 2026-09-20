@@ -17,19 +17,19 @@ they do not establish a person's feelings or linguistic ASL meaning.
    interval. A non-neutral pattern must occupy more than half that interval.
    Mixed patterns, missing evidence, and ties yield neutral. This retains the
    expression if the signer briefly relaxes before the recognition job completes.
-4. Each tentative choice includes that expression. Tapping a choice freezes its
-   word, expression, and expiry. Confirmation creates a phrase carrying the same
-   expression. Later camera events cannot rewrite it.
+4. Each completed sign includes that expression. Its best match automatically
+   creates a phrase carrying the same expression. Later camera events cannot
+   rewrite its word or expression.
 5. Speech receives `{ text, emotion }`. Each queued phrase, replay, and text
    correction retains its own expression. The backend selects the matching voice
-   settings and delivery tags; neutral adds no tags. Nothing is spoken until the
-   user confirms, and voice still requires consent.
+   settings and delivery tags; neutral adds no tags. Completed signs speak
+   automatically when voice is enabled; rolling previews stay silent.
 6. While listening, the goose follows the fresh live expression, even with voice
    muted. During speech preparation and playback, it uses the phrase's expression.
    Afterward it returns to live tracking or neutral. Pause/sheets reset it.
 
 Camera frames and landmarks stay native/on-device. Only compact labels and
-status cross to JS. Voice uploads send confirmed text and its label to the
+status cross to JS. Voice uploads send recognized text and its label to the
 authenticated backend; the provider receives text with delivery directions.
 
 ## Find the real profile
@@ -101,7 +101,7 @@ python3 -m unittest backend.test_voice
 bash ios/scripts/test-core.sh
 ```
 
-Tests cover all six labels through native prediction mapping, confirmation,
+Tests cover all six labels through native prediction mapping, automatic speech,
 goose state, and mocked speech transport; expression freezing, queue/replay/
 correction behavior, face loss, lifecycle/freshness guards, profile validation,
 historical window selection, and backend delivery settings. Native Swift source
@@ -114,8 +114,8 @@ or audible delivery quality.
 1. Use the rebuilt app with the demonstrator's actual checked profile and sign
    reference bank. Verify each of the six patterns changes the listening goose
    appropriately, with neutral at rest and no flicker during short transitions.
-2. Sign with each expression, select a choice, relax/change your face, then
-   confirm. The phrase's goose pose and voice should retain the signing expression.
+2. Sign with each expression, pause briefly to complete it, then relax/change
+   your face while the goose speaks. The phrase's goose pose and voice should retain the signing expression.
 3. Queue two phrases with different expressions. Verify their individual delivery,
    replay, and a text correction retain the expected expression.
 4. Test face loss, turning away, pause/resume, opening sheets, background/return,

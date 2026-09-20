@@ -63,7 +63,7 @@ this module. Simulator can exercise UI but cannot recognize camera input.
   It summarizes stable expression observations from that prediction's input
   interval, so a slow matcher does not use a later face. More than half the interval
   must support the same expression; unknown time and ties fall back to neutral.
-  Selecting a choice freezes its expression together with the word and expiry.
+  Completing a sign freezes its expression with the word for speech and replay.
 - `onExpression` carries capture ID, wall-clock observation time, status, and the
   same six-value emotion contract. The taught matcher requires a 300 ms hold;
   nonmatching, ambiguous, missing, or misaligned faces clear to neutral. Native
@@ -72,12 +72,11 @@ this module. Simulator can exercise UI but cannot recognize camera input.
   Setup failures have explicit statuses and do not block hand/body recognition.
 - The presentation vocabulary is HELLO, MY, NAME, TODAY, WE, SHOW, PHONE,
   PLEASE, SORRY, THANKYOU, ILOVEYOU. Spell name separately supports the AURELIO alphabet.
-- Fresh rolling guesses immediately offer up to three choices and **None of these**.
-  Gesture completion is an additional observation, not a review gate. Selecting a choice and confirming
-  it are separate actions; only confirmation produces a caption or speech.
-  Delivery must be within one second of observation; an accepted review lasts
-  up to ten seconds. Invalid labels, stale events, old capture generations and
-  old attempt IDs cannot confirm a caption.
+- Fresh rolling guesses display one best match. Gesture completion automatically
+  adds the best match to the caption and voice queue; no selection or confirmation
+  is required. Delivery must be within one second of observation. Invalid labels,
+  stale events, old capture generations and repeated attempt IDs cannot add speech.
+  Live previews expire after one second without fresh input.
 - The shared SignSegmenter detects movement/rest and static holds. This adapter
   uses 200 ms of elapsed-time motion history and preserves the attempt's leading
   observations even when onset detection is late. The trained SignEngine keeps
@@ -85,14 +84,11 @@ this module. Simulator can exercise UI but cannot recognize camera input.
   whole hand/body sequence instead of cropping it to the preview window. A
   bounded queue preserves completions while the worker is busy. Tracking loss
   immediately cancels the gesture rather than treating missing hands as its end.
-- The existing acceptance policy was calibrated on rolling windows. Whole
-  segments therefore remain uncertain until separately evaluated and calibrated.
-  Unselected choices follow fresh results; a result with older input cannot
-  overwrite a newer ranking in the same attempt. Tapping any choice freezes it
-  and its original expiry. Neither rolling nor completed results can replace an
-  explicit selection. A held pose cannot reopen a handled attempt. Fresh movement
-  can begin the next attempt; **Review another sign** explicitly restarts capture
-  when the user wants to retry or repeat without a detected movement boundary.
+- The existing acceptance policy was calibrated on rolling windows, so native
+  completed events always carry `matched: false`. Automatic speech uses the
+  lowest-distance completed ranking, not that flag. These rankings are still
+  uncalibrated experimental guesses. Rolling previews never speak; a held pose
+  cannot repeat a completed attempt. Fresh movement begins the next attempt.
 - Pausing/backgrounding stops capture and resets recognition. A changed
   capture ID resets matching and rejects earlier frames/jobs without rebuilding
   the tracking models. Hand/body loss and camera stalls clear predictions.
@@ -102,8 +98,8 @@ this module. Simulator can exercise UI but cannot recognize camera input.
 ## Validation
 
 Run `npm run typecheck`, `npm test`, and `bash ../ios/scripts/test-core.sh`.
-Tests cover the actual native vocabulary mapping to confirmed captions, the
-existing voice path, explicit uncertainty, alternative selection/rejection,
+Tests cover the actual native vocabulary mapping to automatic captions, the
+existing voice path, best-match selection, duplicate suppression,
 completed-gesture boundaries, stale/generation rejection, reference load/retry
 failures, worker reset callbacks, and fit/mirror geometry. Synthetic
 Swift fixtures check the pipeline; they do not establish live ASL accuracy.
@@ -112,18 +108,18 @@ On a physical phone with the private bank installed:
 
 1. Open the rebuilt goose app and Start conversation. Confirm hands and both
    shoulders are visible, with joints aligned to the selfie preview.
-2. Try the 11 supported signs, keeping hands and shoulders in view. Choices
-   should update while signing, without waiting for a final hold. Select one,
-   check that it stays fixed, then confirm. Nothing should be added or spoken automatically.
-3. Select and confirm a choice with voice disabled, then with configured voice
-   enabled. Check alternatives, None of these, expiry, caption, speech, goose
-   animation, held-sign deduplication, and repeating a sign after relaxing.
+2. Try the 11 supported signs, keeping hands and shoulders in view. One guess
+   should update while signing. Pause briefly; the best completed match should
+   appear as a caption without tapping anything.
+3. Repeat with voice disabled, then with configured voice enabled. Check caption,
+   speech, goose animation, edit/replay, held-sign deduplication, and repeating a
+   sign with fresh movement. Consecutive completed signs should speak in order.
 4. Remove hands/shoulders, pause/resume, open a sheet, and background/return.
-   No old prediction may reappear or remain confirmable.
+   No old prediction may reappear or trigger speech.
 5. Test missing/invalid references and Retry after installing a valid bank.
    Do not interpret tracking readiness or offline tests as accuracy validation.
 6. With the checked personal expression profile installed, test all six labels,
-   face loss, pause, and expression changes between signing, selection, and speech.
+   face loss, pause, and expression changes between signing, completion, and speech.
    Follow the [expression device checklist](../../../docs/goose-expression-integration.md#phone-validation).
 
 # Integrated spelling, expression lab and licensed setup

@@ -5,7 +5,7 @@ import type { CameraProps, IntegrationKit } from './contracts';
 import type { SignloopCamera as CameraView } from '../../modules/signloop-camera';
 import { GooseAvatar } from './GooseAvatar';
 import { gooseVoice } from './voice';
-import { candidateFromPrediction } from './localSign';
+import { translationFromPrediction } from './localSign';
 import { cameraAvailability, framingFromCamera } from './cameraStatus';
 
 const nativeModule = Platform.OS === 'ios'
@@ -25,7 +25,7 @@ function Camera({ active, captureId, onFraming, onTranslation, onExpression, sty
     accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
     onExpression={({ nativeEvent }) => { if (active && nativeEvent.captureId === captureId) onExpression(nativeEvent); }}
     onPrediction={({ nativeEvent }) => {
-      const event = candidateFromPrediction(nativeEvent, active && recognitionMode === 'signs', captureId);
+      const event = translationFromPrediction(nativeEvent, active && recognitionMode === 'signs', captureId);
       if (event) onTranslation(event, captureId);
     }}
     onDetection={({ nativeEvent }) => {
@@ -39,7 +39,7 @@ function Camera({ active, captureId, onFraming, onTranslation, onExpression, sty
 
 export const cameraKit: IntegrationKit = {
   mode: 'live', Camera, Avatar: GooseAvatar,
-  // Local estimates arrive from the camera and require explicit user confirmation.
+  // Completed local signs arrive from the camera and automatically enter speech.
   translation: { start: () => () => {} },
   voice: gooseVoice,
 };

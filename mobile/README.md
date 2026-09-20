@@ -1,7 +1,7 @@
 # Honk & Tell mobile
 
 Expo SDK 55 / React Native Playroom app with the **shared 3D goose, native Swift
-camera, shared offline temporal matcher and name spelling, explicit confirmation, captions, and
+camera, shared offline temporal matcher and name spelling, automatic best-match captions, and
 optional server-proxied ElevenLabs voice and taught expression delivery**. A separate sample conversation
 preserves the UI review flow; real hand detection never generates sample captions.
 The goose is expressive animation, not an ASL signing avatar.
@@ -48,11 +48,11 @@ links to an explicitly labelled sample preview. Live capture now uses the shared
 11-sign temporal matcher (including ILOVEYOU), body-relative hand geometry and
 compact-WE guard. Private references must be separately provisioned into this
 app's container. Without them, tracking and bundled AURELIO spelling still work,
-but word recognition reports that references are unavailable. Best guesses can
-be wrong, including on unsupported inputs; they are **never** captions or voice
-until Confirm. The version-5 bridge's review behavior is preserved: up to three choices,
-tap one to hold it, **Confirm selected sign**, **None of these**, and a bounded
-ten-second review expiry. **Review another sign** starts a new attempt. Stale
+but word recognition reports that references are unavailable. One best guess updates as you sign. Pause briefly with hands and shoulders
+in view; the completed sign's best match becomes a caption and the goose speaks
+automatically when voice is enabled. A held pose speaks once; fresh movement
+can repeat the word. Edit and replay remain available. Best guesses can be wrong,
+including on unsupported inputs; this is a limited research preview. Stale
 events and previous capture generations are rejected. Rebuild the native app;
 a Metro reload alone cannot update its recognition contract.
 
@@ -129,12 +129,12 @@ npm test
    deployed origin) and **SIGNLOOP_BACKEND_TOKEN**, never an ElevenLabs key.
 3. Enable text-upload consent, save, and tap Test voice. Provider keys and voice
    selection are configured on the backend. Settings are held in app memory only.
-4. Start a conversation. Select and confirm a recognized sign. The caption appears
+4. Start a conversation. Sign, then pause briefly with your hands in view. The caption appears
    immediately; optional speech follows. Corrections require explicit Save & speak.
 
-The live goose follows stable taught expressions while listening. Each selected
-sign freezes its own expression for confirmation, queued speech, replay, and
-correction. Voice uploads include the confirmed text and that expression label.
+The live goose follows stable taught expressions while listening. Each completed
+sign freezes its own expression for automatic speech, replay, and
+correction. Voice uploads include the recognized text and that expression label.
 
 Backgrounding revokes upload consent and cancels local playback. Pause, mute,
 ending, and replacement speech also cancel local playback and clean temporary

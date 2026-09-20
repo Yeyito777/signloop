@@ -70,7 +70,7 @@ It uses a fixed ElevenLabs HTTPS origin, a percent-encoded configured voice ID,
 `eleven_v3`, and `mp3_44100_128`; clients cannot select an origin, key, voice,
 or model.
 
-The mobile client sends the expression attached to the confirmed phrase, rather
+The mobile client sends the expression attached to the completed phrase, rather
 than reading the current face when requesting speech. Replay and text correction
 retain that phrase's expression. These labels describe the demonstrator's taught
 facial patterns; they are not estimates of inner feelings or ASL grammar.

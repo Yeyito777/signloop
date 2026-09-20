@@ -13,7 +13,7 @@ export type ExpressionEvent = {
 export type CameraStatus = 'starting' | 'searching' | 'tracking' | 'body-missing' | 'denied' | 'unavailable' | 'error'
   | 'model-missing' | 'recognizer-loading' | 'references-missing' | 'references-invalid';
 export type CameraStatusEvent = { captureId: number; status: CameraStatus; handCount: number; message: string };
-/** A ranking, not a caption or calibrated probability. Even matched results need confirmation. */
+/** Uncalibrated rankings: JS previews the best rolling guess and speaks completed signs. */
 export type SignPredictionEvent = {
   captureId: number;
   engine: 'basic-temporal-v3';

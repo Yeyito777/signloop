@@ -31,21 +31,16 @@ export type CameraProps = {
   style?: StyleProp<ViewStyle>;
 };
 
-export type SignChoice = { label: string; text: string };
-export type SignCandidate = SignChoice & {
+export type SignObservation = {
+  text: string;
   attemptId: number;
   observedAtMS: number;
-  selected: boolean;
-  options: SignChoice[];
-  expiresAtMS: number;
-  uncertain: boolean;
-  emotion: Emotion;
 };
 
 export type TranslationEvent =
-  | ({ type: 'candidate' } & SignCandidate)
-  | { type: 'sign-preview'; text: string }
-  | { type: 'clear-candidate' }
+  | ({ type: 'recognized-sign'; emotion: Emotion } & SignObservation)
+  | ({ type: 'sign-preview' } & SignObservation)
+  | { type: 'clear-preview' }
   | { type: 'draft'; text: string }
   | { type: 'thinking' }
   | { type: 'accepted'; id: string; text: string; emotion: Emotion }
