@@ -39,6 +39,9 @@ struct ExpressionCueTests {
                 "browInnerUp":0.9, "noseSneerLeft":0, "noseSneerRight":0,
             ], timingsMS: [:])
     }
+    static func legacyObservation(_ frame: SkeletonFrame) -> ExpressionObservation? {
+        ExpressionObservation.from(frame, measurement: .upperLip)
+    }
     static func reading(_ cue: ExpressionCue? = nil) -> ExpressionObservation {
         let value: SkeletonFrame
         switch cue {
@@ -49,7 +52,7 @@ struct ExpressionCueTests {
         case .disgust: value = frame(eye: 0.09, lip: 0.4)
         case nil: value = frame()
         }
-        return ExpressionObservation.from(value)!
+        return legacyObservation(value)!
     }
     static func replacing(_ source: SkeletonFrame, face: [SkeletonPoint]? = nil,
                           expressions: [String: Float]? = nil) -> SkeletonFrame {
@@ -79,7 +82,7 @@ struct ExpressionCueTests {
         expect(neutral.values[.anger]! < -0.6, "raised neutral brows are a measurable personal position")
         expect(neutral.values[.sadness]! > 0.19, "raised inner brows exist at neutral")
         for transformed in [frame(scale: 0.7, angle: 0.3), frame(width: 1280, height: 720)] {
-            let measured = ExpressionObservation.from(transformed)!
+            let measured = legacyObservation(transformed)!
             for cue in ExpressionCue.allCases {
                 expect(abs(measured.values[cue]! - neutral.values[cue]!) < 0.00001,
                        "\(cue) geometry survives scale, roll and image aspect changes")
@@ -87,17 +90,17 @@ struct ExpressionCueTests {
             expect(measured.pose.isNear(neutral.pose), "pose guard is roll/scale invariant")
         }
         let missing = replacing(frame(), face: frame().face.filter { $0.id != 158 })
-        expect(ExpressionObservation.from(missing) == nil, "missing landmark is unavailable, never zero")
+        expect(legacyObservation(missing) == nil, "missing landmark is unavailable, never zero")
         let duplicate = replacing(frame(), face: frame().face + [frame().face[0]])
-        expect(ExpressionObservation.from(duplicate) == nil, "duplicate IDs cannot silently change geometry")
+        expect(legacyObservation(duplicate) == nil, "duplicate IDs cannot silently change geometry")
         var invalidSignals = frame().expressions
         invalidSignals["mouthSmileLeft"] = .nan
         var invalid = replacing(frame(), expressions: invalidSignals)
-        expect(ExpressionObservation.from(invalid) == nil, "nonfinite coefficients rejected")
+        expect(legacyObservation(invalid) == nil, "nonfinite coefficients rejected")
         invalidSignals.removeValue(forKey: "mouthSmileLeft")
         invalid = replacing(frame(), expressions: invalidSignals)
-        expect(ExpressionObservation.from(invalid) == nil, "both mouth sides are required")
-        expect(ExpressionObservation.from(frame(width: 0)) == nil, "invalid image dimensions rejected")
+        expect(legacyObservation(invalid) == nil, "both mouth sides are required")
+        expect(legacyObservation(frame(width: 0)) == nil, "invalid image dimensions rejected")
 
         var fresh = ExpressionCueEngine()
         fresh.startCalibration(.baseline)
@@ -139,14 +142,14 @@ struct ExpressionCueTests {
         expect(engine.decision == .active(.joy) && engine.levels[.disgust] == 0,
                "smile + upper lip lift + narrowed eyes is joy, never joy/disgust ambiguity")
         engine.resetTracking()
-        let lipOnly = ExpressionObservation.from(frame(lip: 0.8))!
+        let lipOnly = legacyObservation(frame(lip: 0.8))!
         feed(&engine, lipOnly, from: 0, through: 800)
         expect(engine.decision == .none, "upper lip lift alone no longer means disgust")
         engine.startCalibration(.cue(.disgust))
         feed(&engine, reading(.joy), from: 900, through: 2900)
         expect(engine.peaks[.disgust] == nil, "a smile cannot be calibrated as disgust")
         engine.resetTracking()
-        let shut = ExpressionObservation.from(frame(eye: 0.015, lip: 0.8))!
+        let shut = legacyObservation(frame(eye: 0.015, lip: 0.8))!
         feed(&engine, shut, from: 0, through: 800)
         expect(engine.decision == .none, "closed eyes plus lip movement do not become disgust")
         engine.resetTracking()
@@ -175,7 +178,7 @@ struct ExpressionCueTests {
         blinking.startCalibration(.baseline)
         for sample in 0...20 {
             blinking.observe(timestampMS: 100+sample*100, hasFace: true,
-                             observation: (8...10).contains(sample) ? ExpressionObservation.from(frame(eye: 0.015))! : neutral)
+                             observation: (8...10).contains(sample) ? legacyObservation(frame(eye: 0.015))! : neutral)
         }
         expect(blinking.hasBaseline, "naturally blinking during relaxed capture is accepted")
         feed(&blinking, reading(.fear), from: 2200, through: 3000)

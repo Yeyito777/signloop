@@ -63,7 +63,7 @@ struct ContentView: View {
         .onReceive(tracker.$skeleton) { frame in
             guard let frame, !paused else { expressionRuntime.resetTracking(); return }
             expressionRuntime.observe(timestampMS: frame.timestampMS, hasFace: frame.hasFace,
-                                      observation: ExpressionObservation.from(frame))
+                                      observation: ExpressionObservation.from(frame, measurement: expressionRuntime.profile?.measurement ?? .current))
         }
         .onChange(of: paused) { _, value in if value { expressionRuntime.resetTracking() } }
         .onDisappear { tracker.pause() }

@@ -11,7 +11,7 @@ enum TaughtExpressionLabel: String, CaseIterable, Codable, Identifiable {
         case .anger: return "Show your angry expression, including your natural brow furrow."
         case .fear: return "Show your fear expression, opening your eyes comfortably wider."
         case .sadness: return "Show your sad expression as you will use it in the demo."
-        case .disgust: return "Show your “ew” expression. Use the same expression each time; it should look different from your smile."
+        case .disgust: return "Scrunch your nose as if something smells bad. Keep your head steady and your mouth relaxed; hold the same comfortable scrunch each time."
         }
     }
 }
@@ -29,7 +29,8 @@ struct ExpressionExample: Codable, Equatable {
     var sampleCount: Int
     var isValid: Bool {
         center.count == 5 && spread.count == 5 && (12...120).contains(sampleCount) &&
-        zip(ExpressionCue.allCases, center).allSatisfy { $1.isFinite && $0.rawBounds.contains($1) } &&
+        // Accept either representation here; the model checks exact versioned bounds.
+        zip(ExpressionCue.allCases, center).allSatisfy { $1.isFinite && ($0 == .disgust ? -2...1 : $0.rawBounds).contains($1) } &&
         spread.allSatisfy { $0.isFinite && (0...4).contains($0) }
     }
     static func summarize(_ observations: [ExpressionObservation]) -> Self {
@@ -55,7 +56,8 @@ struct ExpressionValidation: Codable, Equatable {
 struct TaughtExpressionProfile: Codable, Equatable {
     // Independent schema: old threshold calibration can never masquerade as taught examples.
     var schemaVersion = 1
-    var measurementVersion = "face-geometry-mouth-v1"
+    var measurementVersion = ExpressionMeasurement.current.rawValue
+    var measurement: ExpressionMeasurement? { ExpressionMeasurement(rawValue: measurementVersion) }
     // Absent in build-12 exports. Keep those usable if their wider/noisier
     // captures cannot pass the more sensitive geometry metric.
     var matchingVersion: Int? = 2
@@ -67,8 +69,9 @@ struct TaughtExpressionProfile: Codable, Equatable {
     var validation: [TaughtExpressionLabel: ExpressionValidation]
 
     func validatedModel() throws -> TaughtExpressionModel {
-        guard schemaVersion == 1, measurementVersion == "face-geometry-mouth-v1",
+        guard schemaVersion == 1, let measurement,
               matchingVersion == nil || matchingVersion == 2,
+              measurement == .upperLip || matchingVersion == 2,
               UUID(uuidString: id) != nil, createdAt.timeIntervalSince1970.isFinite,
               ["front", "back"].contains(camera), pose.isValid,
               validation.count == TaughtExpressionLabel.allCases.count else {
@@ -77,13 +80,13 @@ struct TaughtExpressionProfile: Codable, Equatable {
         do {
             return try checkedModel(sensitiveGeometry: true)
         } catch {
-            guard matchingVersion == nil else { throw error }
+            guard measurement == .upperLip, matchingVersion == nil else { throw error }
             return try checkedModel(sensitiveGeometry: false)
         }
     }
 
     private func checkedModel(sensitiveGeometry: Bool) throws -> TaughtExpressionModel {
-        let model = try TaughtExpressionModel(examples: examples, sensitiveGeometry: sensitiveGeometry)
+        let model = try TaughtExpressionModel(examples: examples, sensitiveGeometry: sensitiveGeometry, measurement: measurement!)
         for label in TaughtExpressionLabel.allCases {
             guard let check = validation[label], check.isValid,
                   model.match(check.example.center).label == label else {
@@ -108,10 +111,14 @@ struct TaughtExpressionModel {
     private var neutral: [Double]
     private var neutralNoise: [Double]
     let sensitiveGeometry: Bool
+    let measurement: ExpressionMeasurement
 
-    init(examples: [TaughtExpressionLabel: [ExpressionExample]], sensitiveGeometry: Bool = true) throws {
+    init(examples: [TaughtExpressionLabel: [ExpressionExample]], sensitiveGeometry: Bool = true,
+         measurement: ExpressionMeasurement = .current) throws {
         guard examples.count == 6, TaughtExpressionLabel.allCases.allSatisfy({
-            examples[$0]?.count == 2 && examples[$0]!.allSatisfy(\.isValid)
+            examples[$0]?.count == 2 && examples[$0]!.allSatisfy { example in
+                example.isValid && zip(ExpressionCue.allCases, example.center).allSatisfy { measurement.bounds(for: $0).contains($1) }
+            }
         }) else { throw ExpressionTeachingError(message: "Capture two examples of your relaxed face and every expression.") }
         let all = TaughtExpressionLabel.allCases.flatMap { examples[$0]! }
         let centers = TaughtExpressionLabel.allCases.map { label in
@@ -121,10 +128,16 @@ struct TaughtExpressionModel {
         // Geometry ratios can carry a real, repeatable change of just 0.01.
         // Use captured noise and the smallest distinguishable class difference,
         // so a large sad-brow raise cannot drown out a small angry-brow drop.
-        let floors = [0.015, 0.001, 0.0005, 0.008, 0.015]
+        let floors = [0.015, 0.001, 0.0005, 0.008, measurement == .noseScrunch ? 0.0015 : 0.015]
         let neutralNoise = (0..<5).map { index in
             max(floors[index] * 3,
                 examples[.neutral]!.map { $0.spread[index] * 3 + abs($0.center[index]-neutral[index]) }.max()!)
+        }
+        if measurement == .noseScrunch {
+            let minimumChange = max(neutralNoise[4], examples[.disgust]!.map { $0.spread[4]*3 }.max()!)
+            guard examples[.disgust]!.allSatisfy({ $0.center[4]-neutral[4] > minimumChange }) else {
+                throw ExpressionTeachingError(message: "The nose scrunch did not show enough repeatable nose movement. Retake disgust with your head steady and scrunch your nose; lifting your lip alone won't pass this check.")
+            }
         }
         let scales = (0..<5).map { index in
             if !sensitiveGeometry {
@@ -133,7 +146,7 @@ struct TaughtExpressionModel {
                     all.map { $0.spread[index] * 4 }.max()!)
             }
             let noise = max(floors[index] * 4, all.map { $0.spread[index] * 4 }.max()!)
-            guard index == 1 || index == 2 else {
+            guard index == 1 || index == 2 || (index == 4 && measurement == .noseScrunch) else {
                 return max(noise, all.map { $0.center[index] }.max()! - all.map { $0.center[index] }.min()!)
             }
             let differences = centers.flatMap { a in centers.map { b in abs(a[index]-b[index]) } }
@@ -166,14 +179,20 @@ struct TaughtExpressionModel {
         self.examples = examples; self.scales = scales; self.radii = radii
         self.neutral = neutral; self.neutralNoise = neutralNoise
         self.sensitiveGeometry = sensitiveGeometry
+        self.measurement = measurement
     }
 
     func match(_ vector: [Double]) -> Match {
-        guard vector.count == 5, vector.allSatisfy(\.isFinite) else { return Match() }
+        guard vector.count == 5, zip(ExpressionCue.allCases,vector).allSatisfy({
+            $1.isFinite && measurement.bounds(for: $0).contains($1)
+        }) else { return Match() }
         if sensitiveGeometry && zip(zip(vector, neutral), neutralNoise).allSatisfy({ abs($0.0.0-$0.0.1) <= $0.1 }) {
             return Match(label: .neutral, distance: 0)
         }
         let ranked = TaughtExpressionLabel.allCases.map { label in
+            if measurement == .noseScrunch, label == .disgust, vector[4]-neutral[4] <= neutralNoise[4] {
+                return (label, Double.infinity, radii[label]!)
+            }
             let closest = examples[label]!.map { example -> (Double, Double) in
                 let exact = sqrt(zip(zip(vector,example.center),scales).reduce(0) { $0 + pow(($1.0.0-$1.0.1)/$1.1,2) })
                 let radius = radii[label]!
@@ -283,6 +302,7 @@ struct TaughtExpressionRuntime {
     private(set) var profile: TaughtExpressionProfile?
     private var model: TaughtExpressionModel?
     var needsSensitivityRetake: Bool { model?.sensitiveGeometry == false }
+    var needsNoseScrunchRetake: Bool { profile?.measurement == .upperLip }
     private(set) var result: Result = .noFace
     private(set) var observation: ExpressionObservation?
     private(set) var distance: Double?
@@ -309,6 +329,7 @@ struct TaughtExpressionRuntime {
         guard let observation, observation.isValid else { resetTracking(); result = .unavailable; return }
         self.observation = observation
         guard let profile, let model else { clear(.noProfile); return }
+        guard observation.measurement == profile.measurement else { clear(.unavailable); return }
         guard profile.camera == observation.camera else { clear(.wrongCamera); return }
         guard observation.pose.isNear(profile.pose) else { clear(.faceForward); return }
         let match = model.match(ExpressionCue.allCases.map { observation.values[$0]! })

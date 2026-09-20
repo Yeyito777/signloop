@@ -27,6 +27,7 @@ struct ExpressionTeacher {
     private var camera: String?
     private var pose: ExpressionPose?
     private var latest: ExpressionObservation?
+    var observation: ExpressionObservation? { latest }
     private var lastMS: Int?
 
     var nextStep: Step? {
@@ -57,7 +58,8 @@ struct ExpressionTeacher {
         message = "Retake \(label.title.lowercased()). The other teaching examples are kept; all expressions will be checked again."
     }
     mutating func observe(timestampMS: Int, hasFace: Bool, observation: ExpressionObservation?) {
-        guard hasFace, timestampMS >= 0, let observation, observation.isValid else { interrupt(); return }
+        guard hasFace, timestampMS >= 0, let observation, observation.isValid,
+              observation.measurement == .current else { interrupt(); return }
         if let lastMS, timestampMS == lastMS { return }
         if let lastMS, timestampMS < lastMS { interrupt(); return }
         if let lastMS, Double(timestampMS)-Double(lastMS) > 400 { interrupt() }

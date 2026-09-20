@@ -13,12 +13,12 @@ struct TaughtExpressionTests {
     static func sample(_ label: TaughtExpressionLabel, delta: Double = 0) -> ExpressionObservation {
         let vector: [Double]
         switch label {
-        case .neutral: vector = [0.05,-0.70,0.12,0.20,0.05]
-        case .joy: vector = [0.65,-0.72,0.10,0.21,0.65]
-        case .anger: vector = [0.08,-0.50,0.10,0.15,0.06]
-        case .fear: vector = [0.07,-0.78,0.15,0.20,0.08]
-        case .sadness: vector = [0.05,-0.78,0.11,0.38,0.05]
-        case .disgust: vector = [0.08,-0.64,0.09,0.16,0.65]
+        case .neutral: vector = [0.05,-0.70,0.12,0.20,-0.24]
+        case .joy: vector = [0.65,-0.72,0.10,0.21,-0.20]
+        case .anger: vector = [0.08,-0.50,0.10,0.15,-0.24]
+        case .fear: vector = [0.07,-0.78,0.15,0.20,-0.24]
+        case .sadness: vector = [0.05,-0.78,0.11,0.38,-0.24]
+        case .disgust: vector = [0.08,-0.64,0.09,0.16,-0.20]
         }
         return ExpressionObservation(values: Dictionary(uniqueKeysWithValues: zip(ExpressionCue.allCases,vector.map { $0+delta })),
                                      pose: ExpressionPose(horizontal: 0, vertical: 0.25), camera: "front")
@@ -97,7 +97,7 @@ struct TaughtExpressionTests {
             let vector = ExpressionCue.allCases.map { sample(label,delta: 0.003).values[$0]! }
             expect(model.match(vector).label == label, "\(label): fresh measurements match the taught pattern")
         }
-        expect(sample(.joy).values[.disgust] == sample(.disgust).values[.disgust], "smile/disgust fixture deliberately shares upper-lip lift")
+        expect(sample(.joy).values[.disgust] == sample(.disgust).values[.disgust], "whole pattern separates smile/disgust even if the nose also moves in a smile")
         var runtime = TaughtExpressionRuntime(profile: profile)
         for label in TaughtExpressionLabel.allCases {
             runtime.resetTracking()
@@ -197,7 +197,11 @@ struct TaughtExpressionTests {
         let data = try TaughtExpressionStore.encode(profile)
         let decoded = try TaughtExpressionStore.decode(data)
         expect(decoded == profile, "export/import is lossless")
-        var old = profile; old.matchingVersion = nil
+        var old = profile; old.matchingVersion = nil; old.measurementVersion = ExpressionMeasurement.upperLip.rawValue
+        for label in TaughtExpressionLabel.allCases {
+            for index in 0..<2 { old.examples[label]![index].center[4] += 1 }
+            old.validation[label]!.example.center[4] += 1
+        }
         let oldData = try JSONEncoder().encode(old)
         let migrated = try TaughtExpressionStore.decode(oldData)
         let migratedModel = try migrated.validatedModel()
@@ -205,7 +209,7 @@ struct TaughtExpressionTests {
                "build-12 export without a matching version automatically uses sensitivity when its checks still pass")
         // A valid earlier small sad expression falls inside the new neutral
         // noise buffer. Retain that profile with its original classifier.
-        var oldSad = ExpressionCue.allCases.map { sample(.neutral).values[$0]! }; oldSad[3] += 0.02
+        var oldSad = old.examples[.neutral]![0].center; oldSad[3] += 0.02
         let oldExample = ExpressionExample(center: oldSad, spread: [0,0,0,0,0], sampleCount: 21)
         old.examples[.sadness] = [oldExample, oldExample]
         old.validation[.sadness] = ExpressionValidation(example: oldExample, accepted: 21, total: 21, longestHoldMS: 2000)
@@ -216,9 +220,13 @@ struct TaughtExpressionTests {
         var oldRuntime = TaughtExpressionRuntime(profile: retained)
         oldRuntime.observe(timestampMS: 0, hasFace: true,
                            observation: ExpressionObservation(values: Dictionary(uniqueKeysWithValues: zip(ExpressionCue.allCases,oldSad)),
-                               pose: sample(.neutral).pose, camera: "front"))
-        expect(oldRuntime.needsSensitivityRetake && oldRuntime.result == .holding(.sadness),
+                               pose: sample(.neutral).pose, camera: "front", measurement: .upperLip))
+        expect(oldRuntime.needsSensitivityRetake && oldRuntime.needsNoseScrunchRetake && oldRuntime.result == .holding(.sadness),
                "older profile remains active and requests a sensitivity retake instead of disappearing")
+        oldRuntime.observe(timestampMS: 100, hasFace: true, observation: sample(.joy))
+        expect(oldRuntime.result == .unavailable, "nose geometry can never be interpreted as an old upper-lip observation")
+        var mislabeled = old; mislabeled.measurementVersion = ExpressionMeasurement.current.rawValue; mislabeled.matchingVersion = 2
+        rejects("old lip examples cannot be relabeled as a nose profile") { _ = try mislabeled.validatedModel() }
         try data.write(to: bundled)
         var replacement = profile; replacement.id = UUID().uuidString
         try store.save(replacement)
