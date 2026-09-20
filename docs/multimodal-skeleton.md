@@ -135,3 +135,7 @@ Before calling live tracking validated, install intentionally and check:
 6. Sustained frame rate, age, heat and battery on the actual iPhone.
 
 Installation and live phone verification are separate from build/simulator tests.
+
+Deployment update: build 11 was installed and launched on Yeyito on September 19
+at 14:19 local time. The user reported that it works. This is positive live
+feedback, not a measured sustained latency, landmark-accuracy or ASL benchmark.

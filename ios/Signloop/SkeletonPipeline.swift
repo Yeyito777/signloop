@@ -7,9 +7,9 @@ import QuartzCore
 final class SkeletonPipeline {
     private let hand: HandLandmarker
     private let pose: PoseLandmarker
-    private let face: FaceLandmarker
+    private let face: FaceLandmarker?
 
-    init() throws {
+    init(trackFace: Bool = true) throws {
         func model(_ name: String) throws -> String {
             guard let path = Bundle.main.path(forResource: name, ofType: "task") else {
                 throw NSError(domain: "Signloop", code: 1, userInfo: [
@@ -36,15 +36,17 @@ final class SkeletonPipeline {
         p.shouldOutputSegmentationMasks = false
         pose = try PoseLandmarker(options: p)
 
-        let f = FaceLandmarkerOptions()
-        f.baseOptions.modelAssetPath = try model("face_landmarker")
-        f.runningMode = .video
-        f.numFaces = 1
-        f.minFaceDetectionConfidence = 0.5
-        f.minFacePresenceConfidence = 0.5
-        f.minTrackingConfidence = 0.5
-        f.outputFaceBlendshapes = true
-        face = try FaceLandmarker(options: f)
+        if trackFace {
+            let f = FaceLandmarkerOptions()
+            f.baseOptions.modelAssetPath = try model("face_landmarker")
+            f.runningMode = .video
+            f.numFaces = 1
+            f.minFaceDetectionConfidence = 0.5
+            f.minFacePresenceConfidence = 0.5
+            f.minTrackingConfidence = 0.5
+            f.outputFaceBlendshapes = true
+            face = try FaceLandmarker(options: f)
+        } else { face = nil }
     }
 
     func detect(_ image: MPImage, timestampMS: Int, width: Int, height: Int,
@@ -54,7 +56,7 @@ final class SkeletonPipeline {
         let afterHand = CACurrentMediaTime()
         let p = try pose.detect(videoFrame: image, timestampInMilliseconds: timestampMS)
         let afterPose = CACurrentMediaTime()
-        let f = try face.detect(videoFrame: image, timestampInMilliseconds: timestampMS)
+        let f = try face?.detect(videoFrame: image, timestampInMilliseconds: timestampMS)
         let end = CACurrentMediaTime()
         func points(_ landmarks: [NormalizedLandmark]) -> [SkeletonPoint] {
             landmarks.enumerated().compactMap { i, l in
@@ -70,14 +72,14 @@ final class SkeletonPipeline {
                                 handednessScore: category?.score ?? 0)
         }
         var expressions: [String: Float] = [:]
-        for c in f.faceBlendshapes.first?.categories ?? [] {
+        for c in f?.faceBlendshapes.first?.categories ?? [] {
             if let name = c.categoryName, c.score.isFinite { expressions[name] = max(0, min(1, c.score)) }
         }
         var result = SkeletonFrame(timestampMS: timestampMS, width: width, height: height, camera: camera,
             hands: hands, pose: points(p.landmarks.first ?? []).filter { $0.id <= 24 },
-            face: points(f.faceLandmarks.first ?? []), expressions: expressions,
+            face: points(f?.faceLandmarks.first ?? []), expressions: expressions,
             timingsMS: ["hands": (afterHand-start)*1000, "pose": (afterPose-afterHand)*1000,
-                        "face": (end-afterPose)*1000, "total": (end-start)*1000])
+                        "face": face == nil ? 0 : (end-afterPose)*1000, "total": (end-start)*1000])
         result.associateHands()
         return result
     }

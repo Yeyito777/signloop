@@ -53,12 +53,62 @@ intentional for the camera app's Xcode compatibility. See
 No credentials were imported. Client-side `EXPO_PUBLIC_*` keys in the standalone
 prototype are not secret; use the consumer app's backend path for shared builds.
 
-## Standalone native scanner: offline skeleton
+## Standalone native scanner: offline skeleton + experimental matching
 
-The standalone native build uses `SkeletonCameraTracker` for synchronized
-MediaPipe hand, upper-body and face tracking, plus an optional taught expression
-profile for the demo. No sign guesses,
-backend, API key, transcription, recording or uploads.
+The standalone native build uses `SkeletonCameraTracker`:
+camera → MediaPipe hand and upper-body landmarkers (face optional) → one synchronized,
+inspectable skeleton → optional **private temporal matching**, with an optional
+taught facial-expression profile from main. The live word scope is the 11
+presentation signs; spelling is restricted to AURELIO's seven letters.
+No backend, API key, transcription, camera recording or uploads. Expression lab
+can explicitly save/export a numeric personal calibration profile.
+
+Build 19 integrates both branches while retaining main's Honk & Tell Expo app,
+voice backend, SignEngine, camera orientation fixes and expression teaching/demo
+schemes. The standalone matcher is not automatically substituted into Expo's
+separate confirmed-caption flow. See [integration notes](docs/main-detection-merge.md).
+
+Build 18 restricts spelling to **A U R E L I O** only and adds smaller-motion
+training-reference variants for WE. C/P and all other letters cannot win or be
+entered. The app can no longer fingerspell SIGNLOOP in this restricted mode.
+See [Aurelio spelling and WE tolerance](docs/aurelio-and-we.md).
+
+Build 17 limits the standalone scanner to the **11 presentation-script signs**,
+including **I love you**. The other 21 words no longer enter matching or the score
+list. Separate name/app fingerspelling stays unchanged. See
+[presentation-only scope](docs/presentation-only.md).
+
+Build 16 replaces arbitrary percentage bars with a ranked closest-three distance
+inspector (Settings → **Show match scores**, then **All 32** for the full list).
+The [score audit](docs/score-audit.md) verifies that expanding the vocabulary does
+not dilute individual distances; new competitors can still change the winner.
+
+Build 15 adds a 32-word research vocabulary for introductions and presenting the
+project, including **I love you**, plus a separate **Spell name** mode.
+Fingerspelling recognizes 24 static letters; **J/Z are explicitly manual**.
+Verify and tap Add to compose a name—nothing is auto-transcribed or saved.
+See [vocabulary, spelling and evaluation limitations](docs/demo32-and-spelling.md).
+
+Build 14 shows the **best current guess**, explicitly uncertain, rather than
+hiding it behind Unknown. It adds hand-local 3D geometry, soft finger-shape
+rules and a shared temporal window with wrist/palm motion features. Face tracking
+is off by default; shoulders/chest remain. Existing test replays improved from
+21/48 to 26/48 correct most-frequent guesses, but all 10 unsupported clips also
+got guesses. This is still experimental, not reliable ASL recognition.
+It needs a separately provisioned schema-2 reference bank; see
+[current behavior and evidence](docs/basic-live-matching.md).
+
+Historical baseline:
+Build 12 displays tentative **Possible sign / Unknown** results when its private
+research references are provisioned separately. The bank is not in Git or the app
+bundle. The initial reserved replay displayed the correct label in **11/48**
+supported clips, and a wrong label in **5/48**; this is not reliable 16-sign
+recognition. See [matching, tests and private provisioning](docs/basic-live-matching.md).
+Without references, the skeleton still works. This change does not wire the
+separate Expo consumer app's gesture flow.
+Build 13 adds Settings → **Show all sign scores**: live similarity bars for all
+16 candidates, including rejected matches. These are not calibrated probabilities
+and do not change recognition or rejection.
 
 - Up to two hands, 21 points each.
 - Upper-body pose through the hips (25 original MediaPipe landmark IDs).
@@ -80,8 +130,17 @@ The experimental presets do not infer emotion or ASL meaning.
 
 This replaces the standalone camera's earlier ILY/five-sign research display;
 old recognition experiments remain below for reference and are not called by the new camera UI.
-No private sign-model assets are needed. Installing build 12 replaces the previous
-app UI; installation is a separate explicit step.
+No private sign-model assets are needed for skeleton tracking. Temporal word
+matching still requires its separately provisioned private research bank.
+Installation is a separate explicit step.
+
+## Small temporal reference dataset
+
+[Basic-sign corpus tooling](docs/basic-signs-corpus.md) produced **196 sequences
+for 16 everyday labels in 8.56 MB**, using the build 11 hand/body/facial trackers.
+It never downloads the full ASL Citizen archive. Research coordinates
+remain private, outside Git and the app; this is data preparation, not validated
+live recognition.
 
 ## Previous recognition research (not active in the tracking UI)
 

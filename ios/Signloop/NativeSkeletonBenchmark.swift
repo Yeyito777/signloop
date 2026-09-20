@@ -37,12 +37,13 @@ struct NativeSkeletonBenchmark: View {
             ("portrait.jpg", "a6f11efaa834706db23f275b6115058fa87fc7f14362681e6abe14e82749de3e"),
             ("thumb_up.jpg", "5d673c081ab13b8a1812269ff57047066f9c33c07db5f4178089e8cb3fdc0291")]
         var results: [[String: Any]] = []
+        for trackFace in [false, true] {
         for (name, digest) in assets {
             let data = try Data(contentsOf: folder.appendingPathComponent(name))
             let actual = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
             try require(actual == digest, "Fixture hash mismatch: \(name)")
             guard let image = UIImage(data: data) else { throw NSError(domain: "Invalid fixture", code: 1) }
-            let pipeline = try SkeletonPipeline()
+            let pipeline = try SkeletonPipeline(trackFace: trackFace)
             let mpImage = try MPImage(uiImage: image)
             var last: SkeletonFrame?
             var times: [Double] = []
@@ -56,9 +57,13 @@ struct NativeSkeletonBenchmark: View {
             }
             guard let frame = last else { throw NSError(domain: "No frames", code: 1) }
             if name == "pose.jpg" { try require(frame.hasPose, "Expected body missing") }
-            if name == "portrait.jpg" {
+            if name == "portrait.jpg" && trackFace {
                 try require(frame.face.count == 478 && frame.expressions.count == 52, "Expected face/blendshapes missing")
                 try require(frame.face.allSatisfy(\.usable), "Face points unexpectedly hidden by confidence gate")
+            }
+            if !trackFace {
+                try require(frame.face.isEmpty && frame.expressions.isEmpty && frame.timingsMS["face"] == 0,
+                            "Face-disabled mode still produced face data/work")
             }
             if name == "thumb_up.jpg" {
                 try require(frame.hands.contains { $0.points.count == 21 && $0.points.allSatisfy(\.usable) }, "Expected drawable hand missing")
@@ -77,11 +82,12 @@ struct NativeSkeletonBenchmark: View {
             try require(last?.hands.isEmpty == true && last?.pose.isEmpty == true &&
                         last?.face.isEmpty == true && last?.expressions.isEmpty == true, "Stale result after blank input")
             let sorted = times.sorted()
-            results.append(["fixture": name, "hands": frame.hands.count, "upper_body_points": frame.pose.count,
+            results.append(["fixture": name, "track_face": trackFace, "hands": frame.hands.count, "upper_body_points": frame.pose.count,
                 "drawable_body_points": frame.pose.filter(\.usable).count,
                 "face_points": frame.face.count, "blendshapes": frame.expressions.count,
                 "median_ms": sorted[sorted.count/2], "p95_ms": sorted[Int(Double(sorted.count-1)*0.95)],
                 "blank_cleared": true])
+        }
         }
         return ["completed": true, "scope": "Public static fixtures on simulator; not live phone performance or ASL recognition",
                 "fixtures": results]
