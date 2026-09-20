@@ -140,12 +140,17 @@ struct BasicFeature: Codable {
 }
 
 final class BasicSignMatcher {
+    // Selected using train-signer folds + existing validation, not test labels.
+    static let compactWEMotionScale: Float = 0.65
     let bank: BasicReferenceBank
-    private var references: [(String, [BasicFeature], [[Float]?])] = []
+    private var references: [(String, [BasicFeature], [[Float]?], Bool)] = []
     private(set) var usableReferenceCount = 0
 
-    init(bank: BasicReferenceBank) throws {
+    init(bank: BasicReferenceBank, weMotionScale: Float? = nil) throws {
         try bank.validate()
+        if let scale = weMotionScale, !scale.isFinite || !(0.5...1.5).contains(scale) {
+            throw CocoaError(.fileReadCorruptFile)
+        }
         self.bank = bank
         for reference in bank.references {
             if let sequence = reference.features ?? Self.sequence(reference.frames) {
@@ -154,14 +159,68 @@ final class BasicSignMatcher {
                     f.shape = f.hands.map { $0.map(Self.intrinsicShape) }
                     return f
                 }
-                references.append((reference.label, prepared, Self.trajectorySignature(prepared)))
+                references.append((reference.label, prepared, Self.trajectorySignature(prepared), false))
+                if reference.label == "WE", let scale = weMotionScale, scale != 1 {
+                    let smaller = Self.scaledMotion(prepared, scale: scale)
+                    references.append((reference.label, smaller, Self.trajectorySignature(smaller), true))
+                }
             }
         }
         usableReferenceCount = references.count
     }
 
+    /// Augment observed training movement, not hand-invented handshapes.
+    /// Keep position center, hand XYZ/orientation, timestamps and missing points.
+    /// Only wrist/elbow excursion and its velocity change.
+    static func scaledMotion(_ sequence: [BasicFeature], scale: Float) -> [BasicFeature] {
+        if scale == 1 { return sequence }
+        var centers = [[Float]?](repeating: nil, count: 2)
+        for side in 0..<2 {
+            let observed = sequence.compactMap { $0.body[side] }
+            if !observed.isEmpty {
+                centers[side] = (0..<4).map { i in observed.reduce(Float(0)) { $0 + $1[i] } / Float(observed.count) }
+            }
+        }
+        return sequence.map { original in
+            var frame = original
+            for side in 0..<2 {
+                if let body = original.body[side], let center = centers[side] {
+                    frame.body[side] = zip(body, center).map { $0.1 + ($0.0-$0.1)*scale }
+                }
+                if let motion = original.motion?[side] {
+                    frame.motion?[side] = motion.map { $0*scale }
+                }
+            }
+            return frame
+        }
+    }
+
+    /// Only unlock the extra tolerance for an index-finger arc at the chest.
+    /// Original WE matching is NEVER gated. In particular NAME's two fingers
+    /// and a stationary MY/point must not receive the extra smaller-motion fit.
+    static func supportsCompactWE(_ sequence: [BasicFeature]) -> Bool {
+        for side in 0..<2 {
+            let points = sequence.compactMap { f -> [Float]? in
+                guard let hand = f.hands[side], let body = f.body[side],
+                      straightness(hand, finger: 0) >= 0.8,
+                      (1..<4).allSatisfy({ straightness(hand, finger: 0)-straightness(hand, finger: $0) > 0.1 }),
+                      abs(body[0]) <= 1, (-0.3...1.3).contains(body[1]) else { return nil }
+                return body
+            }
+            guard points.count >= max(4, sequence.count/2) else { continue }
+            let x = points.map { $0[0] }
+            // The pointing fingertip, not necessarily the wrist, crosses the
+            // chest. Do not require the wrist to cross the shoulder midpoint.
+            if x.max()!-x.min()! >= 0.2 {
+                return true
+            }
+        }
+        return false
+    }
+
     /// Private deployment asset: only the prepared training sequences, not
     /// verbose full-frame geometry, videos, validation or test examples.
+    /// Runtime WE augmentation is intentionally not serialized as fake source IDs.
     func packedBank() -> BasicReferenceBank {
         let packed = bank.references.compactMap { reference -> BasicReference? in
             guard let features = reference.features ?? Self.sequence(reference.frames) else { return nil }
@@ -456,7 +515,9 @@ final class BasicSignMatcher {
                                            minimum: bank.queryFrames ?? 4) else { continue }
             let mirror = query.map { $0.mirrored() }
             let motion = Self.trajectorySignature(query), mirroredMotion = Self.trajectorySignature(mirror)
-            for (label, reference, referenceMotion) in references {
+            let allowCompactWE = Self.supportsCompactWE(query)
+            for (label, reference, referenceMotion, compactOnly) in references {
+                if compactOnly && !allowCompactWE { continue }
                 let best = byLabel[label] ?? .infinity
                 let direct = Self.dtw(query, reference,
                     motion: Self.motionDistance(motion, referenceMotion), best: best)

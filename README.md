@@ -55,6 +55,11 @@ camera → MediaPipe hand and upper-body landmarkers (face optional) → one syn
 inspectable skeleton → optional **private 16-label temporal matching**.
 No backend, API key, transcription, recording or uploads.
 
+Build 18 restricts spelling to **A U R E L I O** only and adds smaller-motion
+training-reference variants for WE. C/P and all other letters cannot win or be
+entered. The app can no longer fingerspell SIGNLOOP in this restricted mode.
+See [Aurelio spelling and WE tolerance](docs/aurelio-and-we.md).
+
 Build 17 limits the standalone scanner to the **11 presentation-script signs**,
 including **I love you**. The other 21 words no longer enter matching or the score
 list. Separate name/app fingerspelling stays unchanged. See

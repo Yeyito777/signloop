@@ -1,5 +1,9 @@
 # Presentation-only vocabulary — build 17
 
+**Build 18 retains these 11 words but restricts spelling to AURELIO's seven
+letters and adds [WE motion tolerance](aurelio-and-we.md).** SIGNLOOP can no longer
+be fingerspelled using the restricted app; introduce the project name aloud.
+
 The user requested removing every word outside the presentation script, retaining
 I LOVE YOU. The standalone scanner now searches exactly:
 

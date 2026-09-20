@@ -14,6 +14,28 @@ import Foundation
         let model = try JSONDecoder().decode(AlphabetModel.self, from: Data(contentsOf: URL(fileURLWithPath: args[1])))
         try model.validate()
         check(model.labels.count == 24 && !model.labels.contains("J") && !model.labels.contains("Z"), "No fake motion letters")
+        check(AlphabetModel.aurelioLetters == ["A","U","R","E","L","I","O"], "Exactly Aurelio's letters")
+        let zero = [Float](repeating: 0, count: 86)
+        check(model.prediction(normalized: zero, allowedLetters: []) == nil, "Empty whitelist fails closed")
+        check(model.prediction(normalized: zero, allowedLetters: ["A","A"]) == nil, "Duplicate whitelist rejected")
+        check(model.prediction(normalized: zero, allowedLetters: ["J"]) == nil, "Unavailable letter rejected")
+        // Synthetic logits deliberately make excluded C huge. Masking after
+        // softmax would underflow both O and A to zero and lose their ordering.
+        var layers = model.layers
+        let last = layers.removeLast()
+        var bias = [Float](repeating: -10, count: last.output)
+        bias[model.labels.firstIndex(of: "C")!] = 10000
+        bias[model.labels.firstIndex(of: "O")!] = 2000
+        bias[model.labels.firstIndex(of: "A")!] = 1999
+        layers.append(AlphabetModel.Layer(input: last.input, output: last.output,
+            weights: [Float](repeating: 0, count: last.weights.count), bias: bias,
+            relu: false, scale: [Float](repeating: 1, count: last.output),
+            offset: [Float](repeating: 0, count: last.output)))
+        let synthetic = AlphabetModel(version: model.version, labels: model.labels, mean: model.mean,
+                                      std: model.std, layers: layers, sourceRevision: model.sourceRevision)
+        check(synthetic.prediction(normalized: zero, allowedLetters: model.labels) == "C", "Unrestricted synthetic winner")
+        check(synthetic.prediction(normalized: zero, allowedLetters: AlphabetModel.aurelioLetters) == "O",
+              "Excluded winner cannot compete or underflow the active ranking")
         check(AlphabetModel.features([]) == nil, "Invalid input rejected")
         check(AlphabetModel.features([Double](repeating: .nan,count: 63)) == nil, "NaN rejected")
         check(model.scores(normalized: []) == nil, "Wrong input size rejected")
@@ -34,9 +56,13 @@ import Foundation
         check(draft.text.isEmpty, "Safe deletion and clear")
         for _ in 0..<50 { draft.append("A") }
         check(draft.text.count == 40, "Bounded RAM-only draft")
+        var nameDraft = SpellingDraft(allowedLetters: AlphabetModel.aurelioLetters)
+        for letter in AlphabetModel.aurelioLetters { nameDraft.append(letter) }
+        for letter in ["C","P","J","Z","B"," ","WRONG"] { nameDraft.append(letter) }
+        check(nameDraft.text == "AURELIO", "Name draft rejects every excluded/manual letter")
         if args.count > 2 {
             let fixture = try JSONDecoder().decode(Fixture.self, from: Data(contentsOf: URL(fileURLWithPath: args[2])))
-            var correct = 0, parity = 0
+            var correct = 0, parity = 0, nameCorrect = 0, nameTotal = 0
             var maximum: Float = 0
             let start = Date()
             for row in fixture.rows {
@@ -50,8 +76,15 @@ import Foundation
                 let expected = row.scores.indices.max { row.scores[$0] < row.scores[$1] }!
                 parity += top == expected ? 1 : 0
                 correct += model.labels[top] == row.label ? 1 : 0
+                let restricted = model.prediction(normalized: features, allowedLetters: AlphabetModel.aurelioLetters)
+                check(AlphabetModel.aurelioLetters.contains(restricted ?? ""), "No removed letters on any real source sample")
+                if AlphabetModel.aurelioLetters.contains(row.label) {
+                    nameTotal += 1
+                    nameCorrect += restricted == row.label ? 1 : 0
+                }
             }
             print("Upstream reused samples: \(correct)/\(fixture.rows.count) correct, \(parity) identical top1, max error \(maximum), total \(-start.timeIntervalSinceNow*1000)ms. Not live/held-out-signer accuracy.")
+            print("AURELIO restricted source samples: \(nameCorrect)/\(nameTotal); not live accuracy or unknown rejection.")
             func wait(_ condition: () -> Bool) {
                 let deadline = Date().addingTimeInterval(3)
                 while !condition() && Date() < deadline {
@@ -88,6 +121,19 @@ import Foundation
             live.reset()
             RunLoop.current.run(until: Date().addingTimeInterval(0.08))
             check(live.letter == nil, "Reset invalidates in-flight letter result")
+            let nameLive = AlphabetRecognition(modelURL: URL(fileURLWithPath: args[1]),
+                                               allowedLetters: AlphabetModel.aurelioLetters)
+            nameLive.load()
+            wait { nameLive.ready }
+            nameLive.receive(frame(2000,[hand]))
+            wait { nameLive.detail == "Hold the letter briefly" }
+            nameLive.receive(frame(2133,[hand]))
+            wait { nameLive.letter != nil }
+            check(nameLive.letter == model.prediction(normalized: model.normalized(raw)!,
+                                                     allowedLetters: AlphabetModel.aurelioLetters),
+                  "Actual restricted async adapter selects only active logits")
+            nameLive.receive(frame(2266,[]))
+            check(nameLive.letter == nil, "Hand loss clears restricted letter")
         }
         print("PASS: \(count) alphabet and explicit spelling checks")
     }

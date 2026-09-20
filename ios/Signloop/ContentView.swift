@@ -9,10 +9,11 @@ private enum CameraTheme {
 /// Offline experimental sign matching plus the existing skeleton inspector.
 struct ContentView: View {
     @StateObject private var tracker = SkeletonCameraTracker()
-    @StateObject private var recognition = BasicLiveRecognition(activeLabels: BasicSignScore.presentationVocabulary)
-    @StateObject private var alphabet = AlphabetRecognition()
+    @StateObject private var recognition = BasicLiveRecognition(activeLabels: BasicSignScore.presentationVocabulary,
+                                                               weMotionScale: BasicSignMatcher.compactWEMotionScale)
+    @StateObject private var alphabet = AlphabetRecognition(allowedLetters: AlphabetModel.aurelioLetters)
     @State private var spelling = false
-    @State private var draft = SpellingDraft()
+    @State private var draft = SpellingDraft(allowedLetters: AlphabetModel.aurelioLetters)
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var paused = false
@@ -167,16 +168,16 @@ struct ContentView: View {
                         Button { draft.backspace() } label: { Image(systemName: "delete.left").frame(minWidth: 44,minHeight: 44) }
                             .accessibilityLabel("Delete last letter").accessibilityIdentifier("delete-letter")
                         Menu {
-                            Button("J (manual)") { draft.append("J") }
-                            Button("Z (manual)") { draft.append("Z") }
-                            Button("Space") { draft.append(" ") }
+                            ForEach(alphabet.allowedLetters, id: \.self) { letter in
+                                Button("\(letter) (manual)") { draft.append(letter) }
+                            }
                             Button("Clear spelling", role: .destructive) { draft.clear() }
                         } label: {
                             Image(systemName: "keyboard").frame(minWidth: 44,minHeight: 44)
                         }.accessibilityLabel("Manual letters and clear").accessibilityIdentifier("manual-spelling")
                     }.buttonStyle(.bordered).controlSize(.regular)
-                    Text(dynamicTypeSize.isAccessibilitySize ? "J/Z: manual" :
-                            "24 static letters · J/Z manual · nothing added automatically")
+                    Text(dynamicTypeSize.isAccessibilitySize ? "AURELIO only" :
+                            "A U R E L I O only · confirm each letter")
                         .font(.caption2).multilineTextAlignment(.center)
                         .accessibilityIdentifier("analysis-mode")
                 }
@@ -247,7 +248,7 @@ private struct CameraSettings: View {
                         .font(.footnote)
                 }
                 Section("Fingerspelling") {
-                    Text("Choose Spell name on the camera. Show one hand, hold a letter, then tap Add after checking it. Letters never compete with words. A–Z are available for composing, but J and Z require manual entry: this model recognizes only 24 static letters.")
+                    Text("Choose Spell name. Only A, U, R, E, L, I and O can be recognized or entered. Show one hand, hold a letter, then tap Add after checking it. Other letters are excluded before selecting a guess. This restricted mode cannot spell SIGNLOOP.")
                     Toggle("Mirror letter input", isOn: $alphabet.mirrorInput)
                     Text("Off matches the source collection scripts’ unmirrored coordinates. Try the other setting if signing-hand orientation differs. Names stay in memory only; no server, autocorrect or saved transcript.")
                     Text("Alphabet data/features: Siruyy/realtime-asl-recognizer · MIT · © 2026 Neria. Signloop-trained model; experimental, not verified for a fresh signer.")
@@ -269,6 +270,7 @@ private struct CameraSettings: View {
                 }.font(.footnote)
                 Section("Try one sign at a time") {
                     Text(recognition.labels.map(BasicLiveRecognition.display).joined(separator: " · "))
+                    Text("WE: point your index finger toward your upper chest and make a small arc from one side to the other. Keep the hand visible; no exaggerated sweep needed.")
                     Text("Frame your face, shoulders and both hands. Sign naturally, then briefly relax. This small research matcher will miss signs and may confuse similar ones; it is not a validated communication aid.")
                 }.font(.footnote)
             }.navigationTitle("Settings").navigationBarTitleDisplayMode(.inline)

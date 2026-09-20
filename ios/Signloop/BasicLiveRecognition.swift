@@ -21,11 +21,13 @@ final class BasicLiveRecognition: ObservableObject {
     private var stability = BasicSignStability()
     private let referenceURL: URL
     private let activeLabels: [String]?
+    private let weMotionScale: Float?
 
-    init(referenceURL: URL? = nil, activeLabels: [String]? = nil) {
+    init(referenceURL: URL? = nil, activeLabels: [String]? = nil, weMotionScale: Float? = nil) {
         self.referenceURL = referenceURL ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("basic-references.json")
         self.activeLabels = activeLabels
+        self.weMotionScale = weMotionScale
         self.labels = activeLabels ?? BasicSignScore.vocabulary
         self.scores = BasicSignScore.rows(labels: self.labels)
     }
@@ -40,7 +42,7 @@ final class BasicLiveRecognition: ObservableObject {
                 guard size > 0, size < 40_000_000 else { throw CocoaError(.fileReadCorruptFile) }
                 let source = try JSONDecoder().decode(BasicReferenceBank.self, from: Data(contentsOf: url))
                 let bank = try self.activeLabels.map { try source.restricted(to: $0) } ?? source
-                let model = try BasicSignMatcher(bank: bank)
+                let model = try BasicSignMatcher(bank: bank, weMotionScale: self.weMotionScale)
                 guard model.usableReferenceCount > 0 else { throw CocoaError(.fileReadCorruptFile) }
                 self.matcher = model
                 // Keep private research material out of device cloud backups.

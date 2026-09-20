@@ -17,6 +17,7 @@ struct AlphabetModel: Codable {
         let offset: [Float]
     }
     static let letters = Array("ABCDEFGHIKLMNOPQRSTUVWXY").map(String.init)
+    static let aurelioLetters = Array("AURELIO").map(String.init)
     let version: Int
     let labels: [String]
     let mean: [Double]
@@ -70,7 +71,7 @@ struct AlphabetModel: Codable {
         return x.allSatisfy(\.isFinite) ? x : nil
     }
 
-    func scores(normalized: [Float]) -> [Float]? {
+    private func logits(normalized: [Float]) -> [Float]? {
         guard normalized.count == 86, normalized.allSatisfy(\.isFinite) else { return nil }
         var x = normalized
         for layer in layers {
@@ -82,7 +83,21 @@ struct AlphabetModel: Codable {
             }
             x = y
         }
-        guard x.allSatisfy(\.isFinite), let maximum = x.max() else { return nil }
+        return x.allSatisfy(\.isFinite) ? x : nil
+    }
+
+    func prediction(normalized: [Float], allowedLetters: [String]) -> String? {
+        guard !allowedLetters.isEmpty, Set(allowedLetters).count == allowedLetters.count,
+              Set(allowedLetters).isSubset(of: Set(labels)),
+              let values = logits(normalized: normalized) else { return nil }
+        // Select among active logits BEFORE softmax. An excluded C/P cannot
+        // win, nor underflow the active scores to identical zeros.
+        let indices = labels.indices.filter { allowedLetters.contains(labels[$0]) }
+        return indices.max { values[$0] < values[$1] }.map { labels[$0] }
+    }
+
+    func scores(normalized: [Float]) -> [Float]? {
+        guard var x = logits(normalized: normalized), let maximum = x.max() else { return nil }
         x = x.map { exp($0-maximum) }
         let sum = x.reduce(0,+)
         return sum.isFinite && sum > 0 ? x.map { $0/sum } : nil
@@ -99,8 +114,12 @@ struct AlphabetModel: Codable {
 
 struct SpellingDraft {
     private(set) var text = ""
+    private let allowedLetters: Set<String>
+    init(allowedLetters: [String] = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZ ").map(String.init)) {
+        self.allowedLetters = Set(allowedLetters)
+    }
     mutating func append(_ letter: String) {
-        guard text.count < 40, letter.count == 1, "ABCDEFGHIJKLMNOPQRSTUVWXYZ ".contains(letter) else { return }
+        guard text.count < 40, letter.count == 1, allowedLetters.contains(letter) else { return }
         text += letter
     }
     mutating func backspace() { if !text.isEmpty { text.removeLast() } }
@@ -108,6 +127,7 @@ struct SpellingDraft {
 }
 
 final class AlphabetRecognition: ObservableObject {
+    let allowedLetters: [String]
     @Published private(set) var letter: String?
     @Published private(set) var ready = false
     @Published private(set) var detail = "Loading static alphabet…"
@@ -125,8 +145,10 @@ final class AlphabetRecognition: ObservableObject {
     private var lastRequest = -1000
     private let modelURL: URL?
 
-    init(modelURL: URL? = Bundle.main.url(forResource: "alphabet-static", withExtension: "json")) {
+    init(modelURL: URL? = Bundle.main.url(forResource: "alphabet-static", withExtension: "json"),
+         allowedLetters: [String] = AlphabetModel.letters) {
         self.modelURL = modelURL
+        self.allowedLetters = allowedLetters
     }
     func load() {
         guard !started else { return }
@@ -138,6 +160,11 @@ final class AlphabetRecognition: ObservableObject {
                 guard data.count < 3_000_000 else { throw CocoaError(.fileReadCorruptFile) }
                 let model = try JSONDecoder().decode(AlphabetModel.self, from: data)
                 try model.validate()
+                guard !self.allowedLetters.isEmpty,
+                      Set(self.allowedLetters).count == self.allowedLetters.count,
+                      Set(self.allowedLetters).isSubset(of: Set(model.labels)) else {
+                    throw CocoaError(.fileReadCorruptFile)
+                }
                 self.model = model
                 DispatchQueue.main.async { self.ready = true; self.detail = "Use one hand · tap Add to keep a letter" }
             } catch {
@@ -166,9 +193,9 @@ final class AlphabetRecognition: ObservableObject {
         busy = true
         let token = generation, began = ProcessInfo.processInfo.systemUptime
         worker.async {
-            let scores = self.model?.normalized(raw).flatMap { self.model?.scores(normalized: $0) }
-            let top = scores?.indices.max { scores![$0] < scores![$1] }
-            let candidate = top.map { AlphabetModel.letters[$0] }
+            let candidate = self.model?.normalized(raw).flatMap {
+                self.model?.prediction(normalized: $0, allowedLetters: self.allowedLetters)
+            }
             DispatchQueue.main.async {
                 self.busy = false
                 guard token == self.generation else { return }
@@ -184,7 +211,7 @@ final class AlphabetRecognition: ObservableObject {
                 self.letter = self.history.count >= 2 && self.history.suffix(2).allSatisfy { $0 == candidate }
                     ? candidate : nil
                 self.detail = self.letter == nil ? "Hold the letter briefly"
-                    : "Letter guess · verify before Add · J/Z manual"
+                    : "Letter guess · verify before Add"
             }
         }
     }

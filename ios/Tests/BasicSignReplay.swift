@@ -20,7 +20,8 @@ import Foundation
         let source = try JSONDecoder().decode(BasicReferenceBank.self, from: Data(contentsOf: URL(fileURLWithPath: args[1])))
         let bank = try args.contains("--presentation")
             ? source.restricted(to: BasicSignScore.presentationVocabulary) : source
-        let matcher = try BasicSignMatcher(bank: bank)
+        let scale = args.first { $0.hasPrefix("--we-scale=") }.flatMap { Float($0.dropFirst("--we-scale=".count)) }
+        let matcher = try BasicSignMatcher(bank: bank, weMotionScale: scale)
         if args.count == 4 && args[2] == "--pack" {
             try JSONEncoder().encode(matcher.packedBank()).write(to: URL(fileURLWithPath: args[3]), options: .atomic)
             print("Packed \(matcher.usableReferenceCount) usable private references")

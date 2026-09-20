@@ -177,30 +177,33 @@ final class SingleScreenUITests: XCTestCase {
         app.buttons["Done"].tap()
     }
 
-    func testSpellingModeNeedsConfirmationAndMarksMotionLettersManual() {
+    func testSpellingModeNeedsConfirmationAndOnlyAllowsAurelio() {
         app.segmentedControls["recognition-mode"].buttons["Spell name"].tap()
         XCTAssertTrue(app.staticTexts["spelling-draft"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["current-sign"].label, "Watching…")
         XCTAssertFalse(app.buttons["add-letter"].isEnabled)
         app.buttons["manual-spelling"].tap()
-        app.buttons["J (manual)"].tap()
-        XCTAssertEqual(app.staticTexts["spelling-draft"].label, "J")
+        XCTAssertFalse(app.buttons["C (manual)"].exists)
+        XCTAssertFalse(app.buttons["P (manual)"].exists)
+        XCTAssertFalse(app.buttons["J (manual)"].exists)
+        app.buttons["A (manual)"].tap()
+        XCTAssertEqual(app.staticTexts["spelling-draft"].label, "A")
         app.buttons["manual-spelling"].tap()
-        app.buttons["Z (manual)"].tap()
-        XCTAssertEqual(app.staticTexts["spelling-draft"].label, "JZ")
+        app.buttons["U (manual)"].tap()
+        XCTAssertEqual(app.staticTexts["spelling-draft"].label, "AU")
         app.buttons["delete-letter"].tap()
-        XCTAssertEqual(app.staticTexts["spelling-draft"].label, "J")
+        XCTAssertEqual(app.staticTexts["spelling-draft"].label, "A")
         app.segmentedControls["recognition-mode"].buttons["Signs"].tap()
         XCTAssertFalse(app.staticTexts["spelling-draft"].exists)
         XCTAssertEqual(app.staticTexts["current-sign"].label, "Tracking")
         app.segmentedControls["recognition-mode"].buttons["Spell name"].tap()
-        XCTAssertEqual(app.staticTexts["spelling-draft"].label, "J")
+        XCTAssertEqual(app.staticTexts["spelling-draft"].label, "A")
     }
 
     func testSpellingIsNotSavedAcrossLaunches() {
         app.segmentedControls["recognition-mode"].buttons["Spell name"].tap()
         app.buttons["manual-spelling"].tap()
-        app.buttons["J (manual)"].tap()
+        app.buttons["A (manual)"].tap()
         app.terminate(); app.launch()
         app.segmentedControls["recognition-mode"].buttons["Spell name"].tap()
         XCTAssertEqual(app.staticTexts["spelling-draft"].label, "Spelling…")

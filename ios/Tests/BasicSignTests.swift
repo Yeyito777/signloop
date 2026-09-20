@@ -169,6 +169,49 @@ import Foundation
         }
         check(BasicSignMatcher.trajectoryCost(circle, circle) == 0, "Temporal identity")
         check(BasicSignMatcher.trajectoryCost(circle, hold) > 0.01, "A circle cannot collapse into a static hold")
+        let smaller = BasicSignMatcher.scaledMotion(circle, scale: 0.65)
+        check(smaller.map(\.hands) == circle.map(\.hands), "WE augmentation never invents handshapes")
+        check(smaller.map(\.time) == circle.map(\.time), "WE augmentation preserves observed timing")
+        check(smaller.allSatisfy { $0.body[1] == nil && $0.hands[1] == nil }, "WE augmentation preserves missing evidence")
+        let span = circle.map { $0.body[0]![0] }.max()! - circle.map { $0.body[0]![0] }.min()!
+        let smallerSpan = smaller.map { $0.body[0]![0] }.max()! - smaller.map { $0.body[0]![0] }.min()!
+        check(abs(smallerSpan/span-0.65) < 0.00001, "WE amplitude is reduced by specified factor")
+        check(BasicSignMatcher.trajectoryCost(smaller, hold) > 0.001, "Smaller movement still differs from a hold")
+        check(BasicSignMatcher.supportsCompactWE(smaller), "Smaller index movement across chest unlocks tolerance")
+        check(!BasicSignMatcher.supportsCompactWE(hold), "Stationary point cannot unlock WE tolerance")
+        var twoFingers = smaller
+        for i in twoFingers.indices {
+            for j in 0..<4 { for axis in 0..<3 {
+                twoFingers[i].hands[0]![(9+j)*3+axis] = pointing[(5+j)*3+axis]
+            } }
+        }
+        check(!BasicSignMatcher.supportsCompactWE(twoFingers), "NAME-like two-finger shape cannot unlock WE tolerance")
+        let low = smaller.map { f -> BasicFeature in
+            var g = f; g.body[0]![1] += 2; return g
+        }
+        check(!BasicSignMatcher.supportsCompactWE(low), "Motion below the chest cannot unlock WE tolerance")
+        let offset = smaller.map { f -> BasicFeature in
+            var g = f; g.body[0]![0] += 0.4; return g
+        }
+        check(BasicSignMatcher.supportsCompactWE(offset), "Pointing wrist need not cross torso midpoint for WE")
+        let weRefs = refs.enumerated().map { i, r in
+            BasicReference(id: r.id, label: i == 0 ? "WE" : r.label, split: r.split,
+                           signer: r.signer, frames: r.frames, features: r.features)
+        }
+        let weBank = BasicReferenceBank(version: 2, labels: ["WE"]+Array(labels.dropFirst()),
+                                       maxDistance: 0, minMargin: 1, references: weRefs)
+        let normalWE = try BasicSignMatcher(bank: weBank)
+        let compactWE = try BasicSignMatcher(bank: weBank, weMotionScale: BasicSignMatcher.compactWEMotionScale)
+        check(compactWE.usableReferenceCount == normalWE.usableReferenceCount+1, "Only WE gets an additional derived reference")
+        check(compactWE.packedBank().references.count == weBank.references.count, "Derived references never replace original provenance")
+        let a = normalWE.candidate(frames), b = compactWE.candidate(frames)
+        check(Array(a.scores.dropFirst()).map(\.distance) == Array(b.scores.dropFirst()).map(\.distance),
+              "Other labels' absolute distances unchanged by WE tolerance")
+        check(b.scores[0].distance! <= a.scores[0].distance!, "Original WE reference remains available")
+        for scale in [Float.nan, .infinity, 0, 2] {
+            do { _ = try BasicSignMatcher(bank: weBank, weMotionScale: scale); fatalError("Invalid WE scale accepted") }
+            catch { assertions += 1 }
+        }
         let legacy = BasicReferenceBank(version: 1, labels: labels, maxDistance: 0.08, minMargin: 0.15,
                                         references: packed.references)
         do { try legacy.validate(); fatalError("Legacy packed feature schema accepted") } catch { assertions += 1 }
