@@ -20,10 +20,14 @@ final class BasicLiveRecognition: ObservableObject {
     private var lastObservedHand: Int?
     private var stability = BasicSignStability()
     private let referenceURL: URL
+    private let activeLabels: [String]?
 
-    init(referenceURL: URL? = nil) {
+    init(referenceURL: URL? = nil, activeLabels: [String]? = nil) {
         self.referenceURL = referenceURL ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("basic-references.json")
+        self.activeLabels = activeLabels
+        self.labels = activeLabels ?? BasicSignScore.vocabulary
+        self.scores = BasicSignScore.rows(labels: self.labels)
     }
 
     func load() {
@@ -34,7 +38,8 @@ final class BasicLiveRecognition: ObservableObject {
             do {
                 let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
                 guard size > 0, size < 40_000_000 else { throw CocoaError(.fileReadCorruptFile) }
-                let bank = try JSONDecoder().decode(BasicReferenceBank.self, from: Data(contentsOf: url))
+                let source = try JSONDecoder().decode(BasicReferenceBank.self, from: Data(contentsOf: url))
+                let bank = try self.activeLabels.map { try source.restricted(to: $0) } ?? source
                 let model = try BasicSignMatcher(bank: bank)
                 guard model.usableReferenceCount > 0 else { throw CocoaError(.fileReadCorruptFile) }
                 self.matcher = model

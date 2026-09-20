@@ -9,7 +9,7 @@ private enum CameraTheme {
 /// Offline experimental sign matching plus the existing skeleton inspector.
 struct ContentView: View {
     @StateObject private var tracker = SkeletonCameraTracker()
-    @StateObject private var recognition = BasicLiveRecognition()
+    @StateObject private var recognition = BasicLiveRecognition(activeLabels: BasicSignScore.presentationVocabulary)
     @StateObject private var alphabet = AlphabetRecognition()
     @State private var spelling = false
     @State private var draft = SpellingDraft()

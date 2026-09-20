@@ -17,7 +17,9 @@ import Foundation
     }
     static func main() throws {
         let args = CommandLine.arguments
-        let bank = try JSONDecoder().decode(BasicReferenceBank.self, from: Data(contentsOf: URL(fileURLWithPath: args[1])))
+        let source = try JSONDecoder().decode(BasicReferenceBank.self, from: Data(contentsOf: URL(fileURLWithPath: args[1])))
+        let bank = try args.contains("--presentation")
+            ? source.restricted(to: BasicSignScore.presentationVocabulary) : source
         let matcher = try BasicSignMatcher(bank: bank)
         if args.count == 4 && args[2] == "--pack" {
             try JSONEncoder().encode(matcher.packedBank()).write(to: URL(fileURLWithPath: args[3]), options: .atomic)

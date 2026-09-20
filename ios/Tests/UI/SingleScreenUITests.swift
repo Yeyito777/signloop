@@ -143,7 +143,9 @@ final class SingleScreenUITests: XCTestCase {
         XCTAssertEqual(mode.label, "Show all candidates")
         mode.tap()
         XCTAssertEqual(mode.label, "Show top three matches")
-        let last = app.descendants(matching: .any)["score-CAMERA"].firstMatch
+        XCTAssertFalse(app.descendants(matching: .any)["score-CAMERA"].firstMatch.exists)
+        XCTAssertFalse(app.descendants(matching: .any)["score-YES"].firstMatch.exists)
+        let last = app.descendants(matching: .any)["score-ILOVEYOU"].firstMatch
         for _ in 0..<8 {
             if last.exists && last.isHittable { break }
             list.swipeUp()

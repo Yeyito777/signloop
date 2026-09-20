@@ -55,6 +55,11 @@ camera → MediaPipe hand and upper-body landmarkers (face optional) → one syn
 inspectable skeleton → optional **private 16-label temporal matching**.
 No backend, API key, transcription, recording or uploads.
 
+Build 17 limits the standalone scanner to the **11 presentation-script signs**,
+including **I love you**. The other 21 words no longer enter matching or the score
+list. Separate name/app fingerspelling stays unchanged. See
+[presentation-only scope](docs/presentation-only.md).
+
 Build 16 replaces arbitrary percentage bars with a ranked closest-three distance
 inspector (Settings → **Show match scores**, then **All 32** for the full list).
 The [score audit](docs/score-audit.md) verifies that expanding the vocabulary does

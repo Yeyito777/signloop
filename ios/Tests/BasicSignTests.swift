@@ -77,6 +77,28 @@ import Foundation
         let roundTrip = try JSONDecoder().decode(BasicReferenceBank.self, from: JSONEncoder().encode(packed))
         let packedMatcher = try BasicSignMatcher(bank: roundTrip)
         check(packedMatcher.candidate(frames).distance == candidate.distance, "Packed parity")
+        let focusLabels = [labels[3], labels[1], labels[2]]
+        let focusBank = try bank.restricted(to: focusLabels)
+        let focus = try BasicSignMatcher(bank: focusBank).candidate(frames)
+        check(focusBank.labels == focusLabels && focusBank.references.count == 3,
+              "Requested order retained and excluded references removed from actual search")
+        check(focus.label != labels[0] && focusLabels.contains(focus.label ?? ""),
+              "Even the former exact winner cannot be predicted once removed")
+        check(focus.scores.map(\.label) == focusLabels, "No hidden excluded candidates in scores")
+        for score in focus.scores {
+            check(score.distance == candidate.scores.first { $0.label == score.label }?.distance,
+                  "Restriction leaves remaining absolute scores unchanged")
+        }
+        check(focusBank.windowMS == bank.windowMS && focusBank.ruleWeight == bank.ruleWeight
+              && focusBank.maxDistance == bank.maxDistance, "Restriction does not retune model policy")
+        for invalid in [[], [labels[0]], [labels[0], labels[0]], [labels[0], "NOT_IN_BANK"]] {
+            do { _ = try bank.restricted(to: invalid); fatalError("Invalid subset accepted") }
+            catch { assertions += 1 }
+        }
+        check(BasicSignScore.presentationVocabulary == [
+            "HELLO", "MY", "NAME", "TODAY", "WE", "SHOW", "PHONE",
+            "PLEASE", "SORRY", "THANKYOU", "ILOVEYOU"
+        ], "Presentation includes exactly script words plus I love you")
         let expandedLabels = labels + (16..<32).map { "SYNTHETIC_\($0)" }
         let expanded = BasicReferenceBank(version: 2, labels: expandedLabels, maxDistance: 0,
                                          minMargin: 1, references: refs)
@@ -160,6 +182,8 @@ import Foundation
         let bad = BasicReferenceBank(version: 1, labels: labels, maxDistance: 0.08, minMargin: 0.15,
             references: [BasicReference(id: "forbidden", label: labels[0], split: "test", signer: "heldout", frames: frames)])
         do { try bad.validate(); fatalError("Evaluation data accepted as reference") } catch { assertions += 1 }
+        do { _ = try bad.restricted(to: [labels[1], labels[2]]); fatalError("Filtering hid forbidden data") }
+        catch { assertions += 1 }
         // Exercise the real asynchronous app adapter, without any camera/data.
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -180,6 +204,25 @@ import Foundation
         }
         check(live.sign == labels[0], "Real adapter confirms synthetic identity")
         check(live.scores.count == 16 && live.scores[0].similarity! > 0.999, "Real adapter publishes every label's score")
+        let restrictedLive = BasicLiveRecognition(referenceURL: url, activeLabels: [labels[0], labels[3], labels[4]])
+        check(restrictedLive.labels.count == 3 && restrictedLive.scores.count == 3,
+              "Startup already shows only requested vocabulary")
+        restrictedLive.load()
+        let restrictedDeadline = Date().addingTimeInterval(5)
+        while !restrictedLive.ready && Date() < restrictedDeadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+        }
+        check(restrictedLive.ready && restrictedLive.labels == [labels[0], labels[3], labels[4]],
+              "Real adapter loads a restricted bank from full private file")
+        for frame in frames {
+            restrictedLive.receive(frame)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.02))
+        }
+        check(restrictedLive.sign == labels[0] && restrictedLive.scores.count == 3,
+              "Live inference and display both use restricted vocabulary")
+        restrictedLive.reset()
+        check(restrictedLive.scores.count == 3 && restrictedLive.scores.allSatisfy { $0.distance == nil },
+              "Reset cannot restore excluded labels")
         let uncertainURL = folder.appendingPathComponent("uncertain.json")
         var uncertainBank = packed
         uncertainBank.maxDistance = 0

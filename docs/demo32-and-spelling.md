@@ -1,5 +1,8 @@
 # 32-word research vocabulary and separate spelling
 
+**Current build 17 uses only [11 presentation signs](presentation-only.md).**
+The 32-word research corpus described below is retained, not all active in the app.
+
 For the current score inspector and vocabulary-size investigation, see the
 [build 16 score audit](score-audit.md). The vocabulary and model below are unchanged.
 

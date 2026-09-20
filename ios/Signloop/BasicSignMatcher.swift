@@ -23,7 +23,7 @@ struct BasicReferenceBank: Codable {
 
     func validate() throws {
         guard (version == 2 || (version == 1 && references.allSatisfy { $0.features == nil })),
-              (400...2400).contains(windowMS ?? 1800), [16, 32].contains(labels.count), Set(labels).count == labels.count,
+              (400...2400).contains(windowMS ?? 1800), (2...32).contains(labels.count), Set(labels).count == labels.count,
               (ruleWeight ?? 0.2).isFinite, (0...1).contains(ruleWeight ?? 0.2),
               (4...6).contains(queryFrames ?? 4),
               references.count <= 256, !references.isEmpty,
@@ -36,6 +36,24 @@ struct BasicReferenceBank: Codable {
             throw NSError(domain: "BasicReferenceBank", code: 1,
                           userInfo: [NSLocalizedDescriptionKey: "Invalid private reference bank"])
         }
+    }
+
+    /// Filter the actual search bank, not just the displayed labels. Validate
+    /// the source first so filtering cannot conceal invalid/evaluation data.
+    func restricted(to active: [String]) throws -> BasicReferenceBank {
+        try validate()
+        guard (2...32).contains(active.count), Set(active).count == active.count,
+              Set(active).isSubset(of: Set(labels)),
+              active.allSatisfy({ label in references.contains { $0.label == label } }) else {
+            throw NSError(domain: "BasicReferenceBank", code: 2,
+                          userInfo: [NSLocalizedDescriptionKey: "Requested vocabulary unavailable"])
+        }
+        let result = BasicReferenceBank(version: version, labels: active,
+            maxDistance: maxDistance, minMargin: minMargin,
+            references: references.filter { active.contains($0.label) },
+            windowMS: windowMS, ruleWeight: ruleWeight, queryFrames: queryFrames)
+        try result.validate()
+        return result
     }
 }
 
@@ -50,6 +68,12 @@ struct BasicCandidate: Codable {
 /// The fixed display scale is unrelated to acceptance thresholds. In particular
 /// a high score can still be rejected because competing signs look similar.
 struct BasicSignScore: Codable, Identifiable {
+    /// User-requested script: introduction, project name, movement comparison,
+    /// PHONE example and closing. Proper names use the separate alphabet mode.
+    static let presentationVocabulary = [
+        "HELLO", "MY", "NAME", "TODAY", "WE", "SHOW", "PHONE",
+        "PLEASE", "SORRY", "THANKYOU", "ILOVEYOU"
+    ]
     static let vocabulary = ["HELLO", "YES", "NO", "PLEASE", "THANKYOU", "HELP", "WATER", "MORE",
                              "FINISH", "GOOD", "BAD", "NAME", "MY", "SORRY", "STOP", "YOU",
                              "ILOVEYOU", "WE", "OUR", "NICE", "MEET", "TODAY", "PROJECT",
