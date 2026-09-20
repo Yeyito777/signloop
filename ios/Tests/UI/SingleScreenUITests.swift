@@ -128,7 +128,7 @@ final class SingleScreenUITests: XCTestCase {
 
     func testAllSignScoresCanBeEnabledPersistedAndHidden() {
         app.buttons["camera-settings"].tap()
-        let toggle = actualSwitch("Show all sign scores")
+        let toggle = actualSwitch("Show match scores")
         if toggle.value as? String != "1" { toggle.tap() }
         app.buttons["Done"].tap()
         XCTAssertTrue(app.staticTexts["scores-disclaimer"].waitForExistence(timeout: 5))
@@ -138,6 +138,11 @@ final class SingleScreenUITests: XCTestCase {
         let hello = app.descendants(matching: .any)["score-HELLO"].firstMatch
         XCTAssertTrue(hello.exists)
         XCTAssertEqual(hello.value as? String, "No current score")
+        let mode = app.buttons["score-list-mode"]
+        XCTAssertTrue(mode.exists)
+        XCTAssertEqual(mode.label, "Show all candidates")
+        mode.tap()
+        XCTAssertEqual(mode.label, "Show top three matches")
         let last = app.descendants(matching: .any)["score-CAMERA"].firstMatch
         for _ in 0..<8 {
             if last.exists && last.isHittable { break }
@@ -150,7 +155,7 @@ final class SingleScreenUITests: XCTestCase {
         app.buttons["hide-sign-scores"].tap()
         XCTAssertFalse(app.scrollViews["sign-scores-list"].exists)
         app.buttons["camera-settings"].tap()
-        XCTAssertEqual(actualSwitch("Show all sign scores").value as? String, "0")
+        XCTAssertEqual(actualSwitch("Show match scores").value as? String, "0")
         app.buttons["Done"].tap()
     }
 
@@ -159,14 +164,14 @@ final class SingleScreenUITests: XCTestCase {
         app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL"]
         app.launch()
         app.buttons["camera-settings"].tap()
-        let toggle = actualSwitch("Show all sign scores")
+        let toggle = actualSwitch("Show match scores")
         if toggle.value as? String != "1" { toggle.tap() }
         app.buttons["Done"].tap()
         XCTAssertTrue(app.buttons["camera-settings"].isHittable)
         XCTAssertTrue(app.buttons["pause-resume"].isHittable)
         // Hide through Settings as well as the panel's close control.
         app.buttons["camera-settings"].tap()
-        actualSwitch("Show all sign scores").tap()
+        actualSwitch("Show match scores").tap()
         app.buttons["Done"].tap()
     }
 

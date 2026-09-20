@@ -1,5 +1,8 @@
 # 32-word research vocabulary and separate spelling
 
+For the current score inspector and vocabulary-size investigation, see the
+[build 16 score audit](score-audit.md). The vocabulary and model below are unchanged.
+
 Build 15 extends the standalone native scanner, not the separate Expo app.
 It remains entirely offline. Word reference data are private and provisioned
 separately; the MIT-derived static-letter model is bundled with attribution.

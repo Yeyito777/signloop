@@ -62,6 +62,22 @@ struct BasicSignScore: Codable, Identifiable {
         guard let distance, distance.isFinite, distance >= 0 else { return nil }
         return exp(-distance / 0.08)
     }
+    /// Prefer the actual independent metric in the UI. The legacy exponential
+    /// percentage has no calibrated interpretation and must not look like one.
+    var measuredDistance: Float? {
+        distance.flatMap { $0.isFinite && $0 >= 0 ? $0 : nil }
+    }
+    var distanceText: String {
+        measuredDistance.map { String(format: "%.3f", $0) } ?? "—"
+    }
+    static func ranked(_ scores: [BasicSignScore]) -> [BasicSignScore] {
+        // Preserve vocabulary order for missing evidence and exact ties.
+        scores.enumerated().sorted {
+            let a = $0.element.measuredDistance ?? .infinity
+            let b = $1.element.measuredDistance ?? .infinity
+            return a == b ? $0.offset < $1.offset : a < b
+        }.map(\.element)
+    }
     static func rows(labels: [String], distances: [String: Float] = [:]) -> [BasicSignScore] {
         labels.map { label in
             let d = distances[label]
@@ -381,17 +397,27 @@ final class BasicSignMatcher {
         return phase.reduce(0, +)/Float(phase.count)
     }
 
-    private static func dtw(_ a: [BasicFeature], _ b: [BasicFeature]) -> Float {
+    private static func dtw(_ a: [BasicFeature], _ b: [BasicFeature],
+                            motion: Float, best: Float) -> Float {
+        // Exact branch-and-bound, NEVER prune against a different label.
+        // All costs are nonnegative. A partial path that already costs more
+        // than this label's best reference cannot improve its absolute score.
+        if motion > best { return .infinity }
+        let length = Float(max(a.count, b.count))
         var previous = [Float](repeating: .infinity, count: b.count+1)
+        var current = previous
         previous[0] = 0
         for i in a.indices {
-            var current = [Float](repeating: .infinity, count: b.count+1)
+            for j in current.indices { current[j] = .infinity }
+            var lowerBound: Float = .infinity
             for j in b.indices where abs(i-j) <= 5 {
                 current[j+1] = cost(a[i], b[j]) + min(previous[j], previous[j+1], current[j])
+                lowerBound = min(lowerBound, current[j+1])
             }
-            previous = current
+            if lowerBound / length + motion > best { return .infinity }
+            swap(&previous, &current)
         }
-        return previous[b.count] / Float(max(a.count, b.count))
+        return previous[b.count] / length + motion
     }
 
     func candidate(_ frames: [SkeletonFrame]) -> BasicCandidate {
@@ -407,9 +433,12 @@ final class BasicSignMatcher {
             let mirror = query.map { $0.mirrored() }
             let motion = Self.trajectorySignature(query), mirroredMotion = Self.trajectorySignature(mirror)
             for (label, reference, referenceMotion) in references {
-                let distance = min(Self.dtw(query, reference) + Self.motionDistance(motion, referenceMotion),
-                                   Self.dtw(mirror, reference) + Self.motionDistance(mirroredMotion, referenceMotion))
-                byLabel[label] = min(byLabel[label] ?? .infinity, distance)
+                let best = byLabel[label] ?? .infinity
+                let direct = Self.dtw(query, reference,
+                    motion: Self.motionDistance(motion, referenceMotion), best: best)
+                let mirrored = Self.dtw(mirror, reference,
+                    motion: Self.motionDistance(mirroredMotion, referenceMotion), best: min(best, direct))
+                byLabel[label] = min(best, direct, mirrored)
             }
             for label in Array(byLabel.keys) {
                 byLabel[label]! += (bank.ruleWeight ?? 0.2) * Self.anatomicalPenalty(label: label, sequence: query)

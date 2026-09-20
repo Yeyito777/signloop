@@ -48,6 +48,13 @@ import Foundation
         check(sampleScores[1].similarity! > sampleScores[2].similarity!, "Similarity monotonically decreases")
         check(sampleScores[3].similarity == nil, "Nonfinite distance not an invented probability")
         check(BasicSignScore(label: "invalid", distance: -1).similarity == nil, "Invalid negative distance rejected")
+        check(sampleScores[1].distanceText == "0.080", "UI displays distance, not an arbitrary confidence percentage")
+        check(sampleScores[3].distanceText == "—", "Missing evidence has no metric")
+        check(BasicSignScore(label: "invalid", distance: -1).distanceText == "—", "Invalid UI metric is unavailable")
+        let ties = BasicSignScore.rows(labels: ["B", "A", "missing"], distances: ["A": 0.1, "B": 0.1])
+        check(BasicSignScore.ranked(ties).map(\.label) == ["B", "A", "missing"], "Ties preserve vocabulary order")
+        check(BasicSignScore.ranked(Array(sampleScores.reversed())).map(\.label) == ["A", "B", "C", "D"],
+              "Closest matches sort by independent distance, missing evidence last")
         check(matcher.candidate([]).scores.count == 16, "Missing input retains all 16 rows")
         check(matcher.candidate([]).scores.allSatisfy { $0.similarity == nil }, "No hand evidence displays dashes, not percentages")
         var rejected = bank
@@ -76,6 +83,25 @@ import Foundation
         let expandedMatcher = try BasicSignMatcher(bank: expanded)
         check(expandedMatcher.candidate(frames).scores.count == 32, "32-label bank supported without changing geometry")
         check(expandedMatcher.candidate(frames).distance == candidate.distance, "Expanding vocabulary alone does not change old distances")
+        // Add actual competing references, not just empty label names. Pruning
+        // against the global winner would violate this for non-winning labels.
+        let competitors = (16..<32).map { i in
+            BasicReference(id: "competitor-\(i)", label: expandedLabels[i], split: "train",
+                           signer: "synthetic-train", frames: frames)
+        }
+        let competingBank = BasicReferenceBank(version: 2, labels: expandedLabels, maxDistance: 0,
+                                               minMargin: 1, references: refs + competitors)
+        let competing = try BasicSignMatcher(bank: competingBank).candidate(frames)
+        check(Array(competing.scores.prefix(16)).map(\.distance) == candidate.scores.map(\.distance),
+              "Adding 16 real competitors cannot dilute ANY existing distance")
+        check(Array(competing.scores.prefix(16)).map(\.similarity) == candidate.scores.map(\.similarity),
+              "Adding competitors cannot dilute the legacy score transform either")
+        check(competing.margin == 0 && candidate.margin > 0, "Ambiguity can increase without reducing absolute match quality")
+        let reversedBank = BasicReferenceBank(version: 2, labels: expandedLabels, maxDistance: 0,
+                                              minMargin: 1, references: Array((refs + competitors).reversed()))
+        let reversed = try BasicSignMatcher(bank: reversedBank).candidate(frames)
+        check(reversed.scores.map(\.distance)
+              == competing.scores.map(\.distance), "Exact search cannot depend on reference traversal order")
         let transformed = frames.map { f in
             func transform(_ p: SkeletonPoint) -> SkeletonPoint {
                 // Change aspect, image translation and scale together.

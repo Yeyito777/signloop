@@ -2,6 +2,7 @@
 
 For the subsequent 32-word expansion and static-letter mode, see
 [build 15](demo32-and-spelling.md). The results below describe the 16-label bank.
+Build 16 replaces percentage bars with [independent match distances](score-audit.md).
 
 ## Build 14: best guesses, geometric rules and shared temporal evidence
 

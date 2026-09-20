@@ -21,6 +21,7 @@ struct ContentView: View {
     @State private var probe = SkeletonProbe()
     @AppStorage("showTrackingStats") private var showTrackingStats = false
     @AppStorage("showAllSignScores") private var showAllSignScores = false
+    @State private var showAllCandidates = false
     private let clock = Timer.publish(every: 0.25, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -60,8 +61,10 @@ struct ContentView: View {
             if showAllSignScores && !spelling {
                 GeometryReader { geometry in
                     VStack {
-                        SignScoresPanel(scores: recognition.scores, isPresented: $showAllSignScores)
-                            .frame(height: min(340, max(0, geometry.size.height-16)))
+                        SignScoresPanel(scores: recognition.scores, isPresented: $showAllSignScores,
+                                        showAll: $showAllCandidates)
+                            .frame(height: min(showAllCandidates || dynamicTypeSize.isAccessibilitySize ? 340 : 210,
+                                               max(0, geometry.size.height-16)))
                             .padding(.horizontal, 12).padding(.top, 8)
                         Spacer(minLength: 0)
                     }
@@ -228,9 +231,9 @@ private struct CameraSettings: View {
         NavigationStack {
             Form {
                 Section("Camera overlays") {
-                    Toggle("Show all sign scores", isOn: $showAllSignScores)
+                    Toggle("Show match scores", isOn: $showAllSignScores)
                         .accessibilityIdentifier("show-all-sign-scores")
-                    Text("Shows similarity for every candidate, including rejected matches. Not calibrated probabilities; scores do not add to 100%. Higher means closer, not necessarily correct.")
+                    Text("Shows the three closest matches; tap All to inspect every sign. Each distance is measured independently: lower is closer, not more certain. Adding signs does not divide existing scores. Even the closest match can be wrong.")
                         .font(.footnote)
                     Toggle("Track face (slower)", isOn: $tracker.trackFace)
                     Text("Hands and shoulders/chest stay tracked. Face is optional and off by default for word matching.")

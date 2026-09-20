@@ -6,6 +6,7 @@ import Foundation
         let label: String?
         let distance: Float
         let margin: Float
+        var scores: [BasicSignScore]? = nil
     }
     struct Row: Codable {
         let id: String
@@ -53,7 +54,8 @@ import Foundation
                 last = frame.timestampMS
                 let c = matcher.candidate(frames)
                 events.append(Event(timestamp: frame.timestampMS, label: c.label,
-                                    distance: c.distance, margin: c.margin))
+                                    distance: c.distance, margin: c.margin,
+                                    scores: args.contains("--scores") ? c.scores : nil))
             }
             rows.append(Row(id: clip.id, label: clip.label, split: clip.split,
                             events: events, elapsedMS: -start.timeIntervalSinceNow*1000))

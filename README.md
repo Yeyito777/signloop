@@ -55,6 +55,11 @@ camera → MediaPipe hand and upper-body landmarkers (face optional) → one syn
 inspectable skeleton → optional **private 16-label temporal matching**.
 No backend, API key, transcription, recording or uploads.
 
+Build 16 replaces arbitrary percentage bars with a ranked closest-three distance
+inspector (Settings → **Show match scores**, then **All 32** for the full list).
+The [score audit](docs/score-audit.md) verifies that expanding the vocabulary does
+not dilute individual distances; new competitors can still change the winner.
+
 Build 15 adds a 32-word research vocabulary for introductions and presenting the
 project, including **I love you**, plus a separate **Spell name** mode.
 Fingerspelling recognizes 24 static letters; **J/Z are explicitly manual**.
