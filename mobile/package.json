@@ -42,6 +42,7 @@
     "postinstall": "node scripts/patch-rn-paths.cjs",
     "start": "expo start --dev-client",
     "camera:assets": "bash ../ios/scripts/fetch-skeleton-models.sh",
+    "camera:references": "bash scripts/provision-sign-references.sh",
     "preios": "npm run camera:assets",
     "ios": "expo run:ios",
     "android": "expo run:android",

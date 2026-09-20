@@ -1,7 +1,7 @@
 import type { NativeSyntheticEvent, ViewProps } from 'react-native';
 import { requireNativeView } from 'expo';
-export type CameraStatus = 'starting' | 'searching' | 'tracking' | 'denied' | 'unavailable' | 'error';
-export type CameraStatusEvent = { captureId: number; status: CameraStatus; handCount: number; message: string };
+import type { CameraStatusEvent, SignPredictionEvent } from './events';
+export type { CameraStatus, CameraStatusEvent, SignPredictionEvent } from './events';
 export type LocalSignEvent = { captureId: number; label: string | null; observedAtMS: number };
 export type DetectionEvent = LocalSignEvent & {
   mode: 'signs' | 'spelling'; letter: string | null; ready: boolean; detail: string;
@@ -12,7 +12,7 @@ export type SignloopCameraProps = ViewProps & {
   active: boolean; captureId: number; recognitionMode?: 'signs' | 'spelling';
   showSkeleton?: boolean; showPose?: boolean; trackFace?: boolean; labMode?: boolean;
   onStatus: (event: NativeSyntheticEvent<CameraStatusEvent>) => void;
-  onSign?: (event: NativeSyntheticEvent<LocalSignEvent>) => void;
+  onPrediction?: (event: NativeSyntheticEvent<SignPredictionEvent>) => void;
   onDetection?: (event: NativeSyntheticEvent<DetectionEvent>) => void;
   onClose?: () => void;
 };

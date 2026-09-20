@@ -5,23 +5,26 @@ import type { CameraProps, IntegrationKit } from './contracts';
 import type { SignloopCamera as CameraView } from '../../modules/signloop-camera';
 import { GooseAvatar } from './GooseAvatar';
 import { gooseVoice } from './voice';
-import { candidateFromSign } from './localSign';
-import { framingFromCamera } from './cameraStatus';
+import { candidateFromPrediction } from './localSign';
+import { cameraAvailability, framingFromCamera } from './cameraStatus';
 
-const NativeCamera: typeof CameraView | null = Platform.OS === 'ios' && requireOptionalNativeModule('SignloopCamera')
+const nativeModule = Platform.OS === 'ios'
+  ? requireOptionalNativeModule<{ recognitionVersion?: number }>('SignloopCamera') : null;
+const unavailable = cameraAvailability(nativeModule);
+const NativeCamera: typeof CameraView | null = unavailable === null
   ? require('../../modules/signloop-camera').SignloopCamera : null;
 
 function Camera({ active, captureId, onFraming, onTranslation, style, recognitionMode = 'signs', detectionSettings, onDetection }: CameraProps) {
   useEffect(() => {
-    if (!NativeCamera && active) onFraming('camera-unavailable', captureId);
+    if (unavailable && active) onFraming(unavailable, captureId);
   }, [active, captureId, onFraming]);
   if (!NativeCamera) return <View style={style} />;
   return <NativeCamera active={active} captureId={captureId} recognitionMode={recognitionMode}
     showSkeleton={detectionSettings?.showSkeleton ?? true} showPose={detectionSettings?.showPose ?? true}
     trackFace={detectionSettings?.trackFace ?? false} style={style}
     accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
-    onSign={({ nativeEvent }) => {
-      const event = candidateFromSign(nativeEvent, active && recognitionMode === 'signs', captureId);
+    onPrediction={({ nativeEvent }) => {
+      const event = candidateFromPrediction(nativeEvent, active && recognitionMode === 'signs', captureId);
       if (event) onTranslation(event, captureId);
     }}
     onDetection={({ nativeEvent }) => {

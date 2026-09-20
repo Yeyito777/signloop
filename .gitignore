@@ -27,6 +27,8 @@ ios/*.log
 __pycache__/
 *.pyc
 .runtime/
+# Private per-device temporal reference banks
+basic-references*.json
 # Trained SignEngine packages are provisioned per build after a provenance check
 ios/Signloop/Resources/SignEngine/
 

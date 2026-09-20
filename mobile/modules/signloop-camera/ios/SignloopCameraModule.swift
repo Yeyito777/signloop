@@ -3,8 +3,9 @@ import ExpoModulesCore
 public final class SignloopCameraModule: Module {
     public func definition() -> ModuleDefinition {
         Name("SignloopCamera")
+        Constant("recognitionVersion") { 4 }
         View(SignloopCameraView.self) {
-            Events("onStatus", "onSign", "onDetection", "onClose")
+            Events("onStatus", "onPrediction", "onDetection", "onClose")
             Prop("active") { (view, active: Bool) in view.active = active }
             Prop("captureId") { (view, captureId: Int) in view.captureId = captureId }
             Prop("showSkeleton") { (view, show: Bool) in view.showSkeleton = show }

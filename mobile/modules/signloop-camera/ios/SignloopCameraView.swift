@@ -9,7 +9,7 @@ import MediaPipeTasksVision
 /// Only decisions/diagnostics cross JS, never pixels or automatic frame uploads.
 final class SignloopCameraView: ExpoView {
     let onStatus = EventDispatcher()
-    let onSign = EventDispatcher()
+    let onPrediction = EventDispatcher()
     let onDetection = EventDispatcher()
     let onClose = EventDispatcher()
     let tracker: SkeletonCameraTracker
@@ -29,6 +29,9 @@ final class SignloopCameraView: ExpoView {
     private var subscriptions = Set<AnyCancellable>()
     private var observers: [NSObjectProtocol] = []
     private var appliedKey = ""
+    private var appliedCaptureId = -1
+    private var captureStartedMS = 0
+    private let missingModels: [String]
     private var timer: Timer?
     private var lastStatus = ""
     private var lastEmission = 0.0
@@ -40,6 +43,9 @@ final class SignloopCameraView: ExpoView {
         let url = Bundle(for: SignloopCameraView.self).url(forResource: "SignloopCameraModels", withExtension: "bundle")
             ?? Bundle.main.url(forResource: "SignloopCameraModels", withExtension: "bundle")
         let bundle = url.flatMap(Bundle.init(url:)) ?? .main
+        missingModels = ["hand_landmarker", "pose_landmarker_lite"].filter {
+            bundle.path(forResource: $0, ofType: "task") == nil
+        }
         tracker = SkeletonCameraTracker(modelBundle: bundle)
         alphabet = AlphabetRecognition(modelURL: bundle.url(forResource: "alphabet-static", withExtension: "json"),
                                        allowedLetters: AlphabetModel.aurelioLetters)
@@ -56,7 +62,7 @@ final class SignloopCameraView: ExpoView {
         skeleton.lineCap = .round
         layer.addSublayer(skeleton)
         tracker.onSkeletonFrame = { [weak self] frame in
-            guard let self, self.isCapturing else { return }
+            guard let self, self.acceptsEvents, frame.timestampMS >= self.captureStartedMS else { return }
             if self.labMode { return }
             if self.recognitionMode == "spelling" { self.alphabet.receive(frame) }
             else { self.recognition.receive(frame) }
@@ -64,6 +70,7 @@ final class SignloopCameraView: ExpoView {
                 observation: ExpressionObservation.from(frame, measurement: self.expression.profile?.measurement ?? .current))
         }
         tracker.onSkeletonReset = { [weak self] in self?.resetRecognition() }
+        recognition.onPrediction = { [weak self] in self?.emitPrediction($0) }
         for publisher in [tracker.objectWillChange, recognition.objectWillChange, alphabet.objectWillChange] {
             publisher.sink { [weak self] _ in self?.scheduleRender() }.store(in: &subscriptions)
         }
@@ -97,6 +104,7 @@ final class SignloopCameraView: ExpoView {
         alphabet.reset()
         expression.resetTracking()
     }
+    private var acceptsEvents: Bool { active && isCapturing && appliedCaptureId == captureId }
     private func scheduleRender() {
         guard !renderScheduled else { return }
         renderScheduled = true
@@ -125,50 +133,88 @@ final class SignloopCameraView: ExpoView {
         emitDetection(force: true)
         return
         #else
-        let key = "\(captureId):\(recognitionMode):\(trackFace):\(labMode)"
-        guard !isCapturing || key != appliedKey else { render(); return }
+        guard missingModels.isEmpty else {
+            emitStatus("model-missing", message: "Missing tracking models. Rebuild the app.")
+            return
+        }
+        let key = "\(recognitionMode):\(trackFace):\(labMode)"
+        guard !isCapturing || key != appliedKey || appliedCaptureId != captureId else { render(); return }
+        let restartCamera = !isCapturing || key != appliedKey
         isCapturing = false
-        tracker.pause() // invalidates queued frames and both engines before changing epoch/mode
+        if restartCamera { tracker.pause() }
+        resetRecognition()
         appliedKey = key
+        appliedCaptureId = captureId
+        captureStartedMS = Int(CaptureClock.now * 1000)
         lastStatus = ""
         lastEmission = 0
         tracker.trackFace = trackFace || labMode
         expression = TaughtExpressionRuntime(profile: TaughtExpressionStore.standard.load())
         isCapturing = true
+        recognition.load() // Allows Retry after provisioning references.
         emitStatus("starting")
-        tracker.start()
+        if restartCamera { tracker.start() }
         preview.mirrored = tracker.isFront
         preview.attach(session: tracker.session)
         preview.previewLayer.videoGravity = .resizeAspect
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+        let nextTimer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
             self?.tracker.expireLocalResult()
             self?.render()
         }
+        timer = nextTimer
+        RunLoop.main.add(nextTimer, forMode: .common)
         #endif
     }
     private func stop() {
         timer?.invalidate(); timer = nil
         guard isCapturing else { return }
+        sendPrediction(.cleared(), observedAtMS: Date().timeIntervalSince1970 * 1000)
         isCapturing = false
         tracker.pause()
         skeleton.path = nil
-        onSign(["captureId": captureId, "label": NSNull(), "observedAtMS": Date().timeIntervalSince1970 * 1000])
     }
     private func emitStatus(_ status: String, handCount: Int = 0, message: String = "") {
         let key = "\(captureId):\(status):\(handCount):\(message)"
         guard key != lastStatus else { return }
         lastStatus = key
         onStatus(["captureId": captureId, "status": status, "handCount": handCount, "message": message])
+        if status != "tracking" { sendPrediction(.cleared(), observedAtMS: Date().timeIntervalSince1970 * 1000) }
+    }
+    private func emitPrediction(_ prediction: BasicLivePrediction) {
+        guard acceptsEvents, recognitionMode == "signs", !labMode else { return }
+        guard prediction.phase != .cleared, let timestamp = prediction.timestampMS,
+              timestamp >= captureStartedMS, recognition.ready,
+              let frame = tracker.skeleton, frame.hasSigningPose, !frame.hands.isEmpty else {
+            sendPrediction(.cleared(), observedAtMS: Date().timeIntervalSince1970 * 1000)
+            return
+        }
+        let ageMS = CaptureClock.now * 1000 - Double(timestamp)
+        guard ageMS >= 0, ageMS <= 1000 else {
+            sendPrediction(.cleared(), observedAtMS: Date().timeIntervalSince1970 * 1000)
+            return
+        }
+        render() // Readiness must precede a candidate on the same native queue.
+        sendPrediction(prediction, observedAtMS: Date().timeIntervalSince1970 * 1000 - ageMS)
+    }
+    private func sendPrediction(_ prediction: BasicLivePrediction, observedAtMS: Double) {
+        let candidates: [[String: Any]] = prediction.candidates.compactMap { score in
+            guard let distance = score.measuredDistance else { return nil }
+            return ["label": score.label, "distance": distance]
+        }
+        onPrediction(["captureId": captureId, "engine": "basic-temporal-v3",
+                      "phase": prediction.phase.rawValue, "attemptId": prediction.attemptID as Any? ?? NSNull(),
+                      "candidates": candidates, "label": prediction.label as Any? ?? NSNull(),
+                      "matched": prediction.matched, "observedAtMS": observedAtMS])
     }
     private func emitDetection(force: Bool = false) {
         let now = Date().timeIntervalSince1970 * 1000
         guard force || now-lastEmission >= 100 else { return }
         lastEmission = now
-        let fresh = isCapturing && !labMode && tracker.skeleton != nil && tracker.isRunning
+        let fresh = acceptsEvents && !labMode && tracker.isRunning
+            && (tracker.skeleton?.timestampMS ?? -1) >= captureStartedMS
         let observed = now-Double(tracker.frameAgeMS ?? 1000)
         let label = fresh && recognitionMode == "signs" ? recognition.sign : nil
-        onSign(["captureId": captureId, "label": label as Any? ?? NSNull(), "observedAtMS": observed])
         onDetection([
             "captureId": captureId, "mode": recognitionMode, "observedAtMS": observed,
             "letter": (fresh && recognitionMode == "spelling" ? alphabet.letter : nil) as Any? ?? NSNull(),
@@ -186,15 +232,21 @@ final class SignloopCameraView: ExpoView {
         #if targetEnvironment(simulator)
         if active { emitDetection() }
         #endif
-        guard isCapturing else { return }
+        guard acceptsEvents else { return }
         if tracker.permissionDenied { emitStatus("denied"); emitDetection(); return }
         if let error = tracker.errorMessage { emitStatus("error", message: error); emitDetection(); return }
         guard tracker.isRunning else { emitStatus("starting"); emitDetection(); return }
-        let frame = tracker.skeleton
+        let frame = tracker.skeleton.flatMap { $0.timestampMS >= captureStartedMS ? $0 : nil }
         let count = frame?.hands.count ?? 0
-        let usable = count > 0 && (recognitionMode == "spelling" || frame?.hasPose == true)
-        emitStatus(usable ? "tracking" : "searching", handCount: count,
-                   message: usable ? "" : "Keep hands and shoulders visible")
+        if recognitionMode == "signs" && !labMode, let failure = recognition.loadFailure {
+            emitStatus(failure == .missing ? "references-missing" : "references-invalid", message: recognition.detail)
+        } else if recognitionMode == "signs" && !labMode && !recognition.ready {
+            emitStatus("recognizer-loading", message: recognition.detail)
+        } else {
+            let status = count == 0 ? "searching"
+                : recognitionMode == "spelling" || frame?.hasSigningPose == true ? "tracking" : "body-missing"
+            emitStatus(status, handCount: count)
+        }
         let path = UIBezierPath()
         if let frame {
             let scale = min(bounds.width / CGFloat(frame.width), bounds.height / CGFloat(frame.height))

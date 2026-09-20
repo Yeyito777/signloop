@@ -13,7 +13,7 @@ Pod::Spec.new do |s|
   s.dependency 'ExpoModulesCore'
   s.dependency 'MediaPipeTasksVision', '0.10.21'
   s.source_files = 'mobile/modules/signloop-camera/ios/*.swift',
-    'ios/Signloop/{CameraPreview,CaptureLifecycle,CaptureCadence,CaptureFreshness,Recognition,Skeleton,SkeletonPipeline,SkeletonCameraTracker,SkeletonOverlay,BasicSignMatcher,BasicLiveRecognition,AlphabetRecognition,ExpressionMeasurements,ExpressionCues,ExpressionTeacher,TaughtExpressionProfile,ExpressionTesterView}.swift'
+    'ios/Signloop/{CameraPreview,CaptureLifecycle,CaptureCadence,CaptureFreshness,Recognition,SignSegmenter,Skeleton,SkeletonPipeline,SkeletonCameraTracker,SkeletonOverlay,BasicSignMatcher,BasicSignSegmentation,BasicLiveRecognition,AlphabetRecognition,ExpressionMeasurements,ExpressionCues,ExpressionTeacher,TaughtExpressionProfile,ExpressionTesterView}.swift'
   # Only redistributable tracker/alphabet assets. The private word bank is
   # generated per researcher and provisioned separately into Documents.
   s.resource_bundles = { 'SignloopCameraModels' => ['ios/Signloop/Resources/{hand_landmarker,pose_landmarker_lite,face_landmarker}.task',

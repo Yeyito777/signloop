@@ -44,6 +44,18 @@ import Foundation
         let c = SkeletonGeometry.project(p(0, 0.5, 0.5), width: 720, height: 1280,
             viewWidth: 390, viewHeight: 844, mirrored: true)
         assert(abs(c.0-195) < 0.0001 && abs(c.1-422) < 0.0001)
+        // Expo's short tile fits the whole portrait sensor. Edge hands remain
+        // visible and share the preview's mirror exactly once.
+        for x: Float in [0, 0.2, 1] {
+            for y: Float in [0, 0.4, 1] {
+                let fit = SkeletonGeometry.project(p(0, x, y), width: 720, height: 1280,
+                    viewWidth: 358, viewHeight: 260, mirrored: false, aspectFill: false)
+                let mirror = SkeletonGeometry.project(p(0, x, y), width: 720, height: 1280,
+                    viewWidth: 358, viewHeight: 260, mirrored: true, aspectFill: false)
+                assert((0...358).contains(fit.0) && (0...260).contains(fit.1))
+                assert(abs(fit.0 + mirror.0 - 358) < 0.0001 && fit.1 == mirror.1)
+            }
+        }
 
         var buffer = SkeletonBuffer()
         for i in 0..<200 { buffer.append(frame(i*10)) }

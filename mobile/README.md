@@ -50,7 +50,11 @@ compact-WE guard. Private references must be separately provisioned into this
 app's container. Without them, tracking and bundled AURELIO spelling still work,
 but word recognition reports that references are unavailable. Best guesses can
 be wrong, including on unsupported inputs; they are **never** captions or voice
-until Confirm. Stale events and previous capture generations are rejected.
+until Confirm. Main's version-4 review behavior is preserved: up to three choices,
+tap one to hold it, **Confirm selected sign**, **None of these**, and a bounded
+ten-second review expiry. **Review another sign** starts a new attempt. Stale
+events and previous capture generations are rejected. Rebuild the native app;
+a Metro reload alone cannot update its recognition contract.
 
 Use **Spell name**, hold one of A/U/R/E/L/I/O, then **Add letter**. Manual letters,
 delete and clear are also available. **Confirm spelled name** sends only the

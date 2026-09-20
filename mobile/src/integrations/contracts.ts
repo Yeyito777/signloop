@@ -4,7 +4,8 @@ import type { DetectionEvent } from '../../modules/signloop-camera';
 
 /** Emit only diagnoses supported by the scanner. Hand tracking is not ASL recognition. */
 export type Framing = 'finding' | 'ready' | 'hands-missing' | 'too-close' | 'too-far' | 'low-light' | 'away'
-  | 'camera-denied' | 'camera-unavailable' | 'camera-error';
+  | 'camera-denied' | 'camera-unavailable' | 'camera-error' | 'camera-update-required' | 'camera-model-missing'
+  | 'body-missing' | 'recognizer-loading' | 'recognizer-missing' | 'recognizer-error';
 export type Emotion = 'neutral' | 'happy' | 'thoughtful' | 'sadness' | 'anger' | 'fear';
 export type AvatarMode = 'idle' | 'listening' | 'thinking' | 'speaking';
 export type AvatarProps = {
@@ -27,8 +28,19 @@ export type CameraProps = {
   style?: StyleProp<ViewStyle>;
 };
 
+export type SignChoice = { label: string; text: string };
+export type SignCandidate = SignChoice & {
+  attemptId: number;
+  observedAtMS: number;
+  selected: boolean;
+  options: SignChoice[];
+  expiresAtMS: number;
+  uncertain: boolean;
+};
+
 export type TranslationEvent =
-  | { type: 'candidate'; label: string; text: string; expiresAtMS: number }
+  | ({ type: 'candidate' } & SignCandidate)
+  | { type: 'sign-preview'; text: string }
   | { type: 'clear-candidate' }
   | { type: 'draft'; text: string }
   | { type: 'thinking' }

@@ -8,7 +8,7 @@ same native engines used by the standalone scanner:
 Expo view → SkeletonCameraTracker → hands + pose (+ optional face)
          → BasicLiveRecognition / BasicSignMatcher (11 presentation signs)
          OR AlphabetRecognition (A U R E L I O)
-         → capture-tagged candidate / diagnostics events
+         → capture-tagged top-three review / diagnostics events
          → explicit user confirmation → existing captions / optional voice
 ```
 
@@ -94,7 +94,10 @@ Expo interface; legacy research implementations remain in the repository.
 
 ## UI and lifecycle
 
-- Caption area: Signs / Spell name. Word guesses require Confirm; name letters
+- Caption area: Signs / Spell name. Main's recognition-version-4 rolling/completed
+  attempts, top-three choices, tap-to-hold selection, ten-second review expiry,
+  None of these and Review another sign are preserved. Word guesses require
+  selection followed by Confirm selected sign; name letters
   require Add, followed by Confirm spelled name. No automatic name completion.
 - Conversation menu: Detection settings (hands, body, face, match distances).
 - Expression lab: existing SwiftUI teaching, six-expression checks, numeric
@@ -126,6 +129,12 @@ first, then run only that class with `TEST_RUNNER_TEST_SIGNLOOP_EXPO=1`. It open
 loading, manual name confirmation/transcript, settings and the embedded
 expression lab. Never run camera screenshot tests on a physical phone.
 
-Release Expo compilation and simulator/device verification results are recorded
-after the corresponding checks finish; source-level tests alone do not establish
-phone tracking accuracy.
+Handoff status: after resolving concurrent main changes, TypeScript checking,
+all **73 mobile tests**, and Swift bridge syntax parsing passed. The licensed
+bank setup was exercised locally.
+The default setup produced the 11-sign training-only bank, and every packed
+reference matched the previous development bank's corresponding reference.
+Full Expo native builds were interrupted to merge teammates' concurrent main
+changes and publish this integration promptly, as requested. **The merged Expo
+Release binary and opt-in Expo UI tests have not yet been verified or installed.**
+Do not interpret source-level tests as phone tracking accuracy.
