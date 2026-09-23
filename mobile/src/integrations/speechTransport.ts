@@ -32,11 +32,20 @@ export async function fetchSpeech(speech: SpeechRequest, settings: VoiceSettings
   if (!text.trim() || text.length > 500) throw new Error('Speech needs 1–500 characters.');
   if (!isEmotion(emotion)) throw new Error('Unsupported speech emotion.');
   assertNotAborted(signal);
-  const response = await request(`${origin}/v1/speech`, {
-    method: 'POST', signal, redirect: 'error',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${settings.token.trim()}` },
-    body: JSON.stringify({ text: text.trim(), emotion }),
-  });
+  let response: Response;
+  try {
+    response = await request(`${origin}/v1/speech`, {
+      method: 'POST', signal, redirect: 'error',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${settings.token.trim()}` },
+      body: JSON.stringify({ text: text.trim(), emotion }),
+    });
+  } catch (error) {
+    assertNotAborted(signal);
+    if (error instanceof TypeError) {
+      throw new Error('Could not reach the backend. Use this Mac’s LAN URL, stay on the same Wi-Fi, and allow Local Network for Honk & Tell.');
+    }
+    throw error;
+  }
   assertNotAborted(signal);
   if (!response.ok) throw new Error(response.status === 401 ? 'The backend access token was rejected.'
     : response.status === 503 ? 'Voice is not configured on the backend.' : 'Voice request failed. Try again.');

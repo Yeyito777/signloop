@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,9 +8,25 @@ import { gooseVoice } from '../integrations/voice';
 import { Button, Copy, IconButton } from '../ui/primitives';
 import { tokens } from '../ui/theme';
 
+function developmentBackendUrl() {
+  for (const value of [Constants.expoConfig?.hostUri, Constants.linkingUri]) {
+    if (!value) continue;
+    try {
+      const parsed = value.includes('://') ? new URL(value) : new URL(`http://${value}`);
+      if (!parsed.hostname) continue;
+      return backendOrigin(`http://${parsed.hostname}:8787`);
+    } catch { /* try the next Metro/host hint */ }
+  }
+  return '';
+}
+
+function describeVoiceError(error: unknown) {
+  return error instanceof Error && error.message.trim() ? error.message : 'Voice failed. Check the backend, access token, and ElevenLabs configuration.';
+}
+
 export default function Settings() {
   const saved = useSyncExternalStore(subscribeVoiceSettings, getVoiceSettings, getVoiceSettings);
-  const [url, setUrl] = useState(saved.url);
+  const [url, setUrl] = useState(saved.url || developmentBackendUrl());
   const [token, setToken] = useState(saved.token);
   const [consent, setConsent] = useState(saved.enabled);
   const [message, setMessage] = useState('');
@@ -17,15 +34,23 @@ export default function Settings() {
   const controller = useRef<AbortController | null>(null);
   useEffect(() => () => controller.current?.abort(), []);
   useEffect(() => { if (!saved.enabled) setConsent(false); }, [saved.enabled]);
+  const persist = (enabled: boolean) => {
+    const origin = url.trim() ? backendOrigin(url) : '';
+    if (enabled && (!origin || token.trim().length < 24)) throw new Error('Enter the backend URL and access token first.');
+    setVoiceSettings({ url: origin, token: token.trim(), enabled });
+    return origin;
+  };
   const save = () => {
     try {
-      const origin = url.trim() ? backendOrigin(url) : '';
-      if (consent && (!origin || token.trim().length < 24)) throw new Error('Enter the backend URL and access token first.');
-      setVoiceSettings({ url: origin, token: token.trim(), enabled: consent });
+      persist(consent);
       setMessage(consent ? 'Voice enabled for this foreground session.' : 'Voice off. Captions stay on-device.');
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Check the settings.'); }
   };
   const testVoice = async () => {
+    if (!consent || !getVoiceSettings().enabled) {
+      setMessage('Enable voice and save settings before testing.');
+      return;
+    }
     controller.current?.abort();
     const abort = new AbortController();
     controller.current = abort;
@@ -34,8 +59,8 @@ export default function Settings() {
     try {
       await gooseVoice.speak({ text: 'Hello from Honk & Tell.', emotion: 'neutral' }, abort.signal, () => setMessage('Playing the voice sample…'));
       if (!abort.signal.aborted) setMessage('Voice playback completed.');
-    } catch {
-      if (!abort.signal.aborted) setMessage('Voice failed. Check the backend, access token, and ElevenLabs configuration.');
+    } catch (error) {
+      if (!abort.signal.aborted) setMessage(describeVoiceError(error));
     } finally { if (controller.current === abort) setTesting(false); }
   };
   return <SafeAreaView style={styles.screen}>
@@ -56,7 +81,8 @@ export default function Settings() {
       </View>
       <Copy role="supporting">Consent turns off when the app backgrounds. Turning it off stops future uploads and playback; it cannot retract text already sent or cancel an already-started provider charge. Provider retention policies apply. The goose animation is expressive, not an ASL signing avatar.</Copy>
       <Button icon="check" onPress={save}>Save settings</Button>
-      <Button variant="secondary" icon="volume" disabled={!saved.enabled || testing} onPress={() => { void testVoice(); }}>Test voice (sends a short sample)</Button>
+      <Copy role="supporting">Enable voice and save settings before testing. The sample uses your saved settings.</Copy>
+      <Button variant="secondary" icon="volume" disabled={!consent || !saved.enabled || testing} onPress={() => { void testVoice(); }}>Test voice (sends a short sample)</Button>
       {testing && <Button variant="plain" onPress={() => { controller.current?.abort(); setTesting(false); setMessage('Voice stopped.'); }}>Stop voice</Button>}
       {!!message && <Copy accessibilityLiveRegion="polite">{message}</Copy>}
     </ScrollView>

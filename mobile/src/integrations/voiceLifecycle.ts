@@ -13,7 +13,8 @@ export function createVoiceAdapter(
       const cancel = () => controller.abort();
       signal.addEventListener('abort', cancel, { once: true });
       const unsubscribe = subscribeVoiceSettings(cancel);
-      const timeout = setTimeout(cancel, 30_000);
+      let timedOut = false;
+      const timeout = setTimeout(() => { timedOut = true; cancel(); }, 30_000);
       try {
         if (signal.aborted) cancel();
         assertNotAborted(controller.signal);
@@ -21,6 +22,9 @@ export function createVoiceAdapter(
         assertNotAborted(controller.signal);
         clearTimeout(timeout);
         await play(clip, controller.signal, onStart);
+      } catch (error) {
+        if (timedOut) throw new Error('Voice timed out. Check the backend URL, access token, and that this iPhone is on the same Wi-Fi.');
+        throw error;
       } finally {
         clearTimeout(timeout);
         unsubscribe();

@@ -132,6 +132,8 @@ test('no consent, missing token and aborted requests make no network call (RN po
   const abort = new RNAbortController();
   abort.abort();
   await assert.rejects(fetchSpeech({ text: 'hello', emotion: 'neutral' }, configured, abort.signal as unknown as AbortSignal, request), /cancelled/);
+  await assert.rejects(fetchSpeech({ text: 'hello', emotion: 'neutral' }, configured, signal,
+    async () => { throw new TypeError('Network request failed'); }), /Could not reach the backend/);
   assert.equal(calls, 0);
   assert.deepEqual([...(await fetchSpeech({ text: 'hello', emotion: 'neutral' }, configured, signal, request)).audio], [73, 68, 51]);
 });
